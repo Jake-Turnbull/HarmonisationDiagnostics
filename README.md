@@ -98,6 +98,7 @@ Provides the StatsReporter class that allows logging text and plots, organizing 
 If individuals would like to use this library to create their own analysis scripts, we suggest using the logging tool as an easy way to organise and return results (see script for more detail)
 
 **Key Functions:**
+
     - log_section(section_id, title): mark a new named section in the log 
     - log_plot(fig, caption, section=None): attach a plot to a section (defaults to last section)
     - write_report(...) builds a TOC with hyperlinks and places each section's plots immediately after its logs.
@@ -132,26 +133,13 @@ Complementary plotting functions for the functions in DiagnosticFunctions.py
 
 Collection of widely used functions for applying harmonisation to tabular data:
 
-    HarmonizationFunctions.combat(
-    data, batch, mod, parametric,
-    DeltaCorrection=True,
-    UseEB=True,
-    ReferenceBatch=None,
-    RegressCovariates=False,
-    GammaCorrection=True)
-
-**Mandatory arguments:**
-data: M × N array (features × observations)
-batch: Length-N array or list of batch labels
-mod: N × C covariate matrix
-parametric: Whether to use parametric estimation (recommended: True)
-
-**Optional arguments:**
-DeltaCorrection: Apply scaling correction (default: True)
-UseEB: Use empirical Bayes estimation (default: True)
-ReferenceBatch: Batch label to use as reference
-RegressCovariates: Return residuals instead of adding covariate effects back (default: False)
-GammaCorrection: Apply mean-shift correction (default: True        
+    - ComBat: Use ComBat to harmonise a given dataset 
+    - lme_harmonization: Use linear mixed modelling to remove an estimated batch effect from the data
+    Future implementations:
+    - Long_Combat
+    - CovBat
+    - ComBat-GAMs
+    - IQM_harmonisation  
 
 ## Simulator.py
 
