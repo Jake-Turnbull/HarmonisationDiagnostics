@@ -62,4 +62,4 @@ version_scheme = "post-release"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["DiagnoseHarmonization*]
+include = ["DiagnoseHarmonization*"]
