@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "HarmonizationDiagnostics"
-dynamic = ["version"]
+version = "0.0.0"
 description = "Diagnostics for pre- and post- Harmonisation"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
@@ -26,7 +26,7 @@ dependencies = [
   "seaborn>=0.13,<0.14",
   "pyarrow>=21.0,<22.0",
   "requests>=2.32,<3.0",
-  "streamlit>=1.51,<2.0",
+  "streamlit>=1.51,<2.0"
 ]
 
 classifiers = [
@@ -62,4 +62,4 @@ version_scheme = "post-release"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["HarmonizationDiagnostics*"]
+include = ["DiagnoseHarmonization*]
