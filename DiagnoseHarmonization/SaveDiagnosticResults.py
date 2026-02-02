@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import date
 import pandas as pd
 
-def _ensure_results_dir(save_root: str | Path, report_date: str | None = None) -> Path:
+def _ensure_results_dir(save_root: str | Path, report_date: str | None = None, report_name: str | None = None) -> Path:
     """
     Create (or return) the directory where per-test CSVs will be saved.
 
@@ -15,13 +15,16 @@ def _ensure_results_dir(save_root: str | Path, report_date: str | None = None) -
     save_root = Path(save_root)
     if report_date is None:
         report_date = date.today().isoformat()  # e.g. '2026-01-28'
-    dir_name = f"DiagnosticResults_{report_date}"
+    if report_name is None:
+        dir_name = f"DiagnosticResults_{report_date}"
+    else:
+        dir_name = f"{report_name}_{report_date}"
     results_dir = save_root / dir_name
     results_dir.mkdir(parents=True, exist_ok=True)
     return results_dir
 
 def save_test_results(results, test_name: str, save_root: str | Path,
-                      feature_names: list | None = None, report_date: str | None = None):
+                      feature_names: list | None = None, report_date: str | None = None, report_name: str | None = None) -> str:
     """
     Save results from a single diagnostic test into a CSV inside a timestamped directory.
 
@@ -39,7 +42,11 @@ def save_test_results(results, test_name: str, save_root: str | Path,
     Minimal and defensive: doesn't change your results structure, only converts it into DataFrame(s)
     and writes one CSV named f"{test_name}.csv".
     """
-    results_dir = _ensure_results_dir(save_root, report_date)
+    if report_name is None:
+        results_dir = _ensure_results_dir(save_root, report_date)
+    else:
+        results_dir = _ensure_results_dir(save_root, report_date, report_name)
+       
     csv_path = results_dir / f"{test_name}.csv"
 
     # If already a DataFrame, just save

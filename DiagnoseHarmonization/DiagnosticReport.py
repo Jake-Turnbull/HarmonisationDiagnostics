@@ -190,7 +190,8 @@ def CrossSectionalReport(
         test_name="Cohens_D",
         save_root=save_dir,
         feature_names=feature_names,
-        report_date=report_date
+        report_date=report_date, 
+        report_name=report_name,
         )
         report.text_simple("Cohen's D test summaries added to report and saved as csv if requested")
         report.text_simple(line_break_in_text)
@@ -226,7 +227,8 @@ def CrossSectionalReport(
         test_name="Mahalanobis_Distance",
         save_root=save_dir,
         feature_names=feature_names,
-        report_date=report_date
+        report_date=report_date, 
+        report_name=report_name,
         )
         report.text_simple("Mahalanobis distance test summaries added to report and saved as csv if requested")
         report.text_simple(line_break_in_text)
@@ -271,7 +273,8 @@ def CrossSectionalReport(
         test_name="LMM_Results",
         save_root=save_dir,
         feature_names=feature_names,
-        report_date=report_date
+        report_date=report_date,
+        report_name=report_name
         )
 
         report.text_simple("Histogram of ICC (proportion of variance explained by batch):")
@@ -346,7 +349,8 @@ def CrossSectionalReport(
                 test_name="Variance_Ratios_Raw",
                 save_root=save_dir,
                 feature_names=feature_names,
-                report_date=report_date
+                report_date=report_date,
+                report_name=report_name,
             )
         # Summarise variance ratio results
         data_dict = {}
@@ -392,7 +396,8 @@ def CrossSectionalReport(
                 test_name="Variance_Ratio_Summary",
                 save_root=save_dir,
                 feature_names=feature_names,
-                report_date=report_date
+                report_date=report_date,
+                report_name=report_name,
             )
         
         summary_df = pd.DataFrame(summary_rows)
@@ -450,7 +455,8 @@ def CrossSectionalReport(
                 test_name="PCA_Scores",
                 save_root=save_dir,
                 feature_names=feature_names,
-                report_date=report_date
+                report_date=report_date,
+                report_name=report_name,
             )
 
         report.log_section("Eigenvalue_Scree", "PCA Eigenvalues and Covariance Structure")  
@@ -507,7 +513,8 @@ def CrossSectionalReport(
                 test_name="KS_Test",
                 save_root=save_dir,
                 feature_names=feature_names,
-                report_date=report_date
+                report_date=report_date,
+                report_name=report_name,
             )
 
         PlotDiagnosticResults.KS_plot(ks_results, rep=report)
