@@ -173,9 +173,9 @@ def run_pipeline_from_cli(data_path: str,
     # Example placeholder:
     try:
         # try importing the expected function from your package
-        from DiagnoseHarmonization.DiagnosticReport import CrossSectionalReport
+        from DiagnoseHarmonization import DiagnosticReport
 
-        CrossSectionalReport(X,
+        DiagnosticReport.CrossSectionalReport(X,
                              batch=cov_struct["batch_series"],
                              covariates=cov_struct["covariates_df"],
                              covariate_names=list(cov_struct["covariates_df"].columns),
@@ -230,3 +230,59 @@ def main(argv: Optional[Sequence[str]] = None):
 
 if __name__ == "__main__":
     main()
+
+    import io
+import pandas as pd
+
+# Optional: if you have charset-normalizer or chardet installed use them
+try:
+    import chardet
+except Exception:
+    chardet = None
+
+def robust_read_csv(path, pandas_kwargs=None, try_encodings=None):
+    """
+    Read CSV with a fallback strategy for encodings.
+    Returns dataframe and used encoding.
+    """
+    if pandas_kwargs is None:
+        pandas_kwargs = {}
+    if try_encodings is None:
+        try_encodings = ["utf-8", "utf-8-sig", "cp1252", "latin-1"]
+
+    # Fast attempt loop
+    for enc in try_encodings:
+        try:
+            return pd.read_csv(path, encoding=enc, **pandas_kwargs), enc
+        except UnicodeDecodeError:
+            continue
+        except pd.errors.ParserError:
+            # try with engine='python' as a fallback for weird separators
+            try:
+                return pd.read_csv(path, encoding=enc, engine="python", **pandas_kwargs), enc
+            except Exception:
+                continue
+
+    # Attempt to detect encoding (best-effort)
+    if chardet is not None:
+        with open(path, "rb") as fh:
+            raw = fh.read(100000)  # sample
+            guess = chardet.detect(raw)
+            enc = guess.get("encoding")
+            if enc:
+                try:
+                    return pd.read_csv(path, encoding=enc, **pandas_kwargs), enc
+                except Exception:
+                    pass
+
+    # Last resort: open with 'latin-1' but warn the user
+    try:
+        df = pd.read_csv(path, encoding="latin-1", **pandas_kwargs)
+        return df, "latin-1 (fallback, may mangle non-latin text)"
+    except Exception as e:
+        # raise a helpful error
+        raise UnicodeDecodeError(
+            f"Failed to read CSV '{path}'. Tried encodings {try_encodings} "
+            f"and detection (chardet={bool(chardet)}). Last error: {e}"
+        )
+
