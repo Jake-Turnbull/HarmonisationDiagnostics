@@ -173,7 +173,7 @@ def run_pipeline_from_cli(data_path: str,
     # Example placeholder:
     try:
         # try importing the expected function from your package
-        from DiagnosticReport import CrossSectionalReport
+        from DiagnoseHarmonization.DiagnosticReport import CrossSectionalReport
 
         CrossSectionalReport(X,
                              batch=cov_struct["batch_series"],
