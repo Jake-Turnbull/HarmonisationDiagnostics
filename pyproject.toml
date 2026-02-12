@@ -54,6 +54,9 @@ docs = [
   "sphinx-rtd-theme",
 ]
 
+[project.scripts]
+harmdiag = "DiagnoseHarmonize.cli:main"
+
 [tool.setuptools_scm]
 version_file = "DiagnoseHarmonization/_version.py"
 write_to = "DiagnoseHarmonization/_version.py"    
@@ -63,3 +66,4 @@ version_scheme = "post-release"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["DiagnoseHarmonization*"]
+
