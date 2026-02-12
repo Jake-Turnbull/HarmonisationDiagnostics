@@ -56,6 +56,7 @@ docs = [
 
 [project.scripts]
 harmdiag = "DiagnoseHarmonization.cli:main"
+eval_longitudinal = "DiagnoseHarmonization.eval_longitudinal:main"
 
 [tool.setuptools_scm]
 version_file = "DiagnoseHarmonization/_version.py"
