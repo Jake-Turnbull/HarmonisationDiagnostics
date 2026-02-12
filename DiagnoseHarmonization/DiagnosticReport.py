@@ -200,7 +200,7 @@ def CrossSectionalReport(
             covariates_numeric = None
 
         # Temp fix to convert covariates to numeric if they are not already, for functions that require numeric input (e.g. PCA correlation function). This will be replaced with a more robust solution in the future that handles mixed covariate types and allows user control over which covariates are converted.
-        covariates_numeric = covariate_to_numeric(covariates)
+        
         covariates = covariates_numeric
    
 
