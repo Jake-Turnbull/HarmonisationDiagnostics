@@ -28,16 +28,18 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
 
     data = np.random.randn(n_samples, n_features)
     covariate_cat = np.random.randint(0, 2, size=n_samples)    # categorical
-    print( covariate_cat)
+    print(covariate_cat)
     # Mean center the categorical covariate, testing this as divide by zero errors in PCA correlations otherwise
-    covariate_cat = covariate_cat - np.mean(covariate_cat) 
-    batch = np.array(["Siemens"] * int(n_samples/2) + ["Philips"] * int(n_samples/8)  + ["GE"] * int(n_samples/8)  + ["Magnetom"] * int(n_samples/4) )
-
-    # Construct mixed effects model to add some batch and covariate effects
     # Define age between 20 and 80 from normal distribution
     covariate_cont = 20 + 60 * np.random.rand(n_samples)   
-    covariate_cont = covariate_cont- np.mean(covariate_cont)             # mean center
     covariates = np.column_stack((covariate_cat, covariate_cont))
+
+    covariate_cat = covariate_cat - np.mean(covariate_cat)           # mean center
+    covariate_cont = covariate_cont- np.mean(covariate_cont)             # mean center
+
+    batch = np.array(["Siemens"] * int(n_samples/2) + ["Philips"] * int(n_samples/8)  + ["GE"] * int(n_samples/8)  + ["Magnetom"] * int(n_samples/4) )
+    # Construct mixed effects model to add some batch and covariate effects
+    # Define age between 20 and 80 from normal distribution
     variable_names = ['Sex', 'Age']
 
     # Simulate more realistic batch effects
@@ -45,13 +47,13 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
         for j in range(n_features):
             if batch[i] == "Siemens":
                 # Draw from a normal distribution with a higher mean, normaly distribute positive shift along features
-                data[i, j] += np.random.normal(loc=1.1, scale=0.1)
+                data[i, j] += np.random.normal(loc=0.7, scale=1.0)
             elif batch[i] == "Philips":
-                data[i, j] += np.random.normal(loc=0.1, scale=0.1)
+                data[i, j] += np.random.normal(loc=0.25, scale=2.0)
             elif batch[i] == "GE":
-                data[i, j] += np.random.normal(loc=-0.5, scale=0.1)
+                data[i, j] += np.random.normal(loc=-0.25, scale=2.5)
             elif batch[i] == "Magnetom":
-                data[i, j] += np.random.normal(loc=-0.7, scale=0.1)
+                data[i, j] += np.random.normal(loc=-0.7, scale=0.6)
                 
     # Simulate covariate effect of age and sex (when age increases, feature values decrease) 
     # (when sex = 0/1 (female/male), feature values decrease/increase to simulate volume differences)
@@ -71,7 +73,7 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
     # -------------------------
     # Run the DiagnosticReport
     # -------------------------
-    timestamped_reports = True
+    timestamped_reports = False
     try:
         # call signature:
         # DiagnosticReport(data, batch, covariates=None, variable_names=None,
@@ -131,3 +133,31 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
     #%%
     covariate_cat = np.random.randint(0, 1, size=n_samples)    # categorical
     print( covariate_cat)
+
+
+def test_min_script(tmp_path=save_dir):
+    """
+    Test that the minimal script runs without error and produces a report.
+    This is a more basic test than test_full_pipeline_generates_report, and can be used to quickly check that the core functionality of DiagnosticReport is working.
+    """
+    # Minimal data and batch
+    data = np.random.randn(100, 20)
+    batch = np.array(["A"] * 50 + ["B"] * 50)
+    # Run DiagnosticReport with minimal inputs
+    try:
+        from DiagnoseHarmonization import DiagnosticReport
+        DiagnosticReport.CrossSectionalReportMin(
+            data=data,
+            batch=batch,
+            save_dir=str(tmp_path),
+            report_name="Minimal_Test",
+            show=False,
+            timestamped_reports=False,
+            save_data=False
+        )
+    except Exception as e:
+        pytest.fail(f"DiagnosticReport raised an exception in minimal script: {e}")
+
+    # Check that report was generated
+    report_path = Path(tmp_path) / "Minimal_Test.html"
+    assert report_path.exists() and report_path.stat().st_size > 100, "Minimal script did not generate expected report."

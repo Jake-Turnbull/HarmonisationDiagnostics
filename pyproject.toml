@@ -26,7 +26,8 @@ dependencies = [
   "seaborn>=0.13,<0.14",
   "pyarrow>=21.0,<22.0",
   "requests>=2.32,<3.0",
-  "streamlit>=1.51,<2.0"
+  "streamlit>=1.51,<2.0",
+  "umap-learn>= 0.5",
 ]
 
 classifiers = [

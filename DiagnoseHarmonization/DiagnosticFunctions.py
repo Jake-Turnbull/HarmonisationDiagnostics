@@ -4,6 +4,7 @@
 import warnings
 from collections import Counter
 import re
+from matplotlib.pylab import lstsq
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -39,6 +40,209 @@ from pandas.api.types import CategoricalDtype
     - KS_Test: Performs two-sample Kolmogorov-Smirnov test between batches for each feature.
 
 """
+
+def RobustOLS_Orig(data,covariates,batch,covariate_names,covariate_types,report=None):
+    """Defining this function that can be called by cohen's d, variance ratio and KS test functions to residualise out covariate effects before calculating batch effects.
+    Here, we support Dummy encoding of categorical covariates and mean-centering of continuous covariates
+    Look for a variable which describes whether covariates are: 0 binary, 2 categorical, 3 Continous.
+    If variable not given, we will attempt to infer from the unique observations
+    Batch always categorical, create Dummy array for batch
+
+    
+    """
+    # Check if covariate types are provided, if not, infer them from data and report mapping:
+    if covariate_types is None:
+        covariate_types = []
+        for i in range(covariates.shape[1]):
+            unique_vals = np.unique(covariates[:, i])
+            if len(unique_vals) == 2:
+                covariate_types.append(0)  # binary
+            elif len(unique_vals) < 10:
+                covariate_types.append(2)  # categorical
+            else:
+                covariate_types.append(3)  # continuous
+                if report is not None and hasattr(report, "log_text"):
+                    report.log_text(f"Covariate {covariate_names[i]} inferred as continuous with {len(unique_vals)} unique values.")
+                    report.log_text(f"Please see https://link.springer.com/article/10.1007/s10459-010-9222-y for more information and consider passing the variable covariate_types to function"
+                                    f" to ensure correct handling of covariates in the report. (list of length unique covariates, 0 binary, 2 categorical, 3 continuous)")
+
+    # Create a DataFrame for OLS regression
+    df = pd.DataFrame(data, columns=[f'feature_{i}' for i in range(data.shape[1])])
+    for i, (name, ctype) in enumerate(zip(covariate_names, covariate_types)):
+        if ctype == 0:  # binary
+            df[name] = covariates[:, i]
+        elif ctype == 2:  # categorical
+            df[name] = covariates[:, i].astype(str)  # convert to string for dummy encoding
+        elif ctype == 3:  # continuous
+            df[name] = covariates[:, i]
+        else:
+            raise ValueError(f"Unknown covariate type {ctype} for covariate {name}")
+
+    df['batch'] = batch.astype(str)  # ensure batch is treated as categorical
+    # Combine batch and covariates, fit OLS and add batch x beta back in
+    # Create one array as design for OLS:
+    design = np.ones((data.shape[0], 1))  # intercept
+    for i, (name, ctype) in enumerate(zip(covariate_names, covariate_types)):
+        if ctype == 0:  # binary, make first column of array
+            design = np.column_stack((design, df[name]))
+        elif ctype == 2:  # categorical
+            design = np.column_stack((design, pd.get_dummies(df[name], drop_first=True)))  # dummy encode categorical covariates, drop first to avoid multicollinearity
+        elif ctype == 3:  # continuous
+            design = np.column_stack((design, df[name]))
+        
+    # Add dummy encoded batch as covariates to design matrix:
+    design = np.column_stack((design, pd.get_dummies(df['batch'], drop_first=True)))
+    # Use OLS and remove covariate effects, but add back in batch effects to ensure batch effects are preserved for downstream batch effect calculations
+    from numpy.linalg import lstsq
+
+    # Get residuals (data with covariate effects removed)
+    B, *_ = lstsq(design, data, rcond=None)
+    predicted = design @ B
+    data = data - predicted + (design[:, 1+covariates.shape[1]:] @ B[1+covariates.shape[1]:,:])  # add back batch effects
+
+        # Add back in batch effects to residuals to ensure batch effects are preserved for downstream batch effect calculations        
+
+
+
+    return data
+
+import numpy as np
+import pandas as pd
+from numpy.linalg import lstsq
+
+def RobustOLS(data, covariates, batch, covariate_names, covariate_types=None, report=None):
+    """
+    Minimal fixes to preserve batch while removing covariate effects.
+    - Builds full design = [Intercept | covariate-expanded-columns | batch-dummies]
+    - Fits full OLS, but subtracts only the covariate-predicted contribution
+      (using the covariate betas estimated conditional on batch).
+    - Returns residualized data (data - covariate_prediction).
+    """
+    # -------------------------
+    # Infer covariate types if not provided (same heuristic you used)
+    # -------------------------
+    if covariate_types is None:
+        covariate_types = []
+        for i in range(covariates.shape[1]):
+            unique_vals = np.unique(covariates[:, i])
+            if len(unique_vals) == 2:
+                covariate_types.append(0)  # binary
+            elif len(unique_vals) < 10:
+                covariate_types.append(2)  # categorical
+            else:
+                covariate_types.append(3)  # continuous
+                if report is not None and hasattr(report, "log_text"):
+                    report.log_text(
+                        f"Covariate {covariate_names[i]} inferred as continuous with {len(unique_vals)} unique values.")
+                    report.log_text(
+                        "Please see https://link.springer.com/article/10.1007/s10459-010-9222-y for more information and consider passing the variable covariate_types to function"
+                        " to ensure correct handling of covariates in the report. (list of length unique covariates, 0 binary, 2 categorical, 3 continuous)")
+
+    # -------------------------
+    # Create DataFrame (for dummy encoding) and prepare to build design matrix
+    # -------------------------
+    df = pd.DataFrame(data, columns=[f'feature_{i}' for i in range(data.shape[1])])
+    # put covariates into df similarly to your original code
+    for i, (name, ctype) in enumerate(zip(covariate_names, covariate_types)):
+        if ctype == 0:  # binary
+            df[name] = covariates[:, i]
+        elif ctype == 2:  # categorical
+            df[name] = covariates[:, i].astype(str)
+        elif ctype == 3:  # continuous
+            df[name] = covariates[:, i]
+        else:
+            raise ValueError(f"Unknown covariate type {ctype} for covariate {name}")
+
+    df['batch'] = batch.astype(str)  # ensure batch is treated as categorical
+
+    # -------------------------
+    # Build design matrix while tracking column ranges for each covariate and batch
+    # -------------------------
+    # Start with intercept
+    design = np.ones((data.shape[0], 1))
+    # We'll keep a list of (group_name, start_col_index, end_col_index) for mapping
+    mapping = []   # each entry: (kind, name, start, end) end is exclusive
+    cur_col = 1
+    mapping.append(('intercept', 'Intercept', 0, 1))
+
+    # Add covariates one-by-one, recording how many columns each expands to
+    covariate_ranges = []  # list of (name, start, end) for covariate columns
+    for i, (name, ctype) in enumerate(zip(covariate_names, covariate_types)):
+        if ctype == 0:  # binary -> single numeric column
+            col = df[name].astype(float).values.reshape(-1, 1)
+            design = np.column_stack((design, col))
+            start = cur_col
+            end = cur_col + 1
+            covariate_ranges.append((name, start, end))
+            mapping.append(('covariate', name, start, end))
+            cur_col = end
+        elif ctype == 2:  # categorical -> dummy columns
+            dummies = pd.get_dummies(df[name], drop_first=True)
+            if dummies.shape[1] == 0:
+                # no variation for this covariate: skip it
+                if report is not None and hasattr(report, "log_text"):
+                    report.log_text(f"Categorical covariate {name} has a single level; skipping.")
+                continue
+            design = np.column_stack((design, dummies.values))
+            start = cur_col
+            end = cur_col + dummies.shape[1]
+            covariate_ranges.append((name, start, end))
+            mapping.append(('covariate', name, start, end))
+            cur_col = end
+        elif ctype == 3:  # continuous -> single numeric column (same as original behavior)
+            col = df[name].astype(float).values.reshape(-1, 1)
+            design = np.column_stack((design, col))
+            start = cur_col
+            end = cur_col + 1
+            covariate_ranges.append((name, start, end))
+            mapping.append(('covariate', name, start, end))
+            cur_col = end
+        else:
+            raise ValueError(f"Unknown covariate type {ctype} for covariate {name}")
+
+    # Add batch dummies and record their range
+    batch_dummies = pd.get_dummies(df['batch'], drop_first=True)
+    if batch_dummies.shape[1] > 0:
+        design = np.column_stack((design, batch_dummies.values))
+        batch_start = cur_col
+        batch_end = cur_col + batch_dummies.shape[1]
+        mapping.append(('batch', 'batch', batch_start, batch_end))
+        cur_col = batch_end
+    else:
+        # single batch; record empty range
+        batch_start = batch_end = None
+        mapping.append(('batch', 'batch', cur_col, cur_col))
+
+    # -------------------------
+    # Fit full model and remove covariate contribution using the covariate column indices
+    # -------------------------
+    # Solve least squares for full design: design @ B = data
+    B_full, *_ = lstsq(design, data, rcond=None)  # shape: (n_design_cols, n_features)
+    # Create a list of all covariate column indices (exclude intercept and batch)
+    cov_indices = []
+    for (name, start, end) in covariate_ranges:
+        cov_indices.extend(list(range(start, end)))
+    if len(cov_indices) == 0:
+        # nothing to remove
+        if report is not None and hasattr(report, "log_text"):
+            report.log_text("No covariate columns detected — returning original data unchanged.")
+        return data
+
+    cov_indices = np.array(cov_indices, dtype=int)
+    # covariate-only design slice and betas:
+    cov_design = design[:, cov_indices]            # (n_samples, n_cov_design_cols)
+    beta_cov = B_full[cov_indices, :]              # (n_cov_design_cols, n_features)
+    pred_cov = cov_design @ beta_cov               # (n_samples, n_features)
+
+    # Subtract only the covariate contribution (preserve intercept and batch terms)
+    data_resid = data - pred_cov
+
+    if report is not None and hasattr(report, "log_text"):
+        report.log_text("RobustOLS: removed covariate contribution estimated conditional on batch (batch preserved).")
+
+    return data_resid
+
+
 
 def fit_lmm_safe(df, formula_fixed, group_col='batch', reml=False,
                  min_group_n=10, var_threshold=1e-8,
@@ -238,7 +442,7 @@ def z_score(data):
 
 import numpy as np
 
-def Cohens_D(Data, batch_indices, covariates=None, BatchNames=None):
+def Cohens_D(Data, batch_indices, covariates=None, BatchNames=None, covariate_names=None, covariate_types=None):
     """
     Cohen's d for each batch vs "all other batches" using UNWEIGHTED batch averages.
     - mean_other: simple (unweighted) mean of the other-batch means
@@ -272,18 +476,10 @@ def Cohens_D(Data, batch_indices, covariates=None, BatchNames=None):
     else:
         raise ValueError("BatchNames must be a dict, list/tuple, or None.")
 
-    # Residualise if covariates provided
+    # Use the helper fuction to residualise out covariate effects if covariates are provided, ensuring batch effects are preserved in the residuals for downstream calculations
     if covariates is not None:
-        from numpy.linalg import lstsq
-        covariates = np.asarray(covariates, dtype=float)
-        if covariates.ndim == 1:
-            covariates = covariates.reshape(-1, 1)
-        if covariates.shape[0] != Data.shape[0]:
-            raise ValueError("Covariates must have the same number of rows as Data.")
-        X = np.column_stack([np.ones((covariates.shape[0], 1)), covariates])
-        B, *_ = lstsq(X, Data, rcond=None)
-        predicted = X @ B
-        Data_to_use = Data - predicted
+        covariate_names = [f'cov_{i}' for i in range(covariates.shape[1])]
+        Data_to_use = RobustOLS(Data, covariates, batch_indices, covariate_names, covariate_types)
     else:
         Data_to_use = Data
 
@@ -594,7 +790,7 @@ def Mahalanobis_Distance(Data=None, batch=None, covariates=None):
     }
 
 # Define a function to calculate the feature-wise ratio of variance between each unique batch pair
-def Variance_Ratios(data, batch, covariates=None):
+def Variance_Ratios(data, batch, covariates=None,covariate_names=None, covariate_types=None):
     # Define a function to calculate the feature-wise ratio of variance between each unique batch pair
     import numpy as np
     import pandas as pd
@@ -616,13 +812,7 @@ def Variance_Ratios(data, batch, covariates=None):
     """If covariates are provided, remove their effects from the data using linear regression"""
     if covariates is not None:
         from numpy.linalg import inv, pinv
-        # Create new array contatining batch and covariates, estimate betas to avoid multicollinearity
-        # by using pseudo inverse
-        X = np.column_stack([np.ones(covariates.shape[0]), pd.get_dummies(batch, drop_first=True), covariates])  # (N, C+1)
-        beta = pinv(X) @ data  # (C+1, X)
-        predicted = X @ beta   # (N, X)
-        # Only remove the covariate effects, not the batch effects
-        data = data - predicted + (X[:,1:1+len(unique_batches)-1] @ beta[1:1+len(unique_batches)-1,:])
+        data = RobustOLS(data, covariates, batch, covariate_names, covariate_types)
     # Calculate variances for each feature in each batch
     for b in unique_batches:
         batch_data[b] = data[batch == b]
@@ -693,18 +883,11 @@ def KS_Test(data,
                 min_batch_n=3,
                 alpha=0.05,
                 do_fdr=True,
-                residualize_covariates=False):
+                residualize_covariates=True,
+                covariate_names=None,
+                covariate_types=None):
     """
     Improved two-sample KS testing for batch effect detection.
-
-    Changes to old code 03/11/2025:
-      - When comparing a batch to "overall", the overall distribution excludes that batch
-        by default (avoids dependence/bias).
-      - Optional pairwise batch-vs-batch comparisons preserved.
-      - Enforces a minimum sample size per group (min_batch_n).
-      - Returns both D-statistics (effect-size) and p-values, plus FDR-corrected p-values (BH).
-      - Returns small summary for each comparison: proportion_significant, mean_D.
-      - Handles feature names.
 
     Args:
       data: (n_samples, n_features) numpy array
@@ -786,11 +969,7 @@ def KS_Test(data,
                 covariates = covariates.reshape(-1, 1)
             if covariates.shape[0] != n_samples:
                 raise ValueError("Covariates must have the same number of rows as data.")
-            X = np.column_stack([np.ones((covariates.shape[0], 1)), covariates, pd.get_dummies(batch, drop_first=True)])  
-            B, *_ = lstsq(X, data, rcond=None)
-            predicted = X @ B
-            data = data - predicted + (X[:, 1+covariates.shape[1]:] @ B[1+covariates.shape[1]:,:])  # add back batch effects
-
+            data = RobustOLS(data, covariates, batch, covariate_names, covariate_types)
 
 
     ks_results = {}

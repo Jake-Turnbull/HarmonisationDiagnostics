@@ -39,7 +39,384 @@ def covariate_to_numeric(covariates):
     
     return covariate_numeric
 
+def CrossSectionalReportMin(data,
+                             batch,
+                             covariates=None,
+                             covariate_names=None,
+                             save_data: bool = True,
+                             save_data_name: str | None = None,
+                             save_dir: str | os.PathLike | None = None,
+                             feature_names: list | None = None,
+                             report_name: str | None = None,
+                             SaveArtifacts: bool = False,
+                             rep= None,
+                             power_analysis: bool = False,
+                             show: bool = False,
+                             timestamped_reports: bool = True,
+                             covariate_types: list | None = None,
+                             ):
+    """This is a minimal version of the CrossSectionalReport function that only runs the following:
+    - Z-score visualization
+    - Cohen's D test for mean differences
+    - Variance ratio test for variance differences between batches
+    - ICC and R^2 from LMM diagnostics"""
+    if save_dir is None:
+        save_dir = Path.cwd()
+        # Check inputs and revert to defaults as needed
+    if save_dir is None:
+        save_dir = Path.cwd()
+    else:
+        save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
 
+    if report_name is None:
+        base_name = "CrossSectionalReport.html"
+    else:
+        base_name = report_name if report_name.endswith(".html") else report_name + ".html"
+
+    if timestamped_reports:
+        stem, ext = base_name.rsplit(".", 1)
+        timestamp_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        base_name = f"{stem}_{timestamp_str}.html"
+
+    # Helper to configure a report object
+    def _configure_report(report_obj):
+        report_obj.save_dir = save_dir
+        report_obj.report_name = base_name
+        # write an initial report (optional) and log the path
+        rp = report_obj.write_report()  # writes to report_obj.report_path
+        report_obj.log_text(f"Initialized HTML report at: {rp}")
+        print(f"Report will be saved to: {rp}")
+        return report_obj
+
+    # If user passed a report object, use it (do not close it here).
+    # Otherwise create one and use it as a context manager so it's closed on exit.
+    created_local_report = False
+    if rep is None:
+        created_local_report = True
+        report_ctx = StatsReporter(save_artifacts=SaveArtifacts, save_dir=None)
+    else:
+        report_ctx = rep
+
+    # If we're using our own, enter the context manager
+    if created_local_report:
+        ctx = report_ctx.__enter__()
+        report = ctx
+    else:
+        report = report_ctx
+    # Report begins here within try block: ***NOTE: may change in the future to run main code outside try/finally if needed***
+    try:
+        logger = report.logger
+        # configure save dir/name and write initial stub report
+        _configure_report(report)
+
+        line_break_in_text = "-" * 125
+        report.text_simple("This is a minimal diagnostic report that includes only Z-score visualization, Cohen's D test for mean differences, Variance ratio test for variance differences between batches,\n\n "
+        "and ICC/R² from LMM diagnostics. For a more comprehensive report with additional tests and visualizations, please use the full CrossSectionalReport function.")
+
+
+        # Basic dataset summary
+        report.text_simple("Summary of dataset:")
+        report.text_simple(line_break_in_text)
+        report.log_text(
+            f"Analysis started\n"
+            f"Number of subjects: {data.shape[0]}\n"
+            f"Number of features: {data.shape[1]}\n"
+            f"Unique batches: {set(batch)}\n"
+            f"Unique Covariates: {set(covariate_names) if covariate_names is not None else set()}\n"
+            f"HTML report: {report.report_path}\n"
+        )
+        # Print version info from _version.py
+        from DiagnoseHarmonization._version import version
+        report.log_text(f"DiagnoseHarmonization version: {version}")
+            
+        # Get todays date for saving results
+        report_date = datetime.now().date().isoformat()
+
+        # Ensure batch is numeric array where needed
+        logger.info("Checking data format")
+        if isinstance(batch, (list, np.ndarray)):
+            batch = np.array(batch)
+            if batch.dtype.kind in {"U", "S", "O"}:  # string/object categorical
+                logger.info(f"Original batch categories: {list(set(batch))}")
+                logger.info("Creating numeric codes for batch categories")
+                batch_numeric, unique = pd.factorize(batch)
+                logger.info(f"Numeric batch codes: {list(set(batch_numeric))}")
+                # keep string labels in `batch` if plotting expects them; numeric conversions can be used inside tests as needed
+        else:
+            raise ValueError("Batch must be a list or numpy array")
+
+        # Samples per batch
+        unique_batches, counts = np.unique(batch, return_counts=True)
+        report.text_simple("Number of samples per batch:")
+        for b, c in zip(unique_batches, counts):
+            report.text_simple(f"Batch {b}: {c} samples")
+        report.text_simple(line_break_in_text)
+
+        # Begin tests
+        logger.info("Beginning diagnostic tests")
+        report.text_simple(" The order of tests is as follows: Multivariate distribution comparisson, Additive tests, Multiplicative tests, Model fit")
+        report.text_simple(line_break_in_text)
+
+        report.log_section("Z-score visualization", "Z-score normalization visualization")
+
+        report.text_simple("Z-score normalization (median-centred) visualization across batches,\n" \
+        "Here, we convert each feature to a median absolute deviation (MAD) and express each observation as a histogram.\n " \
+        "As the normalisation is done globally, batchwise histograms that appear differently (width or location) indicate batch differences in mean and/or variance across features. ")
+        
+        zscored_data = DiagnosticFunctions.z_score(data)
+        PlotDiagnosticResults.Z_Score_Plot(zscored_data, batch, rep=report)
+        report.log_text("Z-score normalization visualization added to report")
+        report.text_simple(line_break_in_text)
+
+        covariates_numeric = covariates
+        # if dataframe or dictionary, convert to numeric array:
+        if covariates is not None:
+            if isinstance(covariates, pd.DataFrame):
+                covariates_numeric = covariate_to_numeric(covariates.values)
+            elif isinstance(covariates, dict):
+                covariates_numeric = covariate_to_numeric(np.column_stack(list(covariates.values())))
+            elif isinstance(covariates, np.ndarray):
+                covariates_numeric = covariate_to_numeric(covariates)
+            else:
+                raise ValueError("Covariates must be a numpy array, pandas DataFrame, or dictionary of arrays")
+        # ---------------------
+        # Additive tests
+        # ---------------------
+        report.log_section("cohens_d", "Cohen's D test for mean differences")
+        logger.info("Cohen's D test for mean differences")
+        cohens_d_results, pairlabels = DiagnosticFunctions.Cohens_D(data, batch, covariates=covariates,covariate_names=covariate_names, covariate_types=covariate_types)
+        report.text_simple("Cohen's D test for mean differences completed")
+
+        # Plot (PlotDiagnosticResults should call rep.log_plot internally; our report.log_section ensures plots are attached)
+        PlotDiagnosticResults.Cohens_D_plot(cohens_d_results, pair_labels=pairlabels, rep=report)
+        report.log_text("Cohen's D plot added to report")
+
+        # Summaries per pair
+        for i, (b1, b2) in enumerate(pairlabels):
+            report.text_simple(f"Summary of Cohen's D results for batch comparison: {b1} vs {b2}")
+            cohens_d_pair = cohens_d_results[i, :]
+            if save_data:
+                data_dict = {}
+                data_dict[f"CohensD_{b1}_vs_{b2}"] = cohens_d_pair
+                
+            small_effect = (np.abs(cohens_d_pair) < 0.2).sum()
+            medium_effect = ((np.abs(cohens_d_pair) >= 0.2) & (np.abs(cohens_d_pair) < 0.5)).sum()
+            large_effect = (np.abs(cohens_d_pair) >= 0.5).sum()
+            report.text_simple(
+                f"Number of features with small effect size (|d| < 0.2): {small_effect}\n"
+                f"Number of features with medium effect size (0.2 <= |d| < 0.6): {medium_effect}\n"
+                f"Number of features with large effect size (|d| >= 0.6): {large_effect}\n"
+            )
+        from DiagnoseHarmonization.SaveDiagnosticResults import save_test_results
+        if save_data:
+            save_test_results(data_dict,
+            test_name="Cohens_D",
+            save_root=save_dir,
+            feature_names=feature_names,
+            report_date=report_date, 
+            report_name=report_name,
+            )
+
+        # Use the same code from CrossSectionalReport, report LMM diagnostics, Variance ratio
+        # run LMM diagnostics
+        lmm_results_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(data, batch, covariates=covariates,
+                                                feature_names=feature_names,
+                                                covariate_names=covariate_names,
+                                                min_group_n=2)
+
+        report.text_simple("LMM diagnostics completed.")
+        report.log_text("LMM results table added to report")
+
+        # add summary text
+        report.text_simple(
+            f"Number of features analyzed: {lmm_summary.get('n_features', 0)}\n"
+            f"Features where LMM succeeded: {lmm_summary.get('succeeded_LMM', 0)}\n"
+            f"Features using fallback (OLS or skipped): {lmm_summary.get('used_fallback', 0)}"
+        )
+
+        # list common notes
+        note_lines = []
+        for tag, count in sorted(lmm_summary.items(), key=lambda x: -x[1])[:10]:
+            if tag == 'n_features':
+                continue
+            note_lines.append(f"{tag}: {count}")
+        report.text_simple("LMM diagnostics notes (top):\n" + "\n".join(note_lines))
+        data_dict = {}
+        # Save DF if needed
+        if save_data:
+            data_dict['LMM_results_df'] = lmm_results_df
+            data_dict['LMM_summary'] = lmm_summary
+        
+        # Save LMM results as csv
+        save_test_results(data_dict,
+        test_name="LMM_Results",
+        save_root=save_dir,
+        feature_names=feature_names,
+        report_date=report_date,
+        report_name=report_name
+        )
+
+        report.text_simple("Histogram of ICC (proportion of variance explained by batch):")
+        # How to interpret ICC:
+        report.text_simple("Intraclass Correlation Coefficient (ICC) is the ratio of variance due to batch effects to the total variance (batch + residual). \n" 
+        "It quantifies the extent to which batch membership explains variability in the data.")
+        report.text_simple(
+            "Interpretation of ICC values:\n"
+            "- ICC close to 0: Little to no variance explained by batch; suggests minimal batch effect.\n"
+            "- ICC around 0.1-0.3: Small batch effect; may be acceptable depending on context.\n"
+            "- ICC around 0.3-0.5: Moderate batch effect; consider further investigation or correction.\n"
+            "- ICC above 0.5: Strong batch effect; likely requires correction to avoid confounding.\n"
+        )
+        try:
+            icc_nonan = lmm_results_df['ICC'].dropna()
+            if len(icc_nonan) > 0:
+                plt.figure(figsize=(10, 4))
+                plt.bar(range(len(icc_nonan)), icc_nonan)
+                plt.xlabel("Feature index")
+                plt.ylabel("ICC")
+                plt.title("ICC values per feature")
+                report.log_plot(plt, caption="ICC values per feature")
+                plt.close()
+
+        except Exception:
+            logger.exception("Could not produce ICC histogram")
+
+        
+        # Plot conditional and marginal R^2 per feature, indicate what each means for interpretation
+        report.text_simple("Marginal R² represents the variance explained by fixed effects (covariates)\n"
+                           "while Conditional R² represents the variance explained by both fixed and random effects (batch + covariates).")
+        lmm_r = lmm_results_df[['R2_marginal', 'R2_conditional']].dropna()
+        if len(lmm_r) > 0:
+            plt.figure(figsize=(10, 4))
+            plt.plot(lmm_r['R2_marginal'].values, label='Marginal R²', alpha=0.7)
+            plt.plot(lmm_r['R2_conditional'].values, label='Conditional R²', alpha=0.7)
+            plt.xlabel("Feature index")
+            plt.ylabel("R² value")
+            plt.title("Marginal and Conditional R² values per feature")
+            plt.legend()
+            report.log_plot(plt, caption="Marginal and Conditional R² values per feature")
+            plt.close()
+
+        # ---------------------
+        # Multiplicative tests
+        # ---------------------
+    
+        # Variance ratio
+        report.log_section("variance_ratio", "Variance ratio test (F-test) for variance differences between batches")
+        logger.info("Variance ratio test between each unique batch pair")
+        variance_ratio = DiagnosticFunctions.Variance_Ratios(data, batch, covariates=covariates, covariate_names=covariate_names, covariate_types=covariate_types)
+        report.log_text("Variance ratio test between each unique batch pair completed")
+
+        labels = [f"Batch {b1} vs Batch {b2}" for (b1, b2) in variance_ratio.keys()]
+        ratio_array = np.array(list(variance_ratio.values()))
+
+        # save variance ratios raw:
+        if save_data:
+            save_test_results(variance_ratio,
+                test_name="Variance_Ratios_Raw",
+                save_root=save_dir,
+                feature_names=feature_names,
+                report_date=report_date,
+                report_name=report_name,
+            )
+        # Summarise variance ratio results
+        data_dict = {}
+        summary_rows = []
+        for (b1, b2), ratios in variance_ratio.items():
+            ratios = np.array(ratios)
+            log_ratios = np.log(ratios)
+            mean_log = np.mean(log_ratios)
+            median_log = np.median(log_ratios)
+            iqr_log = np.percentile(log_ratios, [25, 75])
+            prop_higher = np.mean(log_ratios > 0)
+            median_ratio = np.exp(median_log)
+            mean_ratio = np.exp(mean_log)
+            summary_rows.append({
+                "Batch 1": b1,
+                "Batch 2": b2,
+                "Median log ratio": median_log,
+                "Mean log ratio": mean_log,
+                "IQR lower": iqr_log[0],
+                "IQR upper": iqr_log[1],
+                "Prop > 0": prop_higher,
+                "Median ratio (exp)": median_ratio,
+                "Mean ratio (exp)": mean_ratio,
+            })
+            data_dict[f"VarianceRatio_Batch{b1}_vs_Batch{b2}"] = ratios
+            data_dict[f"MedianLogVarianceRatio_Batch{b1}_vs_Batch{b2}"] = median_log
+            data_dict[f"MeanLogVarianceRatio_Batch{b1}_vs_Batch{b2}"] = mean_log
+            data_dict[f"IQRLowerLogVarianceRatio_Batch{b1}_vs_Batch{b2}"] = iqr_log[0]
+            data_dict[f"IQRUpperLogVarianceRatio_Batch{b1}_vs_Batch{b2}"] = iqr_log[1]
+            data_dict[f"PropHigherLogVarianceRatio_Batch{b1}_vs_Batch{b2}"] = prop_higher
+            data_dict[f"MedianVarianceRatioExp_Batch{b1}_vs_Batch{b2}"] = median_ratio
+            data_dict[f"MeanVarianceRatioExp_Batch{b1}_vs_Batch{b2}"] = mean_ratio
+
+            report.text_simple(
+                f"Variance ratio {b1} vs {b2}: median log={median_log:.3f} "
+                f"(IQR {iqr_log[0]:.3f}–{iqr_log[1]:.3f}), "
+                f"{prop_higher*100:.1f}% of features higher in batch {b1}"
+            )
+        
+        # Save summary as well
+        if save_data:
+            save_test_results(data_dict,
+                test_name="Variance_Ratio_Summary",
+                save_root=save_dir,
+                feature_names=feature_names,
+                report_date=report_date,
+                report_name=report_name,
+            )
+        
+        summary_df = pd.DataFrame(summary_rows)
+        report.text_simple("Variance ratio test summaries (per batch pair):")
+        PlotDiagnosticResults.variance_ratio_plot(ratio_array, labels, rep=report)
+        report.log_text("Variance ratio plot(s) added to report")
+    
+        report.text_simple(line_break_in_text)
+        # add summary text
+
+        report.log_section("report_conclusion", "Minimal Cross-Sectional Report")
+        report.text_simple("This concludes the minimal cross-sectional diagnostic report. For a more comprehensive analysis with additional tests and visualizations, please use the full CrossSectionalReport function.")
+
+        report.text_simple("Summary:")
+                # Summaries per pair
+        for i, (b1, b2) in enumerate(pairlabels):
+            report.text_simple(f"Summary of Cohen's D results for batch comparison: {b1} vs {b2}")
+            cohens_d_pair = cohens_d_results[i, :]
+            if save_data:
+                data_dict = {}
+                data_dict[f"CohensD_{b1}_vs_{b2}"] = cohens_d_pair
+                
+            small_effect = (np.abs(cohens_d_pair) < 0.2).sum()
+            medium_effect = ((np.abs(cohens_d_pair) >= 0.2) & (np.abs(cohens_d_pair) < 0.5)).sum()
+            large_effect = (np.abs(cohens_d_pair) >= 0.5).sum()
+            report.text_simple(
+                f"Number of features with small effect size (|d| < 0.2): {small_effect}\n"
+                f"Number of features with medium effect size (0.2 <= |d| < 0.6): {medium_effect}\n"
+                f"Number of features with large effect size (|d| >= 0.6): {large_effect}\n"
+            )
+        # Report LMM diagnostics summary
+        report.text_simple(
+            f"LMM diagnostics summary:\n"
+            f"Number of features analyzed: {lmm_summary.get('n_features', 0)}\n"
+            f"Features where LMM succeeded: {lmm_summary.get('succeeded_LMM', 0)}\n"
+            f"Features using fallback (OLS or skipped): {lmm_summary.get('used_fallback', 0)}"
+        )
+        # Report variance ratio summary
+        report.text_simple("Variance ratio test summaries (per batch pair):")
+        for _, row in summary_df.iterrows():
+            report.text_simple(
+                f"Batch {row['Batch 1']} vs Batch {row['Batch 2']}: median log ratio={row['Median log ratio']:.3f} "
+                f"(IQR {row['IQR lower']:.3f}–{row['IQR upper']:.3f}), "
+                f"{row['Prop > 0']*100:.1f}% of features higher in batch {row['Batch 1']}"
+            )
+        # Finalise report:
+    finally:
+        # If we created the local report context, close it properly
+        if created_local_report:
+            # call __exit__ on the context-managed report
+            report_ctx.__exit__(None, None, None)
 
 
 def CrossSectionalReport(
@@ -57,6 +434,7 @@ def CrossSectionalReport(
     power_analysis: bool = False,
     show: bool = False,
     timestamped_reports: bool = True,
+    covariate_types: list | None = None,
 ):
     """
     Create a diagnostic report for dataset differences across batches.
@@ -132,6 +510,7 @@ def CrossSectionalReport(
         _configure_report(report)
 
         line_break_in_text = "-" * 125
+        report.text_simple("This is the full diagnostic cross-sectional report that includes a comprehensive set of tests and visualizations to assess batch effects in the dataset. \n\n")
 
         # Basic dataset summary
         report.text_simple("Summary of dataset:")
@@ -147,6 +526,7 @@ def CrossSectionalReport(
         # Print version info from _version.py
         from DiagnoseHarmonization._version import version
         report.log_text(f"DiagnoseHarmonization version: {version}")
+
             
         # Get todays date for saving results
         report_date = datetime.now().date().isoformat()
@@ -160,6 +540,7 @@ def CrossSectionalReport(
                 logger.info("Creating numeric codes for batch categories")
                 batch_numeric, unique = pd.factorize(batch)
                 logger.info(f"Numeric batch codes: {list(set(batch_numeric))}")
+                report.text_simple(f"Batch categories detected: {list(set(batch))}. Numeric codes will be used for tests, but string labels will be kept for plots and summaries where possible.")
                 # keep string labels in `batch` if plotting expects them; numeric conversions can be used inside tests as needed
         else:
             raise ValueError("Batch must be a list or numpy array")
@@ -173,16 +554,28 @@ def CrossSectionalReport(
 
         # Begin tests
         logger.info("Beginning diagnostic tests")
-        report.text_simple(" The order of tests is as follows: Additive tests, Multiplicative tests, Tests of distribution")
+        report.text_simple("This pipeline breaks down batch analysis into the following tests:\n" \
+        "1. Multivariate visualisation of batch differences (MAD histograms)," \
+        "2. Univariate additive tests (Cohen's D for mean differences) " \
+        "3. Multivariate additive tests (Mahalanobis distance) \n "
+        "4. LMM diagnostics, unique variance explained by batch and model fit comparisson\n"\
+        "5. Multiplicative tests (Variance ratio test for variance differences between batches) \n" \
+        "6. Correlation between batch, covariates and principal components\n" \
+        "7. PCA eigenvalues by batch and overall difference in covariance structure\n"\
+        "8. UMAP visualization of batch and covariate clusters\n"
+        "9. Population similarity between batches using univariate two sample Kolmogorov-Smirnov test and multivariate MMD test\n" 
+        )
         report.text_simple(line_break_in_text)
 
         report.log_section("Z-score visualization", "Z-score normalization visualization")
 
         logger.info("Generating Z-score normalization visualization")
-        report.text_simple("Z-score normalization (median-centred) visualization across batches, " \
-        "the further the histograms are apart, the larger the mean batch differences on average across features." )
-        report.text_simple("We show also here a heatmap sorted by batch for further visualisation of batch effects, " \
-        "larger blocks of similar colours that are far from zero indicate larger batch effects compared to average across batches ")
+
+        report.text_simple("Z-score normalization (median-centred) visualization across batches,\n" \
+        "Here, we convert each feature to a median absolute deviation (MAD) and express each observation as a histogram.\n " \
+        "As the normalisation is done globally, batchwise histograms that appear differently (width or location) indicate batch differences in mean and/or variance across features. ")
+
+
         zscored_data = DiagnosticFunctions.z_score(data)
         PlotDiagnosticResults.Z_Score_Plot(zscored_data, batch, rep=report)
         report.log_text("Z-score normalization visualization added to report")
@@ -204,7 +597,7 @@ def CrossSectionalReport(
         # ---------------------
         report.log_section("cohens_d", "Cohen's D test for mean differences")
         logger.info("Cohen's D test for mean differences")
-        cohens_d_results, pairlabels = DiagnosticFunctions.Cohens_D(data, batch, covariates=covariates_numeric)
+        cohens_d_results, pairlabels = DiagnosticFunctions.Cohens_D(data, batch, covariates=covariates,covariate_names=covariate_names, covariate_types=covariate_types)
         report.text_simple("Cohen's D test for mean differences completed")
 
         # Plot (PlotDiagnosticResults should call rep.log_plot internally; our report.log_section ensures plots are attached)
@@ -368,7 +761,7 @@ def CrossSectionalReport(
         # Variance ratio
         report.log_section("variance_ratio", "Variance ratio test (F-test) for variance differences between batches")
         logger.info("Variance ratio test between each unique batch pair")
-        variance_ratio = DiagnosticFunctions.Variance_Ratios(data, batch, covariates=covariates_numeric)
+        variance_ratio = DiagnosticFunctions.Variance_Ratios(data, batch, covariates=covariates, covariate_names=covariate_names, covariate_types=covariate_types)
         report.log_text("Variance ratio test between each unique batch pair completed")
 
         labels = [f"Batch {b1} vs Batch {b2}" for (b1, b2) in variance_ratio.keys()]
@@ -472,7 +865,6 @@ def CrossSectionalReport(
             data, batch,N_components=20, covariates=covariates_numeric, variable_names=variable_names
         )
 
-
         data_dict = {}
         # save just the scores, not the full PCA object
         # Give each PC a name like PC1, PC2, ... as is more intuitive
@@ -507,8 +899,6 @@ def CrossSectionalReport(
 
 
         # Change Frobenius norm plot to be based on the covariance matrices of the data for each batch, rather than the PCA scores, as this is more interpretable in terms of the original features and their covariance structure (which is what we want to compare across batches)
-
-
         logger.info("Generating Frobenius Norm Plot")
         report.text_simple("The Frobenius norm plot displays the pairwise Frobenius norms of the covariance matrices between batches. \n")
         report.text_simple("Using this test, we can see if the covariance structure by batch is the same across all batches \n")
@@ -516,15 +906,37 @@ def CrossSectionalReport(
         report.text_simple("We calculate the overall covariance matrix for each batch and then compute the pairwise Frobenius norms between these covariance matrices. \n")
         covres = PlotDiagnosticResults.plot_covariance_frobenius(data, batch, rep=report)
 
-        logger.info("PCA Frobenius norm plot added to report")
+        logger.info("Frobenius norm plot between covariance matrices added to report")
         report.text_simple(line_break_in_text)
-    
+
+        report.log_section("Clustering", "Clustering and visualiation of batch and covariate clusters")
+        logger.info("Beginning cluster visulisation of batch and covariate clusters")
+
+        report.text_simple("Using UMAP and PCA to visualise clustering of samples by batch and covariates. \n" \
+        "If samples cluster by batch more strongly than covariates, this indicates strong batch effects. \n" \
+        "We include both PCA and UMAP visualisations to show both linear and non-linear clustering patterns. \n" \
+        "If you see clear clustering by batch in either PCA or UMAP, this suggests strong batch effects that may require correction. \n" \
+        "If you see clustering by covariates, this suggests that covariates are driving some of the variance in the data, which may be important to account for in harmonisation. \n" \
+        "If you see no clear clustering by either batch or covariates, this suggests minimal batch effects and that the data may be relatively homogeneous across batches. \n")
+
+        PlotDiagnosticResults.clustering_analysis_all(score,
+        data,
+        batch,
+        covariates=covariates,
+        rep=report,
+        variable_names=covariate_names,
+        UMAP_embedding=True)
+
+        logger.info("Clustering visualizations added to report")
+
         # ---------------------
         # Distribution tests (KS)
         # ---------------------
         report.log_section("ks", "Two-sample Kolmogorov-Smirnov tests")
         logger.info("Two-sample Kolmogorov-Smirnov test for distribution differences between each unique batch pair")
-        ks_results = DiagnosticFunctions.KS_Test(data, batch, feature_names=None, covariates=covariates_numeric, do_fdr=True,residualize_covariates=True)
+        ks_results = DiagnosticFunctions.KS_Test(data, batch, feature_names=None, covariates=covariates, do_fdr=True,residualize_covariates=True,
+                                                 covariate_names=covariate_names,covariate_types=covariate_types)
+        
         report.log_text("Two-sample Kolmogorov-Smirnov test completed")
 
         for key, value in ks_results.items():

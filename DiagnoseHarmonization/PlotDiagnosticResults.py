@@ -481,46 +481,9 @@ def PC_corr_plot(
             if not (len(variable_names) == 1 and str(variable_names[0]).lower() == "batch"):
                 raise ValueError("variable_names provided but covariates is None. Provide covariates or remove variable_names.")
         cov_names = []
-
-    # --- 1) PCA scatter by batch ---
-    fig1, ax = plt.subplots(figsize=(8, 6))
-    for b in unique_batches:
-        ax.scatter(df.loc[df[batch_col_name] == b, "PC1"], df.loc[df[batch_col_name] == b, "PC2"], label=f"{batch_col_name} {b}", alpha=0.7)
-    ax.set_xlabel("Principal Component 1")
-    ax.set_ylabel("Principal Component 2")
-    ax.set_title("PCA Scatter Plot by Batch")
-    ax.legend()
-    ax.grid(True)
-    # put legend outside the plot area to avoid overlap with points, especially if many batches
-    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
-    figs.append(("PCA scatter by batch", fig1))
-    
     batch_numeric = pd.Categorical(batch).codes
     batch_col_code = f"{batch_col_name}_code"
     df[batch_col_code] = batch_numeric
-    # --- 2) PCA scatter by each covariate (if present) ---
-    if cov_names:
-        for name in cov_names:
-            vals = df[name].values
-            fig, ax = plt.subplots(figsize=(8, 6))
-            # treat small-unique-count as categorical
-            if len(np.unique(vals)) <= 10:
-                for cat in np.unique(vals):
-                    sel = df[name] == cat
-                    ax.scatter(df.loc[sel, "PC1"], df.loc[sel, "PC2"], label=f"{name}={cat}", alpha=0.6)
-                    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
-            else:
-                sc = ax.scatter(df["PC1"], df["PC2"], c=vals, cmap="viridis", alpha=0.7)
-                plt.colorbar(sc, ax=ax, label=name)
-            ax.set_xlabel("Principal Component 1")
-            ax.set_ylabel("Principal Component 2")
-            ax.set_title(f"PCA Scatter Plot by {name}")
-            # legend can be large; show only for categorical
-            if len(np.unique(vals)) <= 20:
-                ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
-            ax.grid(True)
-            figs.append((f"PCA scatter by {name}", fig))
-
     # --- 3) Correlation heatmap if requested ---
     if PC_correlations:
         # create combined_data and combined_names in the same order used for corr matrix
@@ -547,193 +510,398 @@ def PC_corr_plot(
                 pass
 
     return figs
-"""----------------------------------------------------------------------------------------------------------------------------"""
-"""---------------------------------------- Plotting functions for PCA clustering results ----------------------------------"""
-"""----------------------------------------------------------------------------------------------------------------------------"""
-@rep_plot_wrapper # This is redundant now so may remove at later date
-def pc_clustering_plot(
+
+@rep_plot_wrapper
+def clustering_analysis_PCA(
     PrincipleComponents,
     batch,
     covariates=None,
     variable_names=None,
-    n_pcs_for_clustering=None,
-    n_clusters_for_kmeans=None,
-    random_state=0,
+    PC_correlations=False,
     *,
-    show=False
-):
-    """
-    NOTE TO USER: THIS FUNCTION IS A NEW ADDITION AND WAS PARTIALLY CREATED USING CHATGPT. PLEASE REVIEW CAREFULLY.
-    Compute clustering diagnostics on PCA (or any embedding).
-
-    Inputs:
-      - PrincipleComponents: ndarray (n_samples x n_components)
-      - batch: 1D array-like labels (length = n_samples)
-      - covariates: optional (not used for clustering but kept for API parity)
-      - variable_names: optional list (keeps same semantics as your other function)
-      - n_pcs_for_clustering: int or None (default = min(10, n_components))
-      - n_clusters_for_kmeans: int or None (default = number of unique batches)
-      - random_state: int
-      - show: bool -> call fig.show() if True
-
-    Returns:
-      - figs: list of (caption, matplotlib.Figure)
-      - metrics: dict with silhouette, ARI, NMI, contingency table, chi2, km_labels, etc.
-    """
+    show: bool = False,
+    cluster_batches: bool = False,
+    UMAP_embedding=False,
+    data = None):
     import numpy as np
     import pandas as pd
     import matplotlib.pyplot as plt
     import seaborn as sns
 
-    from sklearn.preprocessing import LabelEncoder
-    from sklearn.cluster import KMeans
-    from sklearn.metrics import silhouette_score, adjusted_rand_score, normalized_mutual_info_score
-    from scipy.stats import chi2_contingency
+    figs = []
 
-    # --- input validation & normalization (mirrors your style) ---
+    # Basic validation
     if not isinstance(PrincipleComponents, np.ndarray) or PrincipleComponents.ndim != 2:
         raise ValueError("PrincipleComponents must be a 2D numpy array (samples x components).")
-    if not isinstance(batch, np.ndarray):
-        batch = np.asarray(batch)
-    if batch.ndim != 1:
-        raise ValueError("batch must be a 1D array-like.")
-    if PrincipleComponents.shape[0] != batch.shape[0]:
+    if not isinstance(batch, np.ndarray) or batch.ndim != 1:
+        raise ValueError("batch must be a 1D numpy array.")
+    if PrincipleComponents.shape[0] != len(batch):
         raise ValueError("Number of samples in PrincipleComponents and batch must match.")
-    n_samples, n_components = PrincipleComponents.shape
     unique_batches = np.unique(batch)
-    if len(unique_batches) < 1:
-        raise ValueError("batch must contain at least one label.")
+    if len(unique_batches) < 2:
+        raise ValueError("At least two unique batches are required.")
 
-    # choose number of PCs to use for clustering diagnostics
-    if n_pcs_for_clustering is None:
-        n_pcs_for_clustering = min(10, n_components)
-    else:
-        n_pcs_for_clustering = min(int(n_pcs_for_clustering), n_components)
-    X = PrincipleComponents[:, :n_pcs_for_clustering]
+    # Build DataFrame of PCs
+    PC_Names = [f"PC{i+1}" for i in range(PrincipleComponents.shape[1])]
+    df = pd.DataFrame(PrincipleComponents, columns=PC_Names)
 
-    # determine k for KMeans
-    n_batches = len(unique_batches)
-    k = n_clusters_for_kmeans or n_batches
-    k = int(k)
-    if not (1 <= k <= n_samples):
-        raise ValueError("n_clusters_for_kmeans must be between 1 and n_samples")
+    # Decide batch column name (allow variable_names to include 'batch' as first element)
+    batch_col_name = "batch"
+    # If variable_names explicitly provided and starts with "batch", capture it as possible batch name
+    if variable_names is not None and len(variable_names) > 0 and str(variable_names[0]).lower() == "batch":
+        # use the exact provided first name (preserve case) as batch label
+        batch_col_name = variable_names[0]
+    
 
-    # label encode batch for metric functions
-    le = LabelEncoder()
-    try:
-        batch_enc = le.fit_transform(batch)
-    except Exception:
-        batch_enc = le.fit_transform(batch.astype(str))
+    df[batch_col_name] = batch
+    # Change batch to numeric codes to prevent issues in plotting and calculating correlation:
 
-    figs = []
-    metrics = {}
+    # --- Handle covariates robustly and determine covariate names ---
+    cov_names = []
+    cov_matrix = None  # numeric matrix (n_samples x n_covariates) used for correlations/plots
 
-    # --- silhouette using batch as labels (if valid) ---
-    if 2 <= n_batches <= (n_samples - 1):
-        try:
-            sil = silhouette_score(X, batch_enc)
-            metrics["silhouette_using_batch"] = float(sil)
-        except Exception as e:
-            metrics["silhouette_using_batch"] = None
-            metrics["silhouette_error"] = str(e)
-    else:
-        metrics["silhouette_using_batch"] = None
-        metrics["silhouette_note"] = "silhouette requires 2 <= n_labels <= n_samples-1"
+    if covariates is not None:
+        # If DataFrame: use its column names
+        if isinstance(covariates, pd.DataFrame):
+            cov_matrix = covariates.values
+            cov_names = list(map(str, covariates.columns))
+        # Structured numpy array with named fields
+        elif isinstance(covariates, np.ndarray) and covariates.dtype.names is not None:
+            cov_names = [str(n) for n in covariates.dtype.names]
+            # stack named columns into a 2D array
+            cov_matrix = np.vstack([covariates[name] for name in cov_names]).T
+        else:
+            # array-like (convert to ndarray)
+            cov_matrix = np.asarray(covariates)
+            if cov_matrix.ndim != 2:
+                raise ValueError("covariates must be 2D (samples x num_covariates).")
+            if cov_matrix.shape[0] != PrincipleComponents.shape[0]:
+                raise ValueError("Number of rows in covariates must match number of samples.")
 
-    # --- KMeans clustering ---
-    # handle sklearn's n_init compatibility ('auto' introduced in newer sklearn)
-    try:
-        km = KMeans(n_clusters=k, random_state=random_state, n_init="auto")
-    except TypeError:
-        km = KMeans(n_clusters=k, random_state=random_state, n_init=10)
-    km_labels = km.fit_predict(X)
-    metrics["kmeans_n_clusters"] = int(k)
-    metrics["kmeans_labels"] = km_labels
-
-    # ARI / NMI against batch
-    try:
-        ari = adjusted_rand_score(batch_enc, km_labels)
-        nmi = normalized_mutual_info_score(batch_enc, km_labels)
-        metrics["kmeans_ari_vs_batch"] = float(ari)
-        metrics["kmeans_nmi_vs_batch"] = float(nmi)
-    except Exception as e:
-        metrics["kmeans_ari_vs_batch"] = None
-        metrics["kmeans_nmi_vs_batch"] = None
-        metrics["kmeans_metrics_error"] = str(e)
-
-    # contingency table + chi-square test
-    ct = pd.crosstab(pd.Series(batch, name="batch"), pd.Series(km_labels, name="kmeans_label"))
-    metrics["contingency_table_batch_vs_kmeans"] = ct
-    try:
-        chi2, pval, dof, expected = chi2_contingency(ct)
-        metrics["chi2_vs_kmeans"] = {"chi2": float(chi2), "pvalue": float(pval), "dof": int(dof)}
-    except Exception as e:
-        metrics["chi2_vs_kmeans"] = {"error": str(e)}
-
-    # --- Figures: KMeans scatter, compare vs batch, silhouette per-batch plot (if silhouette computed) ---
-    # 1) KMeans clusters (PC1 vs PC2)
-    fig_km, ax = plt.subplots(figsize=(8, 6))
-    for lbl in np.unique(km_labels):
-        sel = km_labels == lbl
-        ax.scatter(X[sel, 0], X[sel, 1], label=f"k={lbl}", alpha=0.7, s=35)
-    ax.set_xlabel("PC1")
-    ax.set_ylabel("PC2")
-    ax.set_title(f"KMeans (k={k}) on first {n_pcs_for_clustering} PCs")
-    ax.legend(loc="best", fontsize="small")
-    ax.grid(True)
-    figs.append((f"KMeans clustering (k={k})", fig_km))
-
-    # 2) Side-by-side comparison: colored by batch vs colored by kmeans
-    fig_cmp, axs = plt.subplots(1, 2, figsize=(14, 5))
-    # by batch
-    for b in unique_batches:
-        sel = batch == b
-        axs[0].scatter(X[sel, 0], X[sel, 1], label=str(b), alpha=0.6, s=30)
-    axs[0].set_title("By batch")
-    axs[0].set_xlabel("PC1"); axs[0].set_ylabel("PC2"); axs[0].legend(fontsize="small")
-    # by kmeans
-    for lbl in np.unique(km_labels):
-        sel = km_labels == lbl
-        axs[1].scatter(X[sel, 0], X[sel, 1], label=f"k={lbl}", alpha=0.6, s=30)
-    axs[1].set_title("By KMeans cluster")
-    axs[1].set_xlabel("PC1"); axs[1].set_ylabel("PC2"); axs[1].legend(fontsize="small")
-    fig_cmp.suptitle("Compare batch vs kmeans (PC1 vs PC2)")
-    figs.append(("Compare batch vs kmeans", fig_cmp))
-
-    # 3) Optional: silhouette per batch (if silhouette computed)
-    if metrics.get("silhouette_using_batch") is not None:
-        # compute individual sample silhouettes and average per batch
-        try:
-            from sklearn.metrics import silhouette_samples
-            sample_sil = silhouette_samples(X, batch_enc)
-            sil_by_batch = {}
-            for b in unique_batches:
-                sel = (batch == b)
-                if sel.sum() > 0:
-                    sil_by_batch[str(b)] = float(np.nanmean(sample_sil[sel]))
+            # If variable_names provided: it may either be exactly covariate names,
+            # or include 'batch' as first element followed by covariate names.
+            if variable_names is not None:
+                # If user included 'batch' as first element, strip it.
+                if len(variable_names) == cov_matrix.shape[1] + 1 and str(variable_names[0]).lower() == "batch":
+                    cov_names = [str(x) for x in variable_names[1:]]
+                elif len(variable_names) == cov_matrix.shape[1]:
+                    cov_names = [str(x) for x in variable_names]
                 else:
-                    sil_by_batch[str(b)] = None
-            metrics["silhouette_by_batch"] = sil_by_batch
+                    # inconsistent lengths: raise helpful error
+                    raise ValueError(
+                        "variable_names length does not match number of covariates.\n"
+                        f"covariates has {cov_matrix.shape[1]} columns, "
+                        f"but variable_names has length {len(variable_names)}.\n"
+                        "If you include 'batch' in variable_names, put it first (e.g. ['batch', 'Age', 'Sex'])."
+                    )
+            else:
+                # No variable_names: create defaults
+                cov_names = [f"Covariate{i+1}" for i in range(cov_matrix.shape[1])]
 
-            # plotting
-            fig_sil, ax = plt.subplots(figsize=(8, 4))
-            names = list(sil_by_batch.keys())
-            vals = [sil_by_batch[n] if sil_by_batch[n] is not None else np.nan for n in names]
-            ax.bar(names, vals)
-            ax.set_ylabel("Average silhouette (per-batch)")
-            ax.set_title("Average silhouette score per batch")
-            figs.append(("Silhouette per batch", fig_sil))
-        except Exception as e:
-            metrics["silhouette_by_batch_error"] = str(e)
-    # show if requested
+        # Finally, assign covariate columns to df using cov_names
+        # (if we reached here cov_matrix and cov_names should be set)
+        if cov_matrix is None:
+            raise ValueError("Unable to interpret covariates input; please supply a DataFrame, structured array, or 2D ndarray.")
+        # Double-check shapes
+        if cov_matrix.shape[0] != PrincipleComponents.shape[0]:
+            raise ValueError("Number of rows in covariates must match number of samples.")
+        if cov_matrix.shape[1] != len(cov_names):
+            # defensive: if Pandas columns count mismatch (shouldn't happen), regenerate names
+            cov_names = [f"Covariate{i+1}" for i in range(cov_matrix.shape[1])]
+
+        for i, name in enumerate(cov_names):
+            df[name] = cov_matrix[:, i]
+    else:
+        # No covariates present; ensure variable_names is either None or only contains 'batch'
+        if variable_names is not None:
+            if not (len(variable_names) == 1 and str(variable_names[0]).lower() == "batch"):
+                raise ValueError("variable_names provided but covariates is None. Provide covariates or remove variable_names.")
+        cov_names = []
+
+
+    # --- 1) PCA scatter by batch ---
+    figs = []
+    fig1, ax = plt.subplots(figsize=(8, 6))
+    for b in unique_batches:
+        ax.scatter(df.loc[df[batch_col_name] == b, "PC1"], df.loc[df[batch_col_name] == b, "PC2"], label=f"{batch_col_name} {b}", alpha=0.7)
+    ax.set_xlabel("Principal Component 1")
+    ax.set_ylabel("Principal Component 2")
+    ax.set_title("PCA Scatter Plot by Batch")
+    ax.legend()
+    ax.grid(True)
+    # put legend outside the plot area to avoid overlap with points, especially if many batches
+    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+    figs.append(("PCA scatter by batch", fig1))
+    
+    batch_numeric = pd.Categorical(batch).codes
+    batch_col_code = f"{batch_col_name}_code"
+    df[batch_col_code] = batch_numeric
+    # Comment out for now as integrating t-SNE/UMAP as clustering here is better.
+    # --- 2) PCA scatter by each covariate (if present) ---
+    if cov_names:
+        for name in cov_names:
+            vals = df[name].values
+            fig, ax = plt.subplots(figsize=(8, 6))
+            # treat small-unique-count as categorical
+            if len(np.unique(vals)) <= 10:
+                for cat in np.unique(vals):
+                    sel = df[name] == cat
+                    ax.scatter(df.loc[sel, "PC1"], df.loc[sel, "PC2"], label=f"{name}={cat}", alpha=0.6)
+                    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+            else:
+                sc = ax.scatter(df["PC1"], df["PC2"], c=vals, cmap="viridis", alpha=0.7)
+                plt.colorbar(sc, ax=ax, label=name)
+            ax.set_xlabel("Principal Component 1")
+            ax.set_ylabel("Principal Component 2")
+            ax.set_title(f"PCA Scatter Plot by {name}")
+            # legend can be large; show only for categorical
+            if len(np.unique(vals)) <= 20:
+                ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+            ax.grid(True)
+            figs.append((f"PCA scatter by {name}", fig))
+    
+        # show only if requested
     if show:
         for _, f in figs:
             try:
                 f.show()
             except Exception:
+                # some backends may not support show on Figure objects; ignore safely
                 pass
-
     return figs
+
+@rep_plot_wrapper
+def clustering_analysis_all(
+    PrincipleComponents,
+    data,
+    batch,
+    covariates=None,
+    variable_names=None,
+    show: bool = False,
+    UMAP_embedding=True):
+
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import umap
+
+
+    figs = []
+
+    # Basic validation
+    if not isinstance(PrincipleComponents, np.ndarray) or PrincipleComponents.ndim != 2:
+        raise ValueError("PrincipleComponents must be a 2D numpy array (samples x components).")
+    if not isinstance(batch, np.ndarray) or batch.ndim != 1:
+        raise ValueError("batch must be a 1D numpy array.")
+    if PrincipleComponents.shape[0] != len(batch):
+        raise ValueError("Number of samples in PrincipleComponents and batch must match.")
+    unique_batches = np.unique(batch)
+    if len(unique_batches) < 2:
+        raise ValueError("At least two unique batches are required.")
+
+    # Build DataFrame of PCs
+    PC_Names = [f"PC{i+1}" for i in range(PrincipleComponents.shape[1])]
+    df = pd.DataFrame(PrincipleComponents, columns=PC_Names)
+
+    # Decide batch column name (allow variable_names to include 'batch' as first element)
+    batch_col_name = "batch"
+    # If variable_names explicitly provided and starts with "batch", capture it as possible batch name
+    if variable_names is not None and len(variable_names) > 0 and str(variable_names[0]).lower() == "batch":
+        # use the exact provided first name (preserve case) as batch label
+        batch_col_name = variable_names[0]
+    
+    df[batch_col_name] = batch
+    # Change batch to numeric codes to prevent issues in plotting and calculating correlation:
+
+    # --- Handle covariates robustly and determine covariate names ---
+    cov_names = []
+    cov_matrix = None  # numeric matrix (n_samples x n_covariates) used for correlations/plots
+    # If covariates given as matrix, dataframe or structured array, handle accordingly to extract covariate names and matrix
+    if covariates is not None:
+        # If DataFrame: use its column names
+        if isinstance(covariates, pd.DataFrame):
+            cov_matrix = covariates.values
+            cov_names = list(map(str, covariates.columns))
+        # Structured numpy array with named fields
+        elif isinstance(covariates, np.ndarray) and covariates.dtype.names is not None:
+            cov_names = [str(n) for n in covariates.dtype.names]
+            # stack named columns into a 2D array
+            cov_matrix = np.vstack([covariates[name] for name in cov_names]).T
+        else:
+            # array-like (convert to ndarray)
+            cov_matrix = np.asarray(covariates)
+            if cov_matrix.shape[0] != PrincipleComponents.shape[0]:
+                raise ValueError("Number of rows in covariates must match number of samples.")
+
+            # If variable_names provided: it may either be exactly covariate names,
+            # or include 'batch' as first element followed by covariate names.
+            if variable_names is not None:
+                # If user included 'batch' as first element, strip it.
+                if len(variable_names) == cov_matrix.shape[1] + 1 and str(variable_names[0]).lower() == "batch":
+                    cov_names = [str(x) for x in variable_names[1:]]
+                elif len(variable_names) == cov_matrix.shape[1]:
+                    cov_names = [str(x) for x in variable_names]
+                else:
+                    # inconsistent lengths: raise helpful error
+                    raise ValueError(
+                        "variable_names length does not match number of covariates.\n"
+                        f"covariates has {cov_matrix.shape[1]} columns, "
+                        f"but variable_names has length {len(variable_names)}.\n"
+                        "If you include 'batch' in variable_names, put it first (e.g. ['batch', 'cov1', 'cov2']).\n")
+    # Overall, returned covariate dataframe will have columns named according to cov_names, and batch column named according to batch_col_name, regardless of input format.
+            else:
+                # No variable_names: create defaults
+                cov_names = [f"Covariate{i+1}" for i in range(cov_matrix.shape[1])]
+                cov_df = pd.DataFrame(cov_matrix, columns=cov_names)
+                df = pd.concat([df, cov_df], axis=1)
+
+    # Plot PCA scatter by batch and covariates as in previous function, create subplots for each covariate and batch
+    # Here we will then display the low dimensional UMAP embedding of the data coloured by batch and covariates next to PCA for comparisson
+
+
+    # Perform UMAP embedding if data is provided and not too large (to avoid long runtime and memory issues)
+    if data is not None and len(data) < 10000:
+        reducer = umap.UMAP(random_state=42)
+        embedding = reducer.fit_transform(data)
+
+        df_umap = pd.DataFrame(embedding, columns=["UMAP1", "UMAP2"])
+        df_umap[batch_col_name] = batch
+
+        
+        if cov_names:
+            for i, name in enumerate(cov_names):
+                df_umap[name] = cov_matrix[:, i]
+                df[name] = cov_matrix[:, i]
+        # Plot UMAP on right, PCA on left for batch and covariates:
+    
+
+        fig_umap, ax = plt.subplots(1, 2, figsize=(16, 6))
+        sns.scatterplot(data=df_umap, x="UMAP1", y="UMAP2", hue=batch_col_name, palette="tab10", alpha=0.7, ax=ax[0])
+        ax[0].set_title("UMAP Embedding Colored by Batch")
+        ax[0].legend(loc="best", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+        figs.append(("UMAP embedding colored by batch", fig_umap))
+        # Plot PCA on left for batch
+        for b in unique_batches:
+            ax[1].scatter(df.loc[df[batch_col_name] == b, "PC1"], df.loc[df[batch_col_name] == b, "PC2"], label=f"{batch_col_name} {b}", alpha=0.7)
+        
+        ax[1].set_xlabel("Principal Component 1")
+        ax[1].set_ylabel("Principal Component 2")
+        ax[1].set_title("PCA Scatter Plot by Batch")
+        ax[1].legend(loc="best", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+        ax[1].grid(True)
+        figs.append(("UMAP and PCA embedding by batch", fig_umap))
+
+        # Plot UMAP colored by covariates if present
+        if cov_names:
+            for name in cov_names:
+                fig_cov, ax_cov = plt.subplots(1, 2, figsize=(16, 6))
+                sns.scatterplot(data=df_umap, x="UMAP1", y="UMAP2", hue=name, palette="viridis", alpha=0.7, ax=ax_cov[0])
+                ax_cov[0].set_title(f"UMAP Embedding Colored by {name}")
+                if len(np.unique(df_umap[name])) <= 20:
+                    ax_cov[0].legend(loc="best", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+                else:
+                    ax_cov[0].legend().remove()
+                    plt.colorbar(ax_cov[0].collections[0], ax=ax_cov[0], label=name)
+                # Plot PCA on left for covariate
+                vals = df[name].values
+                if len(np.unique(vals)) <= 10:
+                    for cat in np.unique(vals):
+                        sel = df[name] == cat
+                        ax_cov[1].scatter(df.loc[sel, "PC1"], df.loc[sel, "PC2"], label=f"{name}={cat}", alpha=0.6)
+                    ax_cov[1].legend(loc="best", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+                else:
+                    sc = ax_cov[1].scatter(df["PC1"], df["PC2"], c=vals, cmap="viridis", alpha=0.7)
+                    plt.colorbar(sc, ax=ax_cov[1], label=name)
+                ax_cov[1].set_xlabel("Principal Component 1")
+                ax_cov[1].set_ylabel("Principal Component 2")
+                ax_cov[1].set_title(f"PCA Scatter Plot by {name}")
+                if len(np.unique(vals)) <= 20:
+                    ax_cov[1].legend(loc="best", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+                ax_cov[1].grid(True)
+                figs.append((f"UMAP and PCA embedding by {name}", fig_cov))
+
+    if show:
+        for _, f in figs:
+            try:
+                f.show()
+            except Exception:
+                # some backends may not support show on Figure objects; ignore safely
+                pass
+    return figs
+
+@rep_plot_wrapper
+def clustering_analysis_UMAP(data, batch,
+                             covariates=None,
+                             variable_names=None,
+                             rep=None):
+    """Perform UMAP dimensionality reduction and plot the embedding colored by batch and covariates.
+    
+    Args:
+        data: 2D array-like (n_samples x n_features) input data for U
+        batch: 1D array-like (n_samples,) batch labels for each sample.
+        covariates: Optional 2D array-like (n_samples x n_covariates
+        variable_names: Optional list of covariate names (if covariates provided).
+        rep: Optional report object with rep.log_plot(plt, caption=...) method for logging"""
+    
+    # Check length of data and batch
+    if len(data) != len(batch):
+        raise ValueError("Length of data and batch must match.")
+    if covariates is not None and len(data) != len(covariates):
+        raise ValueError("Length of data and covariates must match.")
+    
+    # Check data size, if too large, log a warning and skip UMAP to avoid long runtime
+    if len(data) > 10000:
+        if rep is not None:
+            rep.log_text(f"Data has {len(data)} samples, which may lead to long UMAP runtime. Skipping UMAP embedding.")
+        return []
+    else:
+        import umap
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import pandas as pd
+
+        reducer = umap.UMAP(random_state=42)
+        embedding = reducer.fit_transform(data)
+
+        df = pd.DataFrame(embedding, columns=["UMAP1", "UMAP2"])
+        df["batch"] = batch
+        if covariates is not None:
+            for i in range(covariates.shape[1]):
+                df[f"Covariate{i+1}"] = covariates[:, i]
+        figs = []
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.scatterplot(data=df, x="UMAP1", y="UMAP2", hue="batch", palette="tab10", alpha=0.7, ax=ax)
+        ax.set_title("UMAP Embedding Colored by Batch")
+        ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+        figs.append(("UMAP embedding colored by batch", fig))
+        if rep is not None:
+            rep.log_plot(fig, "UMAP embedding colored by batch")
+            plt.close(fig)
+        
+        # Check covarariates and plot if present:
+        if covariates is not None:
+            for i in range(covariates.shape[1]):
+                fig, ax = plt.subplots(figsize=(8, 6))
+                sns.scatterplot(data=df, x="UMAP1", y="UMAP2", hue=f"Covariate{i+1}", palette="viridis", alpha=0.7, ax=ax)
+                ax.set_title(f"UMAP Embedding Colored by Covariate {i+1}")
+                if len(np.unique(covariates[:, i])) <= 20:
+                    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
+                else:
+                    ax.legend().remove()
+                    plt.colorbar(ax.collections[0], ax=ax, label=f"Covariate {i+1}")
+                figs.append((f"UMAP embedding colored by covariate {i+1}", fig))
+                if rep is not None:
+                    rep.log_plot(fig, f"UMAP embedding colored by covariate {i+1}")
+                    plt.close(fig)
+
+    
+    # Check if figs is empty (e.g. if data too large and UMAP skipped), and log a message if so
+    if not figs and rep is not None:
+        rep.log_text("No UMAP plots generated (data may have been too large).")
+    else:  
+        return figs
 
 """----------------------------------------------------------------------------------------------------------------------------"""
 """Plotting per batch variance across first N PCs"""
@@ -1293,6 +1461,7 @@ def KS_plot(ks_results: dict,
         for _, fig in figs:
             fig.show()
     return rep if rep is not None else figs
+
 ##########################################################################
 # Plotting for longitudinal metrics
 ###########################################################################
@@ -1701,7 +1870,6 @@ def plot_SubjectOrder(df,
         plt.show()
     return fig
 
-
 ### plot within subject variability
 import seaborn as sns
 def build_style_registry(subjects,
@@ -1809,7 +1977,7 @@ def plot_WithinSubjVar(
                         color='gray', edgecolor='k', alpha=0.8)
 
     if show_subject_legend:
-        axA.legend(title="Subject", bbox_to_anchor=(1.02, 1), loc='upper left')
+        axA.legend(title="Subject", bbox_to_anchor=(1.02, 1), loc='best')
 
     # -------- B: Mean across subjects per IDP --------
     idp_means = df[idps].mean(axis=0)
@@ -1828,7 +1996,7 @@ def plot_WithinSubjVar(
                         color='gray', edgecolor='k')
 
     if show_idp_legend:
-        axB.legend(title="IDP", bbox_to_anchor=(1.02, 1), loc='upper left')
+        axB.legend(title="IDP", bbox_to_anchor=(1.02, 1), loc='best')
 
     # -------- C: Mean across IDPs per subject --------
     subj_means = df.set_index(subject_col)[idps].mean(axis=1)
@@ -1847,7 +2015,7 @@ def plot_WithinSubjVar(
                         color='gray', edgecolor='k')
 
     # if show_subject_legend:
-    #     axC.legend(title="Subject", bbox_to_anchor=(1.02, 1), loc='upper left')
+    #     axC.legend(title="Subject", bbox_to_anchor=(1.02, 1), loc='best')
     plt.suptitle("Within subject variability", fontsize=13)
     plt.tight_layout(rect=[0, 0, 0.88, 0.95])
 
