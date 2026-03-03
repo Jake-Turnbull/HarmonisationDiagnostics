@@ -48,48 +48,45 @@ Main set of callable functions. Takes in data, batch and covariates to provide a
 The library currently offers two main implementations, one for cross sectional data and one for longitudinal data:
 
 **CrossSectionalReport():**
-Assumes that each row represents an independent sample. This report focuses on:
-Statistical differences between batches
-Potential confounding between batch and covariates
-It should be used before harmonisation to assess:
-Severity of mean differences
-Scaling differences
-Distributional differences
-It also provides visualisation of batch effects and covariates using PCA clustering and correlation analyses.
 
-    Arguments:
-        data (np.ndarray): Data matrix (samples × features)
-        batch (list or np.ndarray): Batch labels for each sample
-        covariates (np.ndarray, optional): Covariate matrix (samples × covariates)
-        covariate_names (list of str, optional): Names of covariates
+Single callable function that takes a data set and batch, returning a full organised analysis as a single easily understood HTML file.
 
-    
+    Arguments:  
+        data (np.ndarray): Data matrix (samples x features).
+        batch (list or np.ndarray): Batch labels for each sample.
+        
+    Optional arguments:
+        covariates (np.ndarray, optional): Covariate matrix (samples x covariates).
+        covariate_names (list of str, optional): Names of covariates.
+        save_data (bool, optional): Whether to save input data and results. Default = True
+        save_data_name (str, optional): Filename for saved data. Default = Report name
+        save_dir (str or os.PathLike, optional): Directory to save report and data. Default = pwd
+        report_name (str, optional): Name of the report file. Default = CrossSectionalReport_timestamp
+        SaveArtifacts (bool, optional): Whether to save plots as pngs. Default = False 
+        rep (StatsReporter, optional): Existing report object to use. Default = Generate report object
+        show (bool, optional): Whether to display plots interactively. Default = False (recommended to keep as false)
+        
 **LongitudinalReport():**
 Requires an additional vector of subject IDs. Longitudinal harmonisation has the added goal of ensuring that between-subject variability is preserved or recovered after harmonisation.
 This report assesses additive, multiplicative, and distributional components of batch effects under the assumption that batch effects affect all observations of a participant similarly across features.
 It also evaluates consistency of subject ranking across sites (e.g. if subject A has larger ROI values than subject B at one site, this ordering should be preserved across sites).
 
     
-    Arguments:      
+    Arguments: 
         data (np.ndarray): Data matrix (samples x features).
         batch (list or np.ndarray): Batch labels for each sample.
         subject_ids (list or np.ndarray): Subject IDs for each sample.
+
+    Optional Arguments:
         covariates (np.ndarray, optional): Covariate matrix (samples x covariates).
-        covariate_names (list of str, optional): Names of covariates.)
-
-
-There are additionally optional arguments for each function to allow users to specify savepath, data etc
-    Optional arguments for each function: 
-        save_data (bool, optional): Whether to save input data and results, default False
-        save_data_name (str, optional): Filename for saved data: Will generate one if not given
-        save_dir (str or os.PathLike, optional): Directory to save report and data: Will save to working directory if not given
-        report_name (str, optional): Name of the report file: Generate name based on date and time if not given
-        SaveArtifacts (bool, optional): Whether to save plots: Default False
-        rep (StatsReporter, optional): Existing report object to use: NOT RECOMMENDED TO CHANGE (the statsreporter functions will handle this in the function)
-        show (bool, optional): Whether to display plots interactively: Default False
-
-**Future implementations**
-We also plan to add a third function, UnknownBatchReport(), which would be applied to datasets where there aren't distinct batches, or cases where there are many batches each with small sample sizes (e.g < 20). This script would take image quality metrics (IQMs) for combination with new methods for harmonisation that don't use a batch label.
+        covariate_names (list of str, optional): Names of covariates.
+        save_data (bool, optional): Whether to save input data and results.
+        save_data_name (str, optional): Filename for saved data.
+        save_dir (str or os.PathLike, optional): Directory to save report and data.
+        report_name (str, optional): Name of the report file.
+        SaveArtifacts (bool, optional): Whether to save intermediate artifacts.
+        rep (StatsReporter, optional): Existing report object to use.
+        show (bool, optional): Whether to display plots interactively.
 
 ## LoggingTool.py
 
@@ -97,56 +94,25 @@ Enhanced logging and HTML report generation for diagnostic reports.
 Provides the StatsReporter class that allows logging text and plots, organizing them into sections, and writing a structured HTM report with a table of contents.
 If individuals would like to use this library to create their own analysis scripts, we suggest using the logging tool as an easy way to organise and return results (see script for more detail)
 
-**Key Functions:**
-
-    - log_section(section_id, title): mark a new named section in the log 
-    - log_plot(fig, caption, section=None): attach a plot to a section (defaults to last section)
-    - write_report(...) builds a TOC with hyperlinks and places each section's plots immediately after its logs.
-
 ## DiagnosticFunctions.py
 
-Definitions for each of the functions called by the different reporting tools in DiagnosticReport.py are written here.
-Each function will show either the additive, multiplicative or distribution difference between batches. Additionally, covariate effects using Linear models (either mixed effects or if this cannot be fit, fixed effects through OLS)
-    
-**Functions include:**
-
-    - Cohens_D: Calculate Cohen's d effect size between batches for each feature.
-    - Mahalanobis_Distance: Calculate Mahalanobis distance between batches.
-    - PC_Correlations: Perform PCA and correlate top PCs with batch and covariates.
-    - fit_lmm_safe: Robustly fit a Linear Mixed Model with fallbacks and diagnostics.
-    - Variance_Ratios: Calculate variance ratios between batches for each feature.
-    - KS_Test: Performs two-sample Kolmogorov-Smirnov test between batches for each feature.
+Definitions for each of the functions called by the different reporting tools in DiagnosticReport.py are written here. These functions can be called independantly of the main diagnostic reports if the user would prefer to focus on a single test.
 
 ## PlotDiagnosticResults.py
 
-Complementary plotting functions for the functions in DiagnosticFunctions.py
-**Functions Include:**
-
-    - Z_Score_Plot: Plot histogram and heatmap of Z-scored data by batch.
-    - Cohens_D_plot: Plot Cohen's d effect sizes with histograms.
-    - variance_ratio_plot: Plot variance ratios between batches.
-    - PC_corr_plot: Generate PCA diagnostic plots including scatter plots and correlation heatmaps.
-    - PC_clustering_plot: K-means clustering and silhouette analysis of PCA results by batch.
-    - Ks_Plot: Plot KS statistic between batches.
+Complementary plotting functions for the functions in DiagnosticFunctions.py. Some of these functions require the output from a corresponding diagnostic function in order to run so keep this in mind this if using them outside of the reports
 
 ## HarmonizationFunctions.py
 
-Collection of widely used functions for applying harmonisation to tabular data:
+While not the main purpose of this library, we do provide access to some well validated harmonisation methods for derived measures. These have all been tested and confirmed to be within machine precision to the other more widely used publically available versions.
 
-    - ComBat: Use ComBat to harmonise a given dataset 
-    - lme_harmonization: Use linear mixed modelling to remove an estimated batch effect from the data
-    Future implementations:
-    - Long_Combat
-    - CovBat
-    - ComBat-GAMs
-    - IQM_harmonisation  
 
 ## Simulator.py
 
 Batch effect simulator that opens an interactive web-browser and allows the user to generate simulated datasets with varying numbers of unique batches,
 severity of batch effects (additive and multiplicative) and different covariate effects. 
 
-The user can then visualise the feature-wise difference in batches using histograms and box-plots, generate a cross-sectional diagnostic report to view the effects in more detail and       apply harmonisation (using ComBat). This allows the user to get a direct comparisson of the before/after of applying harmonisation by comparing the reports in a semi-realistic scenario.
+The user can then visualise the feature-wise difference in batches using histograms and box-plots, generate a cross-sectional diagnostic report to view the effects in more detail and apply harmonisation (using ComBat). This allows the user to get a direct comparisson of the before/after of applying harmonisation by comparing the reports in a semi-realistic scenario.
 
 To run the simulator, run **streamlit run simulator.py** in the terminal
     
