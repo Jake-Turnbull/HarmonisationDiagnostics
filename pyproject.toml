@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "HarmonizationDiagnostics"
-version = "0.0.0"
+version = "0.1.1"
 description = "Diagnostics for pre- and post- Harmonisation"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
@@ -28,6 +28,8 @@ dependencies = [
   "requests>=2.32,<3.0",
   "streamlit>=1.51,<2.0",
   "umap-learn>= 0.5",
+  "mkdocstrings[python]>=0.18",
+  
 ]
 
 classifiers = [
@@ -48,6 +50,9 @@ dev = [
   "twine",
   "pip-tools",
   "pipdeptree",
+  "mkdocs", 
+  "mkdocs-material",
+   "mkdocstrings[python]"
 ]
 
 docs = [

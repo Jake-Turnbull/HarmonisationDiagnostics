@@ -1,0 +1,32 @@
+site_name: DiagnoseHarmonize
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - Getting Started: getting_started.md
+  - Theory: Theory.md
+  - Simulator: simulator.md
+  - API Reference:
+      - DiagnosticReport: api/DiagnosticReport.md
+      - HarmonizationFunctions: api/HarmonizationFunctions.md
+      - DiagnosticFunctions: api/DiagnosticFunctions.md
+      - PlotDiagnosticResults: api/PlotDiagnosticResults.md
+      - LoggingTool: api/LoggingTool.md
+      - DiagnosticFunctionsLong: api/DiagnosticFunctionsLong.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+            
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
