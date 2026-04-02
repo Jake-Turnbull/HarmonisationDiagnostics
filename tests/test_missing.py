@@ -1,7 +1,7 @@
 # This is a test to see if the diagnostic report can handle missing data correctly 
 
 import pytest
-from DiagnoseHarmonization import DiagnosticReport
+from DiagnoseHarmonisation import DiagnosticReport
 import numpy as np
 from pathlib import Path
 import pandas as pd
@@ -76,7 +76,7 @@ def test_missing_data(tmp_path = save_dir):
         # call signature:
         # DiagnosticReport(data, batch, covariates=None, variable_names=None,
         #                  save_dir=None, SaveArtifacts=False, rep=None, show=False)
-        from DiagnoseHarmonization import DiagnosticReport
+        from DiagnoseHarmonisation import DiagnosticReport
         DiagnosticReport.CrossSectionalReport(
             data=data, # Required: data matrix (samples x features)
                 batch=batch, # Required: batch vector (samples,)

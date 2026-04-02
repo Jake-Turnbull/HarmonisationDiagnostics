@@ -1,4 +1,4 @@
-from DiagnoseHarmonization import DiagnosticFunctions
+from DiagnoseHarmonisation import DiagnosticFunctions
 import numpy as np
 
 def make_toy_data():
@@ -34,7 +34,7 @@ def test_distances_positive():
         assert d >= 0
 
 # Additional tests for then plotting functions to ensure they run without error
-from DiagnoseHarmonization import PlotDiagnosticResults
+from DiagnoseHarmonisation import PlotDiagnosticResults
 import matplotlib.pyplot as plt
 
 def test_mahalanobis_distance_plot():

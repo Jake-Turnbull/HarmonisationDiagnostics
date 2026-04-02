@@ -1,2 +1,2 @@
-# HarmonizationFunctions
-::: DiagnoseHarmonization.HarmonizationFunctions
+# HarmonisationFunctions
+::: DiagnoseHarmonisation.HarmonisationFunctions

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "HarmonizationDiagnostics"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Diagnostics for pre- and post- Harmonisation"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
@@ -61,15 +61,13 @@ docs = [
 ]
 
 [project.scripts]
-harmdiag = "DiagnoseHarmonization.cli:main"
+harmdiag = "DiagnoseHarmonisation.cli:main"
 
 [tool.setuptools_scm]
-version_file = "DiagnoseHarmonization/_version.py"
-write_to = "DiagnoseHarmonization/_version.py"    
+fallback_version = "0.1.1"
 local_scheme = "no-local-version"                  
 version_scheme = "post-release"                    
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["DiagnoseHarmonization*"]
-
+include = ["DiagnoseHarmonisation*"]

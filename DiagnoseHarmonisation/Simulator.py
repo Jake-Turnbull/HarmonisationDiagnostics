@@ -171,7 +171,7 @@ if st.button("Generate Cross-Sectional Report"):
     if "data" not in st.session_state:
         st.warning("No data yet — please click **Run Simulation** to generate data before generating report.")
     else:
-        from DiagnoseHarmonization import DiagnosticReport
+        from DiagnoseHarmonisation import DiagnosticReport
         data = st.session_state["data"]
         batch_labels = st.session_state["batch_labels"]
         covariate_data = st.session_state["covariate_data"]
@@ -201,13 +201,13 @@ if st.button("Harmonize Data with ComBat and Generate Report"):
     if "data" not in st.session_state:
         st.warning("No data yet — please click **Run Simulation** to generate data before harmonizing.")
     else:
-        from DiagnoseHarmonization import DiagnosticReport
-        from DiagnoseHarmonization import HarmonizationFunctions
+        from DiagnoseHarmonisation import DiagnosticReport
+        from DiagnoseHarmonisation import HarmonisationFunctions
         data = st.session_state["data"]
         batch_labels = st.session_state["batch_labels"]
         covariate_data = st.session_state["covariate_data"]
         st.write("Harmonizing Data with ComBat...")
-        [harmonized_data, _,_] = HarmonizationFunctions.combat(data.T, batch_labels, covariate_data, parametric=True)
+        [harmonized_data, _,_] = HarmonisationFunctions.combat(data.T, batch_labels, covariate_data, parametric=True)
         harmonized_data = harmonized_data.T  # Transpose back to original shape
         st.write("Generating Cross-Sectional Report on Harmonized Data...")
         SaveArtifacts = False

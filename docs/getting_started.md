@@ -40,7 +40,7 @@ Using the full report:
 
 This will produce a detailed HTML file containing a full analysis of batch and covariate effects.
 
-## 4. Applying harmonization methods
+## 4. Applying harmonisation methods
 
 Assuming you detect significant batch effects, you would then select a harmonisation method based on which you have observed. For example, if the batch effect is only additive (difference in means) you may simply revert to regression. If the effect is more complex however, you may choose a more advanced method such as CovBat:
 
@@ -52,6 +52,6 @@ Assuming you detect significant batch effects, you would then select a harmonisa
     covbat_mode=True
     )
 
-## 5. Checking harmonization efficacy
+## 5. Checking harmonisation efficacy
 
 Now that you have your harmonised data, you can simply rerun the tool on the new data to see which metrics show improvement and whether or not batch effects persist in any of them. It is worth saying here that you may not require them to be completely removed depending on your experimental goal. For example, depending on your analysis, a simple mean correction may suffice.

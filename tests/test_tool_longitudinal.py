@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from DiagnoseHarmonization import DiagnosticFunctions
-from DiagnoseHarmonization import PlotDiagnosticResults
-from DiagnoseHarmonization import DiagnosticReport
+from DiagnoseHarmonisation import DiagnosticFunctions
+from DiagnoseHarmonisation import PlotDiagnosticResults
+from DiagnoseHarmonisation import DiagnosticReport
 
 # Load CSV
 df = pd.read_csv("tests/onharmony.csv")

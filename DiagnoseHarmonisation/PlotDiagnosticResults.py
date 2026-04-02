@@ -12,6 +12,180 @@ import matplotlib.pyplot as plt
 import matplotlib.figure as mfig
 from scipy import stats
 
+def LMM_Diagnostics_Plot(
+    results_df,
+    feature_order="original",
+    max_labels=50,
+    include_delta_r2=True,
+    include_status_summary=True,
+):
+    """
+    Plot LMM diagnostics from Run_LMM_cross_sectional output.
+
+    Args:
+        results_df (pd.DataFrame): Output dataframe from Run_LMM_cross_sectional.
+        feature_order (str): 'original' to preserve input order, 'sorted_icc' to sort by ICC.
+        max_labels (int): Maximum number of x-axis labels to show before thinning them.
+        include_delta_r2 (bool): If True, add a delta_R2 plot.
+        include_status_summary (bool): If True, add a status/notes summary plot.
+
+    Returns:
+        list of tuples: [(caption, fig), ...]
+    """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    # ---- Validation ----
+    if not isinstance(results_df, pd.DataFrame):
+        raise ValueError("results_df must be a pandas DataFrame.")
+
+    required_cols = ["feature", "ICC", "R2_marginal", "R2_conditional"]
+    missing = [c for c in required_cols if c not in results_df.columns]
+    if missing:
+        raise ValueError(f"results_df is missing required columns: {missing}")
+
+    df = results_df.copy()
+
+    # Make sure there is a stable order column
+    if "feature_index" not in df.columns:
+        df["feature_index"] = np.arange(len(df))
+
+    # Choose ordering
+    if feature_order == "original":
+        df_plot = df.sort_values("feature_index").reset_index(drop=True)
+    elif feature_order == "sorted_icc":
+        df_plot = df.sort_values("ICC", ascending=False, na_position="last").reset_index(drop=True)
+    else:
+        raise ValueError("feature_order must be either 'original' or 'sorted_icc'.")
+
+    # Helper for x labels
+    def _x_labels(frame):
+        labels = frame["feature"].astype(str).tolist()
+        if len(labels) <= max_labels:
+            return labels, np.arange(len(labels))
+
+        step = int(np.ceil(len(labels) / max_labels))
+        shown = [lab if (i % step == 0) else "" for i, lab in enumerate(labels)]
+        return shown, np.arange(len(labels))
+
+    figs = []
+
+    # -------------------------------------------------
+    # 1) ICC per feature
+    # -------------------------------------------------
+    fig1, ax1 = plt.subplots(figsize=(14, 5))
+    x_labels, x = _x_labels(df_plot)
+
+    icc_vals = pd.to_numeric(df_plot["ICC"], errors="coerce").to_numpy()
+    ax1.bar(x, icc_vals, alpha=0.8)
+
+    ax1.set_title("ICC per feature")
+    ax1.set_xlabel("Feature")
+    ax1.set_ylabel("ICC")
+    ax1.set_ylim(bottom=0)
+
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(x_labels, rotation=90 if len(df_plot) <= 100 else 0)
+
+    figs.append(("ICC per feature", fig1))
+
+    # -------------------------------------------------
+    # 2) ICC sorted descending
+    # -------------------------------------------------
+    df_icc_sorted = df.sort_values("ICC", ascending=False, na_position="last").reset_index(drop=True)
+
+    fig2, ax2 = plt.subplots(figsize=(14, 5))
+    x_labels2, x2 = _x_labels(df_icc_sorted)
+    icc_sorted_vals = pd.to_numeric(df_icc_sorted["ICC"], errors="coerce").to_numpy()
+
+    ax2.bar(x2, icc_sorted_vals, alpha=0.8)
+    ax2.set_title("ICC per feature (sorted descending)")
+    ax2.set_xlabel("Feature")
+    ax2.set_ylabel("ICC")
+    ax2.set_ylim(bottom=0)
+
+    ax2.set_xticks(x2)
+    ax2.set_xticklabels(x_labels2, rotation=90 if len(df_icc_sorted) <= 100 else 0)
+
+    figs.append(("ICC per feature sorted", fig2))
+
+    # -------------------------------------------------
+    # 3) Marginal and conditional R²
+    # -------------------------------------------------
+    fig3, ax3 = plt.subplots(figsize=(14, 5))
+    x_r2 = np.arange(len(df_plot))
+
+    r2_m = pd.to_numeric(df_plot["R2_marginal"], errors="coerce").to_numpy()
+    r2_c = pd.to_numeric(df_plot["R2_conditional"], errors="coerce").to_numpy()
+
+    ax3.plot(x_r2, r2_m, label="Marginal R²", linewidth=1.5)
+    ax3.plot(x_r2, r2_c, label="Conditional R²", linewidth=1.5)
+
+    ax3.set_title("Marginal and Conditional R² per feature")
+    ax3.set_xlabel("Feature")
+    ax3.set_ylabel("R²")
+    ax3.set_ylim(bottom=0)
+
+    ax3.set_xticks(x_r2)
+    ax3.set_xticklabels(x_labels, rotation=90 if len(df_plot) <= 100 else 0)
+    ax3.legend()
+
+    figs.append(("Marginal and Conditional R² per feature", fig3))
+
+    # -------------------------------------------------
+    # 4) Delta R²
+    # -------------------------------------------------
+    if include_delta_r2 and "delta_R2" in df.columns:
+        fig4, ax4 = plt.subplots(figsize=(14, 5))
+        df_delta = df_plot.copy()
+        df_delta["delta_R2"] = pd.to_numeric(df_delta["delta_R2"], errors="coerce")
+
+        delta_vals = df_delta["delta_R2"].to_numpy()
+        ax4.bar(np.arange(len(df_delta)), delta_vals, alpha=0.8)
+
+        ax4.set_title("Delta R² per feature (Conditional - Marginal)")
+        ax4.set_xlabel("Feature")
+        ax4.set_ylabel("Delta R²")
+
+        max_labels = 100
+        # Only show x labels if not too many features, otherwise, have no labels and just ticks:
+        if len(df_delta) <= max_labels:
+            ax4.set_xticks(np.arange(len(df_delta)))
+            if len(df_delta) <= max_labels-20:
+                ax4.set_xticklabels(
+                    df_delta["feature"].astype(str).tolist(),
+                    rotation=90
+                )
+            else:
+                ax4.set_xticks(np.arange(len(df_delta)))
+                ax4.set_xticklabels(
+                    df_delta["feature"].astype(str).tolist(),
+                    rotation=90 if len(df_delta) <= 100 else 0
+                )
+        else: 
+            ax4.set_xticks(np.arange(len(df_delta)))
+            ax4.set_xticklabels([""] * len(df_delta))
+
+        figs.append(("Delta R² per feature", fig4))
+
+    # -------------------------------------------------
+    # 5) Status / notes summary
+    # -------------------------------------------------
+    if include_status_summary and "status" in df.columns:
+        fig5, ax5 = plt.subplots(figsize=(10, 4))
+        status_counts = df["status"].fillna("unknown").value_counts()
+
+        ax5.bar(status_counts.index.astype(str), status_counts.values, alpha=0.85)
+        ax5.set_title("LMM fit status counts")
+        ax5.set_xlabel("Status")
+        ax5.set_ylabel("Count")
+        ax5.tick_params(axis="x", rotation=30)
+
+        figs.append(("LMM fit status counts", fig5))
+
+    return figs
+
 def _is_figure(obj) -> bool:
     return isinstance(obj, mfig.Figure)
 
@@ -1392,7 +1566,7 @@ def mahalanobis_distance_plot(results: dict,
 """----------------------------------------------------------------------------------------------------------------------------"""
 """---------------------------------------- Plotting functions for Two-sample Kolmogorov-Smirnov test ----------------------------------"""
 """----------------------------------------------------------------------------------------------------------------------------"""
-def KS_plot(ks_results: dict,
+def KS_plot_old(ks_results: dict,
              feature_names: list = None,
                rep = None,            # optional StatsReporter
                  caption: Optional[str] = None,
@@ -1487,6 +1661,289 @@ def KS_plot(ks_results: dict,
         for _, fig in figs:
             fig.show()
     return rep if rep is not None else figs
+
+from typing import Optional
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def KS_plot(
+    ks_results: dict,
+    feature_names: list = None,
+    rep=None,                      # optional StatsReporter
+    caption: Optional[str] = None,
+    show: bool = False
+):
+    """
+    Plot KS test results with:
+      1) p-values ordered by raw p-value, with BH-adjusted values shown
+      2) p-values in original feature order, with BH-adjusted values shown
+      3) KS D statistic with the per-feature critical D threshold needed to reject H0
+
+    Returns:
+      If rep is provided: rep
+      Otherwise: list of (caption, fig) tuples
+    """
+    """
+    Plot the output of the two sample KS test:
+      1) p-values ordered by raw p-value, with BH-adjusted values shown
+      2) p-values in original feature order, with BH-adjusted values shown
+      3) KS D statistic with the per-feature critical D threshold needed to reject H0
+
+    Overall, returns three plots per comparison (batch vs overall and batch vs batch):
+
+        - one plot showing the pairwise KS test results for each feature as a dot plot (ordered as -log10 p-value)
+        - One plot showing the batch vs whole dataset (excluding that batch), again as a dot plot ordered by -log10 p-value.
+
+    Args:
+        ks_results (dict): Output from TwoSampleKSTest(...)
+            ks_results: keys are tuples like (b, 'overall') or (b1, b2)
+        - each value is a dict with:
+            'statistic': np.array of D statistics (length n_features)
+            'p_value': np.array of p-values (nan where test not run)
+            'p_value_fdr': np.array of BH-corrected p-values (if do_fdr else None)
+            'n_group1': array of sample counts per feature for group1 (same across features but kept for completeness)
+            'n_group2': array of counts for group2
+            'summary': {'prop_significant': float, 'mean_D': float}
+    Returns:
+        figs (list): List of (caption, fig) tuples for each plot generated."""
+
+
+
+    def _bh_fdr(pvals):
+        """Benjamini-Hochberg adjustment with NaNs preserved."""
+        p = np.asarray(pvals, dtype=float)
+        out = np.full_like(p, np.nan, dtype=float)
+        mask = ~np.isnan(p)
+        p_nonan = p[mask]
+        m = p_nonan.size
+        if m == 0:
+            return out
+
+        order = np.argsort(p_nonan)
+        ranked = p_nonan[order]
+
+        adj = np.empty(m, dtype=float)
+        cummin = 1.0
+        for i in range(m - 1, -1, -1):
+            rank = i + 1
+            val = ranked[i] * m / rank
+            cummin = min(cummin, val)
+            adj[i] = cummin
+
+        adj_back = np.empty(m, dtype=float)
+        adj_back[order] = np.minimum(adj, 1.0)
+        out[mask] = adj_back
+        return out
+
+    def _ks_critical_d(n1, n2, alpha=0.05):
+        """
+        Approximate two-sample KS critical value for rejecting H0.
+        D_crit = c(alpha) * sqrt((n1+n2)/(n1*n2))
+        where c(alpha) = sqrt(-0.5 * ln(alpha/2))
+        """
+        n1 = np.asarray(n1, dtype=float)
+        n2 = np.asarray(n2, dtype=float)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            c_alpha = np.sqrt(-0.5 * np.log(alpha / 2.0))
+            denom = np.sqrt((n1 * n2) / (n1 + n2))
+            dcrit = c_alpha / denom
+        dcrit[(n1 <= 0) | (n2 <= 0)] = np.nan
+        return dcrit
+
+    def _prepare_feature_names(n_features):
+        if feature_names is None:
+            return np.array([f"feature_{i + 1}" for i in range(n_features)], dtype=object)
+        if len(feature_names) != n_features:
+            raise ValueError("feature_names length must match number of features in ks_results.")
+        return np.asarray(feature_names, dtype=object)
+
+    def _comparison_label(key):
+        if key[1] == "overall":
+            return f"Batch {key[0]} vs overall"
+        return f"Batch {key[0]} vs batch {key[1]}"
+
+    def _plot_pvals_ordered(result, feat_names, title):
+        p = np.asarray(result["p_value"], dtype=float)
+        fdr = result.get("p_value_fdr", None)
+        if fdr is not None:
+            fdr = np.asarray(fdr, dtype=float)
+
+        valid = ~np.isnan(p)
+        if not np.any(valid):
+            return None
+
+        p_valid = p[valid]
+        fdr_valid = fdr[valid] if fdr is not None else None
+        feat_valid = feat_names[valid]
+
+        order = np.argsort(p_valid)
+        p_sorted = p_valid[order]
+        feat_sorted = feat_valid[order]
+        fdr_sorted = fdr_valid[order] if fdr_valid is not None else None
+
+        x = np.arange(p_sorted.size)
+
+        fig, ax = plt.subplots(figsize=(13, 6))
+        ax.plot(x, -np.log10(np.clip(p_sorted, 1e-300, 1.0)),
+                marker="o", linestyle="-", linewidth=1.2, markersize=4,
+                label="Raw p-value")
+
+        if fdr_sorted is not None:
+            ax.plot(x, -np.log10(np.clip(fdr_sorted, 1e-300, 1.0)),
+                    marker="s", linestyle="--", linewidth=1.2, markersize=4,
+                    label="BH-adjusted p-value")
+
+        ax.axhline(-np.log10(0.05), color="red", linestyle=":", linewidth=1.2, label="0.05 threshold")
+        ax.set_xlabel("Features ordered by raw p-value")
+        ax.set_ylabel(r"$-\log_{10}(p)$")
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best")
+
+        # Keep labels readable without overcrowding.
+        if p_sorted.size <= 30:
+            ax.set_xticks(x)
+            ax.set_xticklabels(feat_sorted, rotation=90, fontsize=8)
+        else:
+            step = max(1, p_sorted.size // 20)
+            ax.set_xticks(x[::step])
+            ax.set_xticklabels(feat_sorted[::step], rotation=90, fontsize=8)
+
+        fig.tight_layout()
+        return fig
+
+    def _plot_pvals_feature_order(result, feat_names, title):
+        p = np.asarray(result["p_value"], dtype=float)
+        fdr = result.get("p_value_fdr", None)
+        if fdr is not None:
+            fdr = np.asarray(fdr, dtype=float)
+
+        valid = ~np.isnan(p)
+        if not np.any(valid):
+            return None
+
+        x = np.arange(p.size)
+        fig, ax = plt.subplots(figsize=(13, 6))
+
+        ax.plot(x[valid], -np.log10(np.clip(p[valid], 1e-300, 1.0)),
+                marker="o", linestyle="", markersize=5, label="Raw p-value")
+
+        if fdr is not None:
+            fdr_valid = ~np.isnan(fdr)
+            ax.plot(x[fdr_valid], -np.log10(np.clip(fdr[fdr_valid], 1e-300, 1.0)),
+                    marker="s", linestyle="", markersize=5, label="BH-adjusted p-value")
+
+        ax.axhline(-np.log10(0.05), color="red", linestyle=":", linewidth=1.2, label="0.05 threshold")
+        ax.set_xlabel("Feature index (original order)")
+        ax.set_ylabel(r"$-\log_{10}(p)$")
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best")
+
+        if p.size <= 30:
+            ax.set_xticks(x)
+            ax.set_xticklabels(feat_names, rotation=90, fontsize=8)
+        else:
+            step = max(1, p.size // 20)
+            ax.set_xticks(x[::step])
+            ax.set_xticklabels(feat_names[::step], rotation=90, fontsize=8)
+
+        fig.tight_layout()
+        return fig
+
+    def _plot_distance(result, feat_names, title):
+        d = np.asarray(result["statistic"], dtype=float)
+        n1 = np.asarray(result["n_group1"], dtype=float)
+        n2 = np.asarray(result["n_group2"], dtype=float)
+        dcrit = _ks_critical_d(n1, n2, alpha=0.05)
+
+        valid = ~np.isnan(d)
+        if not np.any(valid):
+            return None
+
+        x = np.arange(d.size)
+        fig, ax = plt.subplots(figsize=(13, 6))
+
+        ax.plot(x[valid], d[valid],
+                marker="o", linestyle="", markersize=5, label="Observed KS D")
+        ax.plot(x[valid], dcrit[valid],
+                marker="s", linestyle="", markersize=5, label="Critical D to reject H0")
+
+        ax.set_xlabel("Feature index (original order)")
+        ax.set_ylabel("KS D statistic")
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best")
+
+        if d.size <= 30:
+            ax.set_xticks(x)
+            ax.set_xticklabels(feat_names, rotation=90, fontsize=8)
+        else:
+            step = max(1, d.size // 20)
+            ax.set_xticks(x[::step])
+            ax.set_xticklabels(feat_names[::step], rotation=90, fontsize=8)
+
+        fig.tight_layout()
+        return fig
+
+    # -------------------------
+    # Main plotting logic
+    # -------------------------
+    figs = []
+
+    tuple_keys = [
+        k for k in ks_results.keys()
+        if isinstance(k, tuple) and len(k) == 2
+    ]
+
+    if not tuple_keys:
+        raise ValueError("ks_results does not contain any comparison keys of the form (batch, 'overall') or (batch1, batch2).")
+
+    for key in tuple_keys:
+        res = ks_results[key]
+        pvals = np.asarray(res["p_value"], dtype=float)
+        n_features = pvals.size
+        feat_names = _prepare_feature_names(n_features)
+
+        label = _comparison_label(key)
+
+        fig1 = _plot_pvals_ordered(
+            res,
+            feat_names,
+            title=f"KS test p-values ordered by raw p-value: {label}"
+        )
+        if fig1 is not None:
+            figs.append((caption or f"KS ordered p-values: {label}", fig1))
+
+        fig2 = _plot_pvals_feature_order(
+            res,
+            feat_names,
+            title=f"KS test p-values in feature order: {label}"
+        )
+        if fig2 is not None:
+            figs.append((caption or f"KS feature-order p-values: {label}", fig2))
+
+        fig3 = _plot_distance(
+            res,
+            feat_names,
+            title=f"KS distance and rejection threshold: {label}"
+        )
+        if fig3 is not None:
+            figs.append((caption or f"KS distance plot: {label}", fig3))
+
+    # Keep the package-style behavior: log figures to rep when provided.
+    if rep is not None:
+        for cap, fig in figs:
+            rep.log_plot(fig, cap)
+            plt.close(fig)
+        return rep
+
+    if show:
+        for _, fig in figs:
+            fig.show()
+
+    return figs
 
 ##########################################################################
 # Plotting for longitudinal metrics

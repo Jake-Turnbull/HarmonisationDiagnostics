@@ -1,3 +1,3 @@
 # DiagnosticFunctionsLong
 
-::: DiagnoseHarmonization.DiagnosticFunctionsLong
+::: DiagnoseHarmonisation.DiagnosticFunctionsLong

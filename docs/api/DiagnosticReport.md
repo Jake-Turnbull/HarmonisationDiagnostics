@@ -1,2 +1,2 @@
 # DiagnosticReport
-::: DiagnoseHarmonization.DiagnosticReport
+::: DiagnoseHarmonisation.DiagnosticReport

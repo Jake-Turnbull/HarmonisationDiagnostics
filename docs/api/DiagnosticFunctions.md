@@ -1,2 +1,2 @@
 # DiagnosticFunctions
-::: DiagnoseHarmonization.DiagnosticFunctions
+::: DiagnoseHarmonisation.DiagnosticFunctions

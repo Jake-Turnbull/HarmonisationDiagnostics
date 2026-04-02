@@ -1,17 +1,87 @@
 import os
 import numpy as np
+import pandas as pd
 from pathlib import Path
 import pytest
 import time
 import webbrowser
 
 # Adjust import to match your package layout
-# from DiagnoseHarmonization.DiagnosticReport import DiagnosticReport
-# If DiagnosticReport is defined in a module file DiagnosticReport.py inside DiagnoseHarmonization package:
+# from DiagnoseHarmonisation.DiagnosticReport import DiagnosticReport
+# If DiagnosticReport is defined in a module file DiagnosticReport.py inside DiagnoseHarmonisation package:
 
-save_dir = "/Users/jacob.turnbull/VS_code_projects/diagnostic_full_run/"
+def test_generate_harmonisation_advice_mean_only():
+    from DiagnoseHarmonisation import DiagnosticReport
 
-def test_full_pipeline_generates_report(tmp_path = save_dir):
+    advice = DiagnosticReport._generate_harmonisation_advice(
+        cohens_d_results=np.array([[0.7, 0.6, 0.8, 0.75]]),
+        mahalanobis_results={
+            "pairwise_raw": {("A", "B"): 1.4},
+            "centroid_resid": {"A": 1.2, "B": 1.2},
+        },
+        lmm_results_df=pd.DataFrame({"ICC": [0.18, 0.21, 0.16, 0.14]}),
+        variance_summary_df=pd.DataFrame(
+            {
+                "Median log ratio": [0.05],
+                "Mean log ratio": [0.04],
+                "IQR lower": [-0.10],
+                "IQR upper": [0.10],
+                "Prop > 0": [0.55],
+            }
+        ),
+        covariance_results={
+            "pairwise_frobenius_normalized": pd.DataFrame(
+                [[0.0, 0.12], [0.12, 0.0]],
+                index=["A", "B"],
+                columns=["A", "B"],
+            )
+        },
+        batch_sizes={"A": 60, "B": 55},
+    )
+
+    assert advice["has_mean_differences"] is True
+    assert advice["has_scale_differences"] is False
+    assert advice["has_covariance_differences"] is False
+    assert advice["has_large_batch_imbalance"] is False
+    assert any("regression-based harmonisation approach or ComBat" in line for line in advice["advice_lines"])
+
+def test_generate_harmonisation_advice_prefers_reference_covbat_for_complex_imbalanced_case():
+    from DiagnoseHarmonisation import DiagnosticReport
+
+    advice = DiagnosticReport._generate_harmonisation_advice(
+        cohens_d_results=np.array([[0.9, 0.8, 0.7, 0.85], [0.75, 0.8, 0.9, 0.7]]),
+        mahalanobis_results={
+            "pairwise_raw": {("Reference", "Small"): 1.8},
+            "centroid_resid": {"Reference": 1.3, "Small": 1.6},
+        },
+        lmm_results_df=pd.DataFrame({"ICC": [0.25, 0.31, 0.28, 0.35]}),
+        variance_summary_df=pd.DataFrame(
+            {
+                "Median log ratio": [np.log(1.6)],
+                "Mean log ratio": [np.log(1.5)],
+                "IQR lower": [np.log(1.3)],
+                "IQR upper": [np.log(1.8)],
+                "Prop > 0": [0.9],
+            }
+        ),
+        covariance_results={
+            "pairwise_frobenius_normalized": pd.DataFrame(
+                [[0.0, 0.42], [0.42, 0.0]],
+                index=["Reference", "Small"],
+                columns=["Reference", "Small"],
+            )
+        },
+        batch_sizes={"Reference": 120, "Small": 40},
+    )
+
+    assert advice["has_mean_differences"] is True
+    assert advice["has_scale_differences"] is True
+    assert advice["has_covariance_differences"] is True
+    assert advice["has_large_batch_imbalance"] is True
+    assert advice["largest_batch"] == "Reference"
+    assert any("CovBat with Reference as the reference batch" in line for line in advice["advice_lines"])
+
+def test_full_pipeline_generates_report(tmp_path, monkeypatch):
     """
     Run the full DiagnosticReport pipeline once and produce a single HTML report.
     - Writes report to a temporary directory (tmp_path / "diagnostic_full_run")
@@ -22,6 +92,11 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
     # -------------------------
     # Prepare synthetic data
     # -------------------------
+    monkeypatch.setenv("NUMBA_DISABLE_JIT", "1")
+    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "mplconfig"))
+    from DiagnoseHarmonisation import PlotDiagnosticResults
+    monkeypatch.setattr(PlotDiagnosticResults, "clustering_analysis_all", lambda *args, **kwargs: None)
+
     np.random.seed(27)
     n_samples = 800
     n_features = 100
@@ -78,7 +153,7 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
         # call signature:
         # DiagnosticReport(data, batch, covariates=None, variable_names=None,
         #                  save_dir=None, SaveArtifacts=False, rep=None, show=False)
-        from DiagnoseHarmonization import DiagnosticReport
+        from DiagnoseHarmonisation import DiagnosticReport
         DiagnosticReport.CrossSectionalReport(
             data=data, # Required: data matrix (samples x features)
                 batch=batch, # Required: batch vector (samples,)
@@ -94,9 +169,9 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
                                             
         )
         # Run harmoisation and generate report
-        from DiagnoseHarmonization import HarmonizationFunctions
+        from DiagnoseHarmonisation import HarmonisationFunctions
 
-        data_harmonized = HarmonizationFunctions.combat(data, batch, mod=covariates)
+        data_harmonized = HarmonisationFunctions.combat(data, batch, mod=covariates)
         DiagnosticReport.CrossSectionalReport(
             data=data_harmonized, # Required: data matrix (samples x features)
                 batch=batch, # Required: batch vector (samples,)
@@ -151,18 +226,19 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
     covariate_cat = np.random.randint(0, 1, size=n_samples)    # categorical
     print( covariate_cat)
 
-
-def test_min_script(tmp_path=save_dir):
+def test_min_script(tmp_path, monkeypatch):
     """
     Test that the minimal script runs without error and produces a report.
     This is a more basic test than test_full_pipeline_generates_report, and can be used to quickly check that the core functionality of DiagnosticReport is working.
     """
     # Minimal data and batch
+    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "mplconfig"))
+
     data = np.random.randn(100, 20)
     batch = np.array(["A"] * 50 + ["B"] * 50)
     # Run DiagnosticReport with minimal inputs
     try:
-        from DiagnoseHarmonization import DiagnosticReport
+        from DiagnoseHarmonisation import DiagnosticReport
         DiagnosticReport.CrossSectionalReportMin(
             data=data,
             batch=batch,

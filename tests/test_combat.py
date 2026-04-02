@@ -10,7 +10,7 @@ def test_combat_with_covbat():
     """Test combat function used within CovBat
 
     This test ensures that the combat function works correctly when used
-    within the CovBat harmonization process.
+    within the CovBat harmonisation process.
 
     Steps:
     1. Prepare synthetic data and batch information.
@@ -22,7 +22,7 @@ def test_combat_with_covbat():
     """
     import numpy as np
     import pandas as pd
-    from DiagnoseHarmonization import HarmonizationFunctions
+    from DiagnoseHarmonisation import HarmonisationFunctions
 
     # Create synthetic data
     np.random.seed(42)
@@ -43,7 +43,7 @@ def test_combat_with_covbat():
     )
 
     # Call CovBat function which uses combat internally
-    corrected_data = HarmonizationFunctions.combat(data=data, batch=batch, mod=None, UseEB=True, parametric=True,covbat_mode=True)
+    corrected_data = HarmonisationFunctions.combat(data=data, batch=batch, mod=None, UseEB=True, parametric=True,covbat_mode=True)
     # Verify output, should be an array of same shape as input data
     assert isinstance(corrected_data, np.ndarray), "Output should be a numpy array"
     assert corrected_data.shape == data.shape, "Output shape should match input data shape"

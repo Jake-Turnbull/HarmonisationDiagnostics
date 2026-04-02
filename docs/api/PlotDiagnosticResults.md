@@ -1,3 +1,3 @@
 # PlotDiagnosticResults
 
-::: DiagnoseHarmonization.PlotDiagnosticResults
+::: DiagnoseHarmonisation.PlotDiagnosticResults

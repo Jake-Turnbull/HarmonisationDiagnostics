@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Command-line wrapper for Harmonization Diagnostics.
+Command-line wrapper for Harmonisation Diagnostics.
 
 Usage examples:
   # minimal: specify data and covariates files and batch column index (1-based)
@@ -218,7 +218,7 @@ def run_pipeline_from_cli(data_path: str,
         print("Final covariates columns (should NOT include batch):", covariates_df.columns.tolist())
 
     # Now call your report. Pass batch_codes (or batch_series) separately.
-    from DiagnoseHarmonization import DiagnosticReport
+    from DiagnoseHarmonisation import DiagnosticReport
     try:
         DiagnosticReport.CrossSectionalReport(
             X,
@@ -242,7 +242,7 @@ def run_pipeline_from_cli(data_path: str,
 # --- CLI parser -------------------------------------------------------------
 def main(argv: Optional[Sequence[str]] = None):
     p = argparse.ArgumentParser(prog="harmdiag",
-                                description="Harmonization Diagnostics CLI — run harmonisation/reporting from the terminal.")
+                                description="Harmonisation Diagnostics CLI — run harmonisation/reporting from the terminal.")
     sub = p.add_subparsers(dest="command", required=True)
 
     runp = sub.add_parser("run", help="Run the diagnostics pipeline from data and covariates CSVs")

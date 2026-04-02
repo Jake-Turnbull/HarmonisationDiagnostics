@@ -1,6 +1,6 @@
 """
 
-Script containing self contained harmonization functions that can be used in conjunction with the diagnostic tools:
+Script containing self contained harmonisation functions that can be used in conjunction with the diagnostic tools:
 """
 
 import numpy as np
@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 
 def combat_for_covbat(data, batch, model=None, numerical_covariates=None, eb=True):
     """Correct for batch effects in a dataset
-    This function is a modified version of the ComBat harmonization function that is used as part of the CovBat harmonization process. 
+    This function is a modified version of the ComBat harmonisation function that is used as part of the CovBat harmonisation process. 
     """
     if isinstance(numerical_covariates, str):
         numerical_covariates = [numerical_covariates]
@@ -182,7 +182,7 @@ def itSol(sdat_batch, gamma_hat, delta_hat, gamma_bar, t2, a, b, conv=0.001):
 
 def it_sol(sdat, g_hat, d_hat, g_bar, t2, a, b, conv=0.0001):
     """Iteratively solve for the posterior mean and variance of the batch effect parameters.
-    This version is used by CovBat and taken from: https://github.com/andy1764/CovBat_Harmonization
+    This version is used by CovBat and taken from: https://github.com/andy1764/CovBat_Harmonisation
     Chen, A. A., Beer, J. C., Tustison, N. J., Cook, P. A., Shinohara, R. T., Shou, H., & Initiative, T. A. D. N. (2022). Mitigating site effects in covariance for machine learning in neuroimaging data. Human Brain Mapping, 43(4), 1179–1195. https://doi.org/10.1002/hbm.25688)
     """
     n = (1 - np.isnan(sdat)).sum(axis=1)
@@ -210,12 +210,12 @@ def adjust_nums(numerical_covariates, drop_idxs):
     return [nc - sum(nc < di for di in drop_idxs) for nc in numerical_covariates]
 
 # ----------------------------- Main functions -----------------------------
-# Define ComBat harmonization function
+# Define ComBat harmonisation function
 def combat(data, batch, mod, parametric=True,
            DeltaCorrection=True, UseEB=True, ReferenceBatch=None,
            RegressCovariates=False, GammaCorrection=True, covbat_mode=False,return_priors=False):
     """
-    Run ComBat harmonization on the data and return the harmonized data.
+    Run ComBat harmonisation on the data and return the harmonized data.
 
     This version accepts numpy arrays or pandas DataFrame/Series for data, batch, and mod.
     If a DataFrame is supplied, columns are treated as samples (so data.shape == (n_features, n_samples)).
@@ -232,7 +232,7 @@ def combat(data, batch, mod, parametric=True,
         DeltaCorrection (bool, optional): Whether to apply delta (scale) correction. Default is True.
         UseEB (bool, optional): Whether to use empirical Bayes adjustments. Default is True.
         ReferenceBatch (str or int, optional): If provided, the name or index of the reference batch to use for fitting priors. Default is None (no reference).
-        RegressCovariates (bool, optional): Whether to regress out covariate effects before harmonization. Default is False.
+        RegressCovariates (bool, optional): Whether to regress out covariate effects before harmonisation. Default is False.
         GammaCorrection (bool, optional): Whether to apply gamma (mean) correction. Default is True.
         covbat_mode (bool, optional): Whether to run in CovBat mode which includes additional covariance correction steps. Default is False.
         return_priors (bool, optional): Whether to return the estimated parameters from the ComBat model along with the harmonized data. Default is False.
@@ -252,8 +252,8 @@ def combat(data, batch, mod, parametric=True,
     Note:
     If using this version of ComBat, please cite:
 
-    Jean-Philippe Fortin, Drew Parker, Birkan Tunc, Takanori Watanabe, Mark A Elliott, Kosha Ruparel, David R Roalf, Theodore D Satterthwaite, Ruben C Gur, Raquel E Gur, Robert T Schultz, Ragini Verma, Russell T Shinohara. Harmonization Of Multi-Site Diffusion Tensor Imaging Data. NeuroImage, 161, 149-170, 2017
-    Jean-Philippe Fortin, Nicholas Cullen, Yvette I. Sheline, Warren D. Taylor, Irem Aselcioglu, Philip A. Cook, Phil Adams, Crystal Cooper, Maurizio Fava, Patrick J. McGrath, Melvin McInnis, Mary L. Phillips, Madhukar H. Trivedi, Myrna M. Weissman, Russell T. Shinohara. Harmonization of cortical thickness measurements across scanners and sites. NeuroImage, 167, 104-120, 2018
+    Jean-Philippe Fortin, Drew Parker, Birkan Tunc, Takanori Watanabe, Mark A Elliott, Kosha Ruparel, David R Roalf, Theodore D Satterthwaite, Ruben C Gur, Raquel E Gur, Robert T Schultz, Ragini Verma, Russell T Shinohara. Harmonisation Of Multi-Site Diffusion Tensor Imaging Data. NeuroImage, 161, 149-170, 2017
+    Jean-Philippe Fortin, Nicholas Cullen, Yvette I. Sheline, Warren D. Taylor, Irem Aselcioglu, Philip A. Cook, Phil Adams, Crystal Cooper, Maurizio Fava, Patrick J. McGrath, Melvin McInnis, Mary L. Phillips, Madhukar H. Trivedi, Myrna M. Weissman, Russell T. Shinohara. Harmonisation of cortical thickness measurements across scanners and sites. NeuroImage, 167, 104-120, 2018
     W. Evan Johnson and Cheng Li, Adjusting batch effects in microarray expression data using empirical Bayes methods. Biostatistics, 8(1):118-127, 2007.
 
     """
@@ -693,11 +693,11 @@ def combat(data, batch, mod, parametric=True,
         return data
     else:
         return bayesdata
-# Define CovBat harmonization function: from Chen et al. 2022
+# Define CovBat harmonisation function: from Chen et al. 2022
 def covbat(data, batch, model=None, numerical_covariates=None, pct_var=0.95, n_pc=0):
 
     """Correction of *Cov*ariance *Bat* effects
-    This function applies the ComBat harmonization procedure to the data, then applies an additional covariance correction step via PCA and re-application of ComBat on the PCA scores. This method is based on the CovBat approach described in Chen et al. 2022.  
+    This function applies the ComBat harmonisation procedure to the data, then applies an additional covariance correction step via PCA and re-application of ComBat on the PCA scores. This method is based on the CovBat approach described in Chen et al. 2022.  
 
     Args:
         data (np.array or pd.DataFrame): The data matrix to be harmonized, with shape (n_features, n_samples).
@@ -826,13 +826,13 @@ def covbat(data, batch, model=None, numerical_covariates=None, pct_var=0.95, n_p
     x_covbat += stand_mean
  
     return x_covbat
-# Define harmonization via mixed effects model (Regression analysis)
+# Define harmonisation via mixed effects model (Regression analysis)
 import numpy as np
 import pandas as pd
 import warnings
 from statsmodels.formula.api import mixedlm
 
-def lme_harmonization(data, batch, mod, variable_names):
+def lme_harmonisation(data, batch, mod, variable_names):
     """
     Fits a per feature linear mixed model to harmonize data across batches while adjusting for covariates. This function is an alternative to ComBat that uses mixed effects modeling to estimate and remove batch effects.
 
@@ -977,13 +977,13 @@ def lme_harmonization(data, batch, mod, variable_names):
         return residuals_df
     else:
         return residuals
-# Define LME_IQM harmonization functions
-def lme_iqm_harmonization(data, IQMs, mod, variable_names):
-    # Run LME harmonization on IQMs to get resisuals:
+# Define LME_IQM harmonisation functions
+def lme_iqm_harmonisation(data, IQMs, mod, variable_names):
+    # Run LME harmonisation on IQMs to get resisuals:
     """
-    Place holder for future implementation of LME-IQM harmonization. 
+    Place holder for future implementation of LME-IQM harmonisation. 
     When batch labels not given, or when batch size is very small, IQMs may hold more information than batch labels."""
     
-    print("Place holder for future implementation of LME-IQM harmonization")
+    print("Place holder for future implementation of LME-IQM harmonisation")
 
     return None

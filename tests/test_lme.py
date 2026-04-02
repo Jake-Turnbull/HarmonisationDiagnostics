@@ -8,7 +8,7 @@ def test_lme_harmonisation():
     """
     import numpy as np
     import pandas as pd
-    from DiagnoseHarmonization import HarmonizationFunctions
+    from DiagnoseHarmonisation import HarmonisationFunctions
 
     # Create simulated data
     np.random.seed(0)
@@ -35,8 +35,8 @@ def test_lme_harmonisation():
         # add shape (n_rows_in_batch, n_features) to those rows
         data.loc[idx, :] += np.random.randn(len(idx), n_features) * 2
 
-    # Run lme_harmonization (function expects samples x features)
-    corrected_data = HarmonizationFunctions.lme_harmonization(
+    # Run lme_harmonisation (function expects samples x features)
+    corrected_data = HarmonisationFunctions.lme_harmonisation(
         data, batch, mod=None, variable_names=None
     )
 

@@ -2,7 +2,7 @@
 Docstring for tests.test_covbat
 
 This module contains unit tests for the covbat package. 
-CovBat was copied from the GitHub repository at: https://github.com/andy1764/CovBat_Harmonization/tree/master
+CovBat was copied from the GitHub repository at: https://github.com/andy1764/CovBat_Harmonisation/tree/master
 
 CovBat was originally proposed in the paper:
 Chen, A. A., Beer, J. C., Tustison, N. J., Cook, P. A., Shinohara, R. T., Shou, H., & Initiative, T. A. D. N. (2022). Mitigating site effects in covariance for machine learning in neuroimaging data. Human Brain Mapping, 43(4), 1179–1195. https://doi.org/10.1002/hbm.25688
@@ -40,7 +40,7 @@ def test_Covbat():
     # Prepare data for testing:
     import numpy as np
     import pandas as pd
-    from DiagnoseHarmonization import HarmonizationFunctions
+    from DiagnoseHarmonisation import HarmonisationFunctions
 
     # create data:
     np.random.seed(0)
@@ -69,7 +69,7 @@ def test_Covbat():
     model = patsy.dmatrix("age + sex", model_df, return_type="dataframe")
     numerical_covariates = ["age"]  
     # Run CovBat:
-    corrected_data = HarmonizationFunctions.covbat(
+    corrected_data = HarmonisationFunctions.covbat(
         data,
         batch,
         model=model,
@@ -95,7 +95,7 @@ def test_CovBat_efficacy():
 
     import numpy as np
     import pandas as pd
-    from DiagnoseHarmonization import HarmonizationFunctions
+    from DiagnoseHarmonisation import HarmonisationFunctions
     from sklearn.decomposition import PCA
 
     # Simulate data with batch effects
@@ -130,7 +130,7 @@ def test_CovBat_efficacy():
     model = None
     numerical_covariates = []
     # Apply CovBat
-    corrected_data = HarmonizationFunctions.covbat(
+    corrected_data = HarmonisationFunctions.covbat(
         data,
         batch,
         model=model,

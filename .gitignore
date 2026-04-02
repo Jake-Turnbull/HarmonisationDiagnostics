@@ -19,6 +19,8 @@
 *.rar
 *.tar
 *.zip
+umap*
+memory*
 
 # Logs and databases #
 ######################
@@ -27,7 +29,7 @@
 *.sqlite
 
 # Python
-§####################
+####################
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -44,6 +46,11 @@ history/
 /history/
 .history/
 /.history/
+/__pycache__/
+*__pycache__/
+*/__pycache__/
+tests/__pycache__/
+*/tests/__pycache__/
 
 # OS generated files #
 ######################

@@ -1,6 +1,6 @@
 # DiagnoseHarmonize
 
-DiagnoseHarmonize is an **in-development** library for the streamlined application and assessment of harmonization algorithms at the summary-measure level. It also serves as a centralised location for popular, well-validated harmonization methods from the literature.
+DiagnoseHarmonize is an **in-development** library for the streamlined application and assessment of harmonisation algorithms at the summary-measure level. It also serves as a centralised location for popular, well-validated harmonisation methods from the literature.
 
 In an upcoming paper, we plan to demonstrate that systematic evaluation and reporting of different components of batch effects is not only beneficial for choosing an appropriate harmonisation strategy, but essential for evaluating how well harmonisation has worked.
 

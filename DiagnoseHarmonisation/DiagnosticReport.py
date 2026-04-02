@@ -7,9 +7,9 @@ from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-from DiagnoseHarmonization import DiagnosticFunctions
-from DiagnoseHarmonization import PlotDiagnosticResults
-from DiagnoseHarmonization.LoggingTool import StatsReporter
+from DiagnoseHarmonisation import DiagnosticFunctions
+from DiagnoseHarmonisation import PlotDiagnosticResults
+from DiagnoseHarmonisation.LoggingTool import StatsReporter
 
 # Helper function 
 def covariate_to_numeric(covariates):
@@ -39,6 +39,163 @@ def covariate_to_numeric(covariates):
     covariate_numeric = covariates.astype(float)  # ensure all numeric for functions that require numeric input
     
     return covariate_numeric
+
+
+def _generate_harmonisation_advice(
+    cohens_d_results,
+    mahalanobis_results,
+    lmm_results_df,
+    variance_summary_df,
+    covariance_results,
+    batch_sizes,
+):
+    """
+    Turn the existing diagnostic outputs into short harmonisation advice.
+
+    The thresholds here are intentionally heuristic so the report can give
+    practical guidance without introducing new statistical tests.
+    """
+    abs_d = np.abs(np.asarray(cohens_d_results, dtype=float))
+    if abs_d.size == 0:
+        max_large_effect_fraction = 0.0
+        median_abs_d = 0.0
+    else:
+        max_large_effect_fraction = float(np.nanmax(np.mean(abs_d >= 0.5, axis=1)))
+        median_abs_d = float(np.nanmedian(abs_d))
+
+    pairwise_mahal = np.asarray(
+        list((mahalanobis_results or {}).get("pairwise_raw", {}).values()),
+        dtype=float,
+    )
+    centroid_mahal = np.asarray(
+        list(
+            ((mahalanobis_results or {}).get("centroid_resid") or
+             (mahalanobis_results or {}).get("centroid_raw") or {}).values()
+        ),
+        dtype=float,
+    )
+    max_pairwise_mahal = float(np.nanmax(pairwise_mahal)) if pairwise_mahal.size else 0.0
+    max_centroid_mahal = float(np.nanmax(centroid_mahal)) if centroid_mahal.size else 0.0
+
+    icc_values = np.array([], dtype=float)
+    if lmm_results_df is not None and "ICC" in lmm_results_df:
+        icc_values = pd.to_numeric(lmm_results_df["ICC"], errors="coerce").dropna().to_numpy(dtype=float)
+    median_icc = float(np.nanmedian(icc_values)) if icc_values.size else 0.0
+    high_icc_fraction = float(np.mean(icc_values >= 0.1)) if icc_values.size else 0.0
+
+    mean_signal_details = {
+        "cohens_d": (max_large_effect_fraction >= 0.2) or (median_abs_d >= 0.35),
+        "mahalanobis": (max_pairwise_mahal >= 1.0) or (max_centroid_mahal >= 1.0),
+        "lmm": (median_icc >= 0.1) or (high_icc_fraction >= 0.2),
+    }
+    has_mean_differences = any(mean_signal_details.values())
+
+    has_scale_differences = False
+    if variance_summary_df is not None and not variance_summary_df.empty:
+        median_logs = pd.to_numeric(
+            variance_summary_df["Median log ratio"],
+            errors="coerce",
+        ).to_numpy(dtype=float)
+        has_scale_differences = bool(
+            np.any(np.abs(median_logs) >= np.log(1.25))
+        )
+
+    normalized_covariance = (covariance_results or {}).get("pairwise_frobenius_normalized")
+    covariance_strength = 0.0
+    if normalized_covariance is not None:
+        if isinstance(normalized_covariance, pd.DataFrame):
+            covariance_array = normalized_covariance.to_numpy(dtype=float)
+        else:
+            covariance_array = np.asarray(normalized_covariance, dtype=float)
+
+        if covariance_array.ndim == 2 and covariance_array.size > 0:
+            upper_idx = np.triu_indices_from(covariance_array, k=1)
+            upper_values = covariance_array[upper_idx]
+        else:
+            upper_values = covariance_array.ravel()
+
+        if upper_values.size:
+            covariance_strength = float(np.nanmax(upper_values))
+    has_covariance_differences = covariance_strength >= 0.3
+
+    largest_batch = max(batch_sizes, key=batch_sizes.get)
+    smallest_batch = min(batch_sizes, key=batch_sizes.get)
+    largest_batch_n = batch_sizes[largest_batch]
+    smallest_batch_n = batch_sizes[smallest_batch]
+    has_large_batch_imbalance = smallest_batch_n > 0 and (largest_batch_n > (2 * smallest_batch_n))
+
+    mean_signal_labels = [
+        label.replace("_", " ")
+        for label, present in mean_signal_details.items()
+        if present
+    ]
+    advice_lines = []
+
+    if has_mean_differences:
+        if mean_signal_labels:
+            advice_lines.append(
+                "Strong mean-shift signals were detected from \n "
+                + ", ".join(mean_signal_labels)
+                + ".\n"
+            )
+    else:
+        advice_lines.append(
+            "Mean-shift diagnostics were not especially strong, so any harmonisation choice should be made cautiously.\n"
+        )
+
+    if has_large_batch_imbalance and has_mean_differences and has_scale_differences and has_covariance_differences:
+        advice_lines.append(
+            f"{largest_batch} is much larger than the other batches (n={largest_batch_n} vs smallest n={smallest_batch_n}), \n"
+            f"and the diagnostics suggest differences in mean, scale, and covariance structure. \n"
+            f"CovBat with {largest_batch} as the reference batch looks like the strongest candidate.\n"
+        )
+    else:
+        if has_mean_differences and not has_scale_differences and not has_covariance_differences:
+            advice_lines.append(
+                "The residual batch effects look mainly additive, so a regression-based harmonisation approach or ComBat would be a sensible first choice.\n"
+            )
+
+        if has_scale_differences:
+            advice_lines.append(
+                "Scale differences were also detected, so ComBat is likely a better fit than a mean-only regression adjustment.\n"
+            )
+
+        if has_covariance_differences:
+            advice_lines.append(
+                "Covariance structure differences were detected between batches, so CovBat could be a good alternative when multivariate structure needs to be aligned.\n"
+            )
+
+        if has_large_batch_imbalance:
+            advice_lines.append(
+                f"Batch sizes are imbalanced and {largest_batch} is the largest batch (n={largest_batch_n}), "
+                f"so using {largest_batch} as the ComBat reference batch may help avoid over-correcting that cohort.\n"
+            )
+
+    if not any(
+        [
+            has_mean_differences,
+            has_scale_differences,
+            has_covariance_differences,
+            has_large_batch_imbalance,
+        ]
+    ):
+        advice_lines.append(
+            "The diagnostics do not indicate a strong harmonisation target pattern, so a lighter-touch adjustment or no harmonisation may be reasonable depending on the study goal.\n"
+        )
+
+    return {
+        "advice_lines": advice_lines,
+        "has_mean_differences": has_mean_differences,
+        "has_scale_differences": has_scale_differences,
+        "has_covariance_differences": has_covariance_differences,
+        "has_large_batch_imbalance": has_large_batch_imbalance,
+        "largest_batch": largest_batch,
+        "largest_batch_n": largest_batch_n,
+        "smallest_batch": smallest_batch,
+        "smallest_batch_n": smallest_batch_n,
+        "mean_signal_details": mean_signal_details,
+        "covariance_strength": covariance_strength,
+    }
 
 # Min report (for quick surface level checks;)
 def CrossSectionalReportMin(data,
@@ -150,8 +307,8 @@ def CrossSectionalReportMin(data,
             f"HTML report: {report.report_path}\n"
         )
         # Print version info from _version.py
-        from DiagnoseHarmonization._version import version
-        report.log_text(f"DiagnoseHarmonization version: {version}")
+        from DiagnoseHarmonisation._version import version
+        report.log_text(f"DiagnoseHarmonisation version: {version}")
             
         # Get todays date for saving results
         report_date = datetime.now().date().isoformat()
@@ -217,7 +374,7 @@ def CrossSectionalReportMin(data,
         "Here, we convert each feature to a median absolute deviation (MAD) and express each observation as a histogram.\n " \
         "As the normalisation is done globally, batchwise histograms that appear differently (width or location) indicate batch differences in mean and/or variance across features. ")
         
-        zscored_data = DiagnosticFunctions.z_score(data)
+        zscored_data = DiagnosticFunctions.robust_z_score(data)
         PlotDiagnosticResults.Z_Score_Plot(zscored_data, batch, rep=report)
         report.log_text("Z-score normalization visualization added to report")
         report.text_simple(line_break_in_text)
@@ -261,7 +418,7 @@ def CrossSectionalReportMin(data,
                 f"Number of features with medium effect size (0.2 <= |d| < 0.6): {medium_effect}\n"
                 f"Number of features with large effect size (|d| >= 0.6): {large_effect}\n"
             )
-        from DiagnoseHarmonization.SaveDiagnosticResults import save_test_results
+        from DiagnoseHarmonisation.SaveDiagnosticResults import save_test_results
         if save_data:
             save_test_results(data_dict,
             test_name="Cohens_D",
@@ -624,7 +781,7 @@ def CrossSectionalReport(
         line_break_in_text = "-" * 125
         report.text_simple("This is the full diagnostic cross-sectional report that includes a comprehensive set of tests and visualizations to assess batch effects in the dataset. \n\n")
 
-        report.text_simple("For full documentation and interpretation of each test, please refer to the online documentation at https://jake-turnbull.github.io/HarmonizationDiagnostics/")
+        report.text_simple("For full documentation and interpretation of each test, please refer to the online documentation at https://jake-turnbull.github.io/HarmonisationDiagnostics/")
 
         # Basic dataset summary
         report.text_simple("Summary of dataset:")
@@ -638,8 +795,8 @@ def CrossSectionalReport(
             f"HTML report: {report.report_path}\n"
         )
         # Print version info from _version.py
-        from DiagnoseHarmonization._version import version
-        report.log_text(f"DiagnoseHarmonization version: {version}")
+        from DiagnoseHarmonisation._version import version
+        report.log_text(f"DiagnoseHarmonisation version: {version}")
 
             
         # Get todays date for saving results
@@ -829,7 +986,7 @@ def CrossSectionalReport(
         "As the normalisation is done globally, batchwise histograms that appear differently (width or location) indicate batch differences in mean and/or variance across features. ")
 
 
-        zscored_data = DiagnosticFunctions.z_score(data)
+        zscored_data = DiagnosticFunctions.robust_z_score(data)
         PlotDiagnosticResults.Z_Score_Plot(zscored_data, batch, rep=report)
         report.log_text("Z-score normalization visualization added to report")
         report.text_simple(line_break_in_text)
@@ -851,7 +1008,6 @@ def CrossSectionalReport(
             report.text_simple(f"Summary of Cohen's D results for batch comparison: {b1} vs {b2}")
             cohens_d_pair = cohens_d_results[i, :]
             if save_data:
-                data_dict = {}
                 data_dict[f"CohensD_{b1}_vs_{b2}"] = cohens_d_pair
                 
             small_effect = (np.abs(cohens_d_pair) < 0.2).sum()
@@ -862,7 +1018,7 @@ def CrossSectionalReport(
                 f"Number of features with medium effect size (0.2 <= |d| < 0.6): {medium_effect}\n"
                 f"Number of features with large effect size (|d| >= 0.6): {large_effect}\n"
             )
-        from DiagnoseHarmonization.SaveDiagnosticResults import save_test_results
+        from DiagnoseHarmonisation.SaveDiagnosticResults import save_test_results
         
         if save_data:
             save_test_results(data_dict,
@@ -918,21 +1074,25 @@ def CrossSectionalReport(
         report.log_section("lmm_diagnostics", "Linear mixed effects diagnostics (batch + covariates)")
         report.text_simple("Fitting per-feature LMMs (random intercept for batch). Where LMM fails or batch variance is zero we fallback to OLS fixed-effects.")
 
+        from DiagnoseHarmonisation import temp
         # run LMM diagnostics
-        lmm_results_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(data, batch, covariates=covariates,
-                                                feature_names=feature_names,
-                                                covariate_names=covariate_names,
-                                                min_group_n=2)
+        lmm_results_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(
+        data,
+        batch,
+        covariates=covariates,
+        feature_names=feature_names,
+        covariate_names=covariate_names,
+        min_group_n=2
+    )
 
         report.text_simple("LMM diagnostics completed.")
         report.log_text("LMM results table added to report")
 
-        # add summary text
         report.text_simple(
             f"Number of features analyzed: {lmm_summary.get('n_features', 0)}\n"
             f"Features where LMM succeeded: {lmm_summary.get('succeeded_LMM', 0)}\n"
             f"Features using fallback (OLS or skipped): {lmm_summary.get('used_fallback', 0)}"
-        )
+    )
 
         # list common notes
         note_lines = []
@@ -944,12 +1104,11 @@ def CrossSectionalReport(
         data_dict = {}
         # Save DF if needed
         if save_data:
-            data_dict['LMM_results_df'] = lmm_results_df
-            data_dict['LMM_summary'] = lmm_summary
+            data_dict = lmm_results_df
         
         # Save LMM results as csv
         save_test_results(data_dict,
-        test_name="LMM_Results",
+        test_name="LMM_fitting_results",
         save_root=save_dir,
         feature_names=feature_names,
         report_date=report_date,
@@ -967,35 +1126,21 @@ def CrossSectionalReport(
             "- ICC around 0.3-0.5: Moderate batch effect; consider further investigation or correction.\n"
             "- ICC above 0.5: Strong batch effect; likely requires correction to avoid confounding.\n"
         )
-        try:
-            icc_nonan = lmm_results_df['ICC'].dropna()
-            if len(icc_nonan) > 0:
-                plt.figure(figsize=(10, 4))
-                plt.bar(range(len(icc_nonan)), icc_nonan)
-                plt.xlabel("Feature index")
-                plt.ylabel("ICC")
-                plt.title("ICC values per feature")
-                report.log_plot(plt, caption="ICC values per feature")
-                plt.close()
-
-        except Exception:
-            logger.exception("Could not produce ICC histogram")
-
         
         # Plot conditional and marginal R^2 per feature, indicate what each means for interpretation
         report.text_simple("Marginal R² represents the variance explained by fixed effects (covariates)\n"
                            "while Conditional R² represents the variance explained by both fixed and random effects (batch + covariates).")
         lmm_r = lmm_results_df[['R2_marginal', 'R2_conditional']].dropna()
-        if len(lmm_r) > 0:
-            plt.figure(figsize=(10, 4))
-            plt.plot(lmm_r['R2_marginal'].values, label='Marginal R²', alpha=0.7)
-            plt.plot(lmm_r['R2_conditional'].values, label='Conditional R²', alpha=0.7)
-            plt.xlabel("Feature index")
-            plt.ylabel("R² value")
-            plt.title("Marginal and Conditional R² values per feature")
-            plt.legend()
-            report.log_plot(plt, caption="Marginal and Conditional R² values per feature")
-            plt.close()
+        lmm_figs = PlotDiagnosticResults.LMM_Diagnostics_Plot(
+        lmm_results_df,
+        feature_order="original",
+        include_delta_r2=True,
+        include_status_summary=True,
+    )
+
+        for caption, fig in lmm_figs:
+            report.log_plot(fig, caption=caption)
+            plt.close(fig)
 
         # ---------------------
         # Multiplicative tests
@@ -1014,21 +1159,10 @@ def CrossSectionalReport(
             mode = mode
         )
 
-        report.log_text("Variance ratio test completed")
-
-        # save variance ratios raw:
-        if save_data:
-            save_test_results(
-                variance_ratios,
-                test_name="Variance_Ratios_Raw",
-                save_root=save_dir,
-                feature_names=feature_names,
-                report_date=report_date,
-                report_name=report_name,
-            )
 
         # Summarise variance ratio results
         data_dict = {}
+        Ratios={}
         summary_rows = []
 
         # variance_ratios is (num_pairs x num_features)
@@ -1075,7 +1209,7 @@ def CrossSectionalReport(
             # sanitize label for keys (replace spaces and parentheses)
             safe_label = label.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_vs_")
 
-            data_dict[f"VarianceRatio_{safe_label}"] = ratios
+            Ratios[f"VarianceRatio_{safe_label}"] = ratios
             data_dict[f"MedianLogVarianceRatio_{safe_label}"] = median_log
             data_dict[f"MeanLogVarianceRatio_{safe_label}"] = mean_log
             data_dict[f"IQRLowerLogVarianceRatio_{safe_label}"] = iqr_log[0]
@@ -1089,6 +1223,18 @@ def CrossSectionalReport(
                 f"Variance ratio {label}: median log={median_log:.3f} "
                 f"(IQR {iqr_log[0]:.3f}–{iqr_log[1]:.3f}), "
                 f"{prop_higher*100:.1f}% of features higher in {b1}"
+            )
+            report.log_text("Variance ratio test completed")
+
+        # save variance ratios raw:
+        if save_data:
+            save_test_results(
+                Ratios,
+                test_name="Variance_Ratios_Raw",
+                save_root=save_dir,
+                feature_names=feature_names,
+                report_date=report_date,
+                report_name=report_name,
             )
 
         # Save summary as well
@@ -1232,7 +1378,16 @@ def CrossSectionalReport(
             "    'n_group1': array of sample counts per feature for group1\n"
             "    'n_group2': array of counts for group2\n"
         )
+        report.text_simple("The KS test compares the distribution of each feature between batches. \n" \
+        "A significant KS test (low p-value) indicates that the distribution of that feature differs between the groups being compared (either batch vs overall, or batch vs batch) being compared. \n" \
+        "The D statistic indicates the magnitude of the distribution difference, with higher values indicating greater differences. \n" \
+        "By examining the KS test results across features, we can identify which features show the most significant distribution differences between batches, which can inform our choice of harmonisation method and whether to apply it globally or on specific features. \n")
 
+        report.text_simple("Users should look both at the plot by P-value magnitude and in the distributions of D statistics and p-values across features. \n" \
+                           "If specific clusters of features show significant KS differences, this may indicate that certain types of features are more affected by batch effects and may benefit from targeted harmonisation approaches. \n" \
+                           "If KS differences are widespread across many features, this may indicate more global batch effects that could benefit from global harmonisation approaches. \n" \
+                           "If KS differences are minimal, this may indicate minimal batch effects and that harmonisation may not be necessary. \n")
+        data_dict = {}
         if save_data:
             for key, value in ks_results.items():
                 if key != "params":
@@ -1258,22 +1413,22 @@ def CrossSectionalReport(
 
         # Save data dictionary as csv if requested 
         report.log_section("Summary","Summary of Diagnostic Report and Advice")
+        report.text_simple("Summary of diagnostic findings and advice for harmonisation:")
+        report.text_simple("Based on the diagnostic tests performed, we can summarise the major findings regarding batch differences in the data. \n" \
+                           "We can also provide advice on which harmonisation methods may be most appropriate given the observed batch effects. \n")
 
-        # Report the major findings in brief and provide advice on harmonisation method to apply in this context
-        # Summarise the biggest additive differences between batches (Cohen's d, Mahalanobis)
-
-        # Check size of each batch
         batch_sizes = {b: np.sum(batch == b) for b in unique_batches}
-        min_batch_size = min(batch_sizes.values())
-        max_batch_size = max(batch_sizes.values())
+        advice_summary = _generate_harmonisation_advice(
+            cohens_d_results=cohens_d_results,
+            mahalanobis_results=mahalanobis_results,
+            lmm_results_df=lmm_results_df,
+            variance_summary_df=summary_df,
+            covariance_results=covres,
+            batch_sizes=batch_sizes,
+        )
 
-        # Check if large differences in batch sizes (if the difference between smallest and largest batch is more than double)
-        if max_batch_size > 2 * min_batch_size:
-            report.text_simple(
-                f"Note: Large differences in batch sizes detected (smallest batch size: {min_batch_size}, largest batch size: {max_batch_size}). "
-                "When applying harmonisation, be aware that most methods will apply a greater correction to smaller batches. " \
-                "This isn't inherently problematic but may not be exactly what you want so proceed with caution or consider using the larger batch as a reference batch explicitly so that it remains unchanged in harmonisation"
-            )
+        for advice_line in advice_summary["advice_lines"]:
+            report.text_simple(advice_line)
         
         return data_dict if save_data else None
 
@@ -1325,7 +1480,7 @@ def LongitudinalReport(data, batch,
     
     """
     from pprint import pformat
-    from DiagnoseHarmonization import DiagnosticFunctionsLong
+    from DiagnoseHarmonisation import DiagnosticFunctionsLong
 
     # Check inputs and revert to defaults as needed 
 
@@ -2012,4 +2167,3 @@ def LongitudinalReport(data, batch,
         if created_local_report:
             # call __exit__ on the context-managed report (no exception info)
             report_ctx.__exit__(None, None, None)  # type: ignore
-

@@ -3,8 +3,8 @@
 import numpy as np
 from numpy.linalg import norm
 from scipy.linalg import norm as scipy_norm
-from DiagnoseHarmonization import DiagnosticFunctions  # Assuming the function to test is in mymodule.py
-from DiagnoseHarmonization import PlotDiagnosticResults
+from DiagnoseHarmonisation import DiagnosticFunctions  # Assuming the function to test is in mymodule.py
+from DiagnoseHarmonisation import PlotDiagnosticResults
 
 
 matrix = np.array([[1, 2, 3], [4, 5, 6]])
