@@ -1,0 +1,1156 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../getting_started/">
+      
+      
+        <link rel="next" href="../simulator/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Theory - DiagnoseHarmonise</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#theory" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="DiagnoseHarmonise" class="md-header__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            DiagnoseHarmonise
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Theory
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="DiagnoseHarmonise" class="md-nav__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    DiagnoseHarmonise
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#introduction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introduction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#additive-batch-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additive batch effects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Additive batch effects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#histograms-of-mad-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Histograms of MAD scores
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cohens-d-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cohen's d scores
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mahalanobis-distance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mahalanobis distance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multiplicative-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiplicative effects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multiplicative effects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mixed-effect-modelling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mixed effect modelling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ratio-of-variance-f-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ratio of variance (F-test)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#correlations-and-covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlations and covariance
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Correlations and covariance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pca-correlations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PCA correlations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#covariance-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Covariance structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dimensionality-reduction-visualisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dimensionality reduction visualisation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dimensionality reduction visualisation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PCA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#umap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UMAP
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-overall-distribution-similarity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing overall distribution similarity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing overall distribution similarity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-sample-ks-tests-hypothesis-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two-Sample KS-tests (hypothesis testing)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../terminal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/DiagnosticReport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticReport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/HarmonisationFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HarmonisationFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/DiagnosticFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/PlotDiagnosticResults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlotDiagnosticResults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/LoggingTool/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LoggingTool
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/DiagnosticFunctionsLong/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctionsLong
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#introduction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introduction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#additive-batch-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additive batch effects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Additive batch effects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#histograms-of-mad-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Histograms of MAD scores
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cohens-d-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cohen's d scores
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mahalanobis-distance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mahalanobis distance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multiplicative-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiplicative effects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multiplicative effects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mixed-effect-modelling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mixed effect modelling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ratio-of-variance-f-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ratio of variance (F-test)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#correlations-and-covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlations and covariance
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Correlations and covariance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pca-correlations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PCA correlations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#covariance-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Covariance structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dimensionality-reduction-visualisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dimensionality reduction visualisation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dimensionality reduction visualisation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PCA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#umap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UMAP
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-overall-distribution-similarity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing overall distribution similarity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing overall distribution similarity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-sample-ks-tests-hypothesis-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two-Sample KS-tests (hypothesis testing)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="theory">Theory</h1>
+<p>This page will briefly cover the theory behind each of the tests used in the diagnostic pipeline, as well as provide links to helpful resources:</p>
+<p>This page will not go into the full mathematical explanation behind each of the tests but will instead explain why they have been chosen.</p>
+<h2 id="introduction">Introduction</h2>
+<p>MRI harmonisation, or indeed any form of harmonisation in multisite/batch analysis must begin a thorough analysis of what the differences between datasets is. Often when choosing a method, this is somewhat overlooked, leading to non-optimal or even harmful harmonisation approaches being applied.</p>
+<p>No clear guidelines on how to best approach this form of analysis are givej by the literature and metrics of success vary between methods. This problem was the motivation for this libraries development, serving as a set of guidelines and metrics from which researchers can base their choice in harmonisation methods on but also from which they can evaluate their efficacy.</p>
+<p>We break down harmonisation efficacy assesment into two main categories: 1. Removal of site/batch differences and 2. Preservation of biological information. The tests we have chosen for this pipeline were collected from frequently cited metrics from harmonisation literature, but also chosen to be as interpretable as possible. For clarity we will described below the basic form of each test and how to best interpret it.</p>
+<h2 id="additive-batch-effects">Additive batch effects</h2>
+<p>The most easily detectable batch effects tend to be those that are additive in nature (shown by a difference in means). The easiest way to see this difference is often just by looking at the data as histograms. If there is a difference between the centre of the peaks, then there is a difference in means.</p>
+<h3 id="histograms-of-mad-scores">Histograms of MAD scores</h3>
+<p>To show this, we use Median Absolute Deviations (MAD) scores. These are calculated for each feature (column) in the data and plotted per batch as a histogram, serving as the easiest way to visually compare batch differences across features.</p>
+<h3 id="cohens-d-scores">Cohen's d scores</h3>
+<p>To show the mean difference across features, we use <a href="https://en.wikipedia.org/wiki/Effect_size">Cohen's d</a>. as the metric of comparisson. Here, we go a level deeper than the MAD scores when showing the difference by modelling out covariate effects first using OLS. In this way, we isolate dataset differences to those purely caused by batch differences. This is especially important for cases where there may be strong confounding of a variable of interest with batch (i.e one batch may be systematically older).</p>
+<p>Cohen's d is calculated per batch against the rest of the data, using the unweighted mean and variance in each case.
+<span class="arithmatex">\(d_i  = \frac{\mu_{batch=i}-\mu_{batch \not= i}}{(1/2)(\sigma_{batch = i} + \sigma_{batch \not= i})}\)</span></p>
+<p>Here, the mean (mu) is calculated from the residuals of the data after removing covariate effects predicted with OLS.</p>
+<h3 id="mahalanobis-distance">Mahalanobis distance</h3>
+<p>The <a href="https://en.wikipedia.org/wiki/Mahalanobis_distance">Mahalanobis distance</a> is a multivariate extention to the Cohen's d score that uses a projection of all data to measure the difference in the multivariate mean between different groups. We show this metric in three ways; as a heatmap between the raw data between all batches; As a heatmap between the residuals of the data after removing covariate effects; And as a difference between each batch to the overall data centroid as both raw and residuals.</p>
+<h2 id="multiplicative-effects">Multiplicative effects</h2>
+<h3 id="mixed-effect-modelling">Mixed effect modelling</h3>
+<p>The first test we show here uses <a href="https://en.wikipedia.org/wiki/Mixed_model">mixed effect model</a> fitting, with the random term set to the batch term. The script builds up a patsy formula using all provided covariates, distringuising their type by the number of unique variables (less than 3 = binary, between 3 and 10 = categorical, greater than 10 = continuous). The best way to use the tool is to format the covariates properly yourself prior to running, but it does support some native handling of different types of covariates.</p>
+<p>The tool then compares the model fit with and without batch as the random term, showing the results as R^2 values. If the model fit is higher with batch, then it explains a large portion of the variance.</p>
+<h3 id="ratio-of-variance-f-test">Ratio of variance (F-test)</h3>
+<p>The most simple way to assess difference in the scale between two datasets/samples is through an F-test (ratio of variance). Here, we use OLS similarly to as with Cohen's d to model out covariate effects. We then take the variance of a given batch of data and compare it to the variance of the whole dataset or the variance of the individual batch (as decided by one of four input modes).</p>
+<p>By seeing which batches have larger ratios compared to the rest of the data, or individual batches, one can see how the scale is affected by batch. We would expect the ratio to be close to 1 for datasets that are similar.</p>
+<h2 id="correlations-and-covariance">Correlations and covariance</h2>
+<p>In this section we show a batch effect approach that differes slightly from general methods but one that can be useful for showing preservation of covariate effects and reduction of batch effects.</p>
+<h3 id="pca-correlations">PCA correlations</h3>
+<p><a href="https://en.wikipedia.org/wiki/Principal_component_analysis">Principle Component Analysis</a> is a linear dimensionality technique projects a dataset to a set of N orthoganal components with each N+i component explaining less variance to the Nth component. PCA can be very useful for reducing the size of large datasets with many dimensions to only a few while retaining a large portion of the variance.</p>
+<p>We use it here to show the correlations with the batch effect and covariates. By using PCA to reduce the whole dataset into just four components, we can see how well correlated the variables given are with the linear axes explaining the most variance in the data. We also show here the explained variance by principle component number by batch which can show overall if the multivariate variance structure differs between batches.</p>
+<p>If batch explains a large proportion of the variance, it is likely to be well correlated with one or more of the first 4 PC's. The same is then true for covariates. This analysis can tell you how well correlated these variables are with the overall variance structure of the data, but also with eacother. After harmonisation, we would define success by a reduction of correlation of the PC's with batch and a preservation (or indeed increase) of the correlations with covariates (such as age)</p>
+<h3 id="covariance-structure">Covariance structure</h3>
+<p>Another measure of interest that can be affected by batch differences is covariance, which explains how different features change in relation to eachother. Take for example a dataset concisting of derived measures of corticial thickness and volume. We know these features aren't truly independant and would expect them to have certain covariance structure which changes relatively similarly between batches. If batches have a large covariance difference, this can be due to batch effects which aren't explicitely shown through other analysis.</p>
+<p>We compare the difference in the overall covariance structure here by using the Eucledian/Frobenius norm between the covariance matrices of individual batches, scaled by the norm of the covariance of the whole dataset. This returns a sinle value expressing a scaled sum of squared difference between two matrices, with a larger value indicating a greater difference in covariance.</p>
+<h2 id="dimensionality-reduction-visualisation">Dimensionality reduction visualisation</h2>
+<p>One other way that is frequently use to assess batch effects is through visual methods involving dimensionality reduction. One such was is using linear dimensionality reduction using PCA (as described above), but non-linear techniques can often provide more global information.</p>
+<h3 id="pca">PCA</h3>
+<p>We compute and plot the first two principle components as a scatter plot, colouring the points by the variable of interest. Prior to harmonisation, one might expect distinct clusters of data from different batches. After harmonisation, these clusters should appear less visible. Additionally, we would expect values such as age and sex to have distinct directions of variation and seperation respectively.</p>
+<h3 id="umap">UMAP</h3>
+<p>For non-linear dimensionality reduction, we use <a href="https://umap-learn.readthedocs.io/en/latest/">UMAP</a>
+Uniform Manifold Approximation and Projection (UMAP) is a dimension reduction technique that can be used for visualisation similarly to t-SNE, but also for general non-linear dimension reduction. When using UMAP, care must be taken to pick optimal parameters for specific datasets. These are described more thoroughly in the <a href="https://joss.theoj.org/papers/10.21105/joss.00861">original paper</a> describing the theory and underlying assumptions of UMAP, but also in these tutorials courtesy of Andy Coenen and Adam Pearce: <a href="https://pair-code.github.io/understanding-umap/">Understanding UMAP</a> and <a href="https://pair-code.github.io/understanding-umap/supplement.html">A deeper dive into UMAP theory</a></p>
+<h2 id="testing-overall-distribution-similarity">Testing overall distribution similarity</h2>
+<h3 id="two-sample-ks-tests-hypothesis-testing">Two-Sample KS-tests (hypothesis testing)</h3>
+<p>The last test we include here is the two sample <a href="https://en.wikipedia.org/wiki/Kolmogorov–Smirnov_test">KS test</a>. Once again we perform this test on the residuals after removing covariate effects in order to see deviations that are driven only by batch differences. The two sample KS test looks at the difference between the empirical distributions between batches using a step function. This test is a popular and robust technique that can assess both mean and scale differences.</p>
+<p>Here, we plot the results as log-transformed P-values for each feature. These are plotted in ascending order and as a bar chart, allowing users to see the magnitude and distributions of P-values. Here, somewhat unintuitively (and perhaps mortifying for frequentist statisticians) we define the null-hypothesis as there being no difference between the empirical distributions. In this case we define reduction in significant differences as our success metric for harmonisation.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
