@@ -332,7 +332,7 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
     # -------------------------
     # Run the DiagnosticReport
     # -------------------------
-    timestamped_reports = True
+    timestamped_reports = False
     try:
         # call signature:
         # DiagnosticReport(data, batch, covariates=None, variable_names=None,
@@ -345,8 +345,8 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
                         covariate_names=variable_names, # Optional: names of covariates
                             save_dir=str(out_dir), # Optional: directory to save report
                             save_data=True, # Whether to save data used in report, default False
-                                report_name=Report_name, # Optional: base name of report file
-                                SaveArtifacts=False, # Whether to save artifacts, default False
+                                report_name=Report_name+'testtest', # Optional: base name of report file
+                                SaveArtifacts=True, # Whether to save artifacts, default False
                                     rep=None, # Optional: report object
                                         show=False, # Whether to display the report, default False
                                         timestamped_reports=timestamped_reports, # Whether to use timestamped report names

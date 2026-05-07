@@ -48,6 +48,20 @@ history/
 /.history/
 /__pycache__/
 *__pycache__/
+
+# macOS
+########
+.DS_Store
+._*
+.AppleDouble/
+.LSOverride
+
+# Pytest outputs
+################
+.coverage
+htmlcov/
+.tox/
+.cache/
 */__pycache__/
 tests/__pycache__/
 */tests/__pycache__/
