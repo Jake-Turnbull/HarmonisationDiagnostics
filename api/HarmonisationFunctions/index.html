@@ -1,0 +1,1661 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../DiagnosticReport/">
+      
+      
+        <link rel="next" href="../DiagnosticFunctions/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>HarmonisationFunctions - DiagnoseHarmonise</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#harmonisationfunctions" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="DiagnoseHarmonise" class="md-header__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            DiagnoseHarmonise
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              HarmonisationFunctions
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="DiagnoseHarmonise" class="md-nav__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    DiagnoseHarmonise
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../terminal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DiagnosticReport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticReport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HarmonisationFunctions
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HarmonisationFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HarmonisationFunctions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.combat_for_covbat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        combat_for_covbat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.design_mat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        design_mat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.aprior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aprior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.bprior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        bprior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.postmean" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        postmean
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.postvar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        postvar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.itSol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        itSol
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.it_sol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        it_sol
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.combat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        combat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.covbat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        covbat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.lme_harmonisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lme_harmonisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.lme_iqm_harmonisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lme_iqm_harmonisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DiagnosticFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PlotDiagnosticResults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlotDiagnosticResults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LoggingTool/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LoggingTool
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DiagnosticFunctionsLong/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctionsLong
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HarmonisationFunctions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.combat_for_covbat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        combat_for_covbat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.design_mat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        design_mat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.aprior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aprior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.bprior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        bprior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.postmean" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        postmean
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.postvar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        postvar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.itSol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        itSol
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.it_sol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        it_sol
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.combat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        combat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.covbat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        covbat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.lme_harmonisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lme_harmonisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.HarmonisationFunctions.lme_iqm_harmonisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lme_iqm_harmonisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="harmonisationfunctions">HarmonisationFunctions</h1>
+<p><strong>A set of harmonisation functions that are frequently used in the literature. We will continue to expand these with methods we develop.</strong></p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="DiagnoseHarmonisation.HarmonisationFunctions"></a>
+    <div class="doc doc-contents first">
+
+        <p>Script containing self contained harmonisation functions that can be used in conjunction with the diagnostic tools:</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.combat_for_covbat" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">combat_for_covbat</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">numerical_covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">eb</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Correct for batch effects in a dataset
+This function is a modified version of the ComBat harmonisation function that is used as part of the CovBat harmonisation process.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.design_mat" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">design_mat</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="n">numerical_covariates</span><span class="p">,</span> <span class="n">batch_levels</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Construct design matrix for ComBat, ensuring batch levels are in the correct order and handling numerical covariates.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.aprior" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">aprior</span><span class="p">(</span><span class="n">delta_hat</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Calculate the aprior parameter for the inverse gamma distribution based on the method of moments.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.bprior" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">bprior</span><span class="p">(</span><span class="n">delta_hat</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Calculate the bprior parameter for the inverse gamma distribution based on the method of moments.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.postmean" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">postmean</span><span class="p">(</span><span class="n">g_hat</span><span class="p">,</span> <span class="n">g_bar</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">d_star</span><span class="p">,</span> <span class="n">t2</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Calculate the posterior mean for the batch effect parameters.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.postvar" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">postvar</span><span class="p">(</span><span class="n">sum2</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Calculate the posterior variance for the batch effect parameters.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.itSol" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">itSol</span><span class="p">(</span><span class="n">sdat_batch</span><span class="p">,</span> <span class="n">gamma_hat</span><span class="p">,</span> <span class="n">delta_hat</span><span class="p">,</span> <span class="n">gamma_bar</span><span class="p">,</span> <span class="n">t2</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">conv</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Iteratively solve for the posterior mean and variance of the batch effect parameters.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.it_sol" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">it_sol</span><span class="p">(</span><span class="n">sdat</span><span class="p">,</span> <span class="n">g_hat</span><span class="p">,</span> <span class="n">d_hat</span><span class="p">,</span> <span class="n">g_bar</span><span class="p">,</span> <span class="n">t2</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">conv</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Iteratively solve for the posterior mean and variance of the batch effect parameters.
+This version is used by CovBat and taken from: https://github.com/andy1764/CovBat_Harmonisation
+Chen, A. A., Beer, J. C., Tustison, N. J., Cook, P. A., Shinohara, R. T., Shou, H., &amp; Initiative, T. A. D. N. (2022). Mitigating site effects in covariance for machine learning in neuroimaging data. Human Brain Mapping, 43(4), 1179–1195. https://doi.org/10.1002/hbm.25688)</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.combat" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">combat</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">mod</span><span class="p">,</span> <span class="n">parametric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">DeltaCorrection</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">UseEB</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ReferenceBatch</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">RegressCovariates</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">GammaCorrection</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">covbat_mode</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_priors</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Run ComBat harmonisation on the data and return the harmonized data.</p>
+<p>This version accepts numpy arrays or pandas DataFrame/Series for data, batch, and mod.
+If a DataFrame is supplied, columns are treated as samples (so data.shape == (n_features, n_samples)).
+The function will auto-transpose data or mod if it detects that samples were provided as rows.
+The returned bayesdata is the same type as input data (DataFrame -&gt; DataFrame, ndarray -&gt; ndarray).</p>
+<p>Note: helper functions aprior, bprior, itSol must be defined in scope.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+                  <code><span title="numpy.array">array</span> or <span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The data matrix to be harmonized, with shape (n_features, n_samples).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><span title="numpy.array">array</span> or <span title="pandas.Series">Series</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A vector of batch labels for each sample, with length n_samples.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>mod</code>
+            </td>
+            <td>
+                  <code><span title="numpy.array">array</span> or <span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>An optional design matrix of covariates to adjust for, with shape (n_samples, n_covariates).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>parametric</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to use parametric adjustments. Default is True.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>DeltaCorrection</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to apply delta (scale) correction. Default is True.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>UseEB</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to use empirical Bayes adjustments. Default is True.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ReferenceBatch</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> or <span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If provided, the name or index of the reference batch to use for fitting priors. Default is None (no reference).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>RegressCovariates</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to regress out covariate effects before harmonisation. Default is False.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>GammaCorrection</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to apply gamma (mean) correction. Default is True.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covbat_mode</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to run in CovBat mode which includes additional covariance correction steps. Default is False.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>return_priors</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to return the estimated parameters from the ComBat model along with the harmonized data. Default is False.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>bayesdata</code></td>            <td>
+                  <code><span title="numpy.array">array</span> or <span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The harmonized data, in the same format as the input data.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+<td><code>priors</code></td>            <td>
+                  <code>(<span title="dict">dict</span>, <span title="optional">optional</span>)</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A dictionary containing the estimated parameters from the ComBat model, including:
+- gamma_hat: raw batch effect mean estimates (n_batch, n_features)
+- delta_hat: raw batch effect variance estimates (n_batch, n_features)
+- gamma_star: empirical Bayes adjusted batch effect means (n_batch, n_features)
+- delta_star: empirical Bayes adjusted batch effect variances (n_batch, n_features)
+- gamma_bar: mean of gamma_hat across batches (n_batch,)
+- t2: variance of gamma_hat across batches (n_batch,)
+- a_prior: aprior parameters for each batch (n_batch,)
+- b_prior: bprior parameters for each batch (n_batch,)  </p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+        <p>Note:
+If using this version of ComBat, please cite:</p>
+<p>Jean-Philippe Fortin, Drew Parker, Birkan Tunc, Takanori Watanabe, Mark A Elliott, Kosha Ruparel, David R Roalf, Theodore D Satterthwaite, Ruben C Gur, Raquel E Gur, Robert T Schultz, Ragini Verma, Russell T Shinohara. Harmonisation Of Multi-Site Diffusion Tensor Imaging Data. NeuroImage, 161, 149-170, 2017
+Jean-Philippe Fortin, Nicholas Cullen, Yvette I. Sheline, Warren D. Taylor, Irem Aselcioglu, Philip A. Cook, Phil Adams, Crystal Cooper, Maurizio Fava, Patrick J. McGrath, Melvin McInnis, Mary L. Phillips, Madhukar H. Trivedi, Myrna M. Weissman, Russell T. Shinohara. Harmonisation of cortical thickness measurements across scanners and sites. NeuroImage, 167, 104-120, 2018
+W. Evan Johnson and Cheng Li, Adjusting batch effects in microarray expression data using empirical Bayes methods. Biostatistics, 8(1):118-127, 2007.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.covbat" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">covbat</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">numerical_covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">pct_var</span><span class="o">=</span><span class="mf">0.95</span><span class="p">,</span> <span class="n">n_pc</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Correction of <em>Cov</em>ariance <em>Bat</em> effects
+This function applies the ComBat harmonisation procedure to the data, then applies an additional covariance correction step via PCA and re-application of ComBat on the PCA scores. This method is based on the CovBat approach described in Chen et al. 2022.  </p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+                  <code><span title="numpy.array">array</span> or <span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The data matrix to be harmonized, with shape (n_features, n_samples).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><span title="numpy.array">array</span> or <span title="pandas.Series">Series</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A vector of batch labels for each sample, with length n_samples.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>model</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>An optional design matrix of covariates to adjust for, with shape (n_samples, n_covariates). Must include a column named "batch" with the batch labels. If None, a design matrix will be created with only the batch variable. Default is None.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>numerical_covariates</code>
+            </td>
+            <td>
+                  <code>list of str or list of int</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A list of column names or indices in the model design matrix that correspond to numerical covariates (as opposed to categorical). These covariates</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+        <p>will be included in the design matrix but not treated as batch variables. Default is None (no numerical covariates).</p>
+<p>If using this version of CovBat, please cite:
+Note:
+    Chen, A. A., Beer, J. C., Tustison, N. J., Cook, P. A., Shinohara, R. T., Shou, H., &amp; Initiative, T. A. D. N. (2022). 
+    Mitigating site effects in covariance for machine learning in neuroimaging data. 
+    Human Brain Mapping, 43(4), 1179–1195. https://doi.org/10.1002/hbm.25688)</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.lme_harmonisation" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">lme_harmonisation</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">mod</span><span class="p">,</span> <span class="n">variable_names</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Fits a per feature linear mixed model to harmonize data across batches while adjusting for covariates. This function is an alternative to ComBat that uses mixed effects modeling to estimate and remove batch effects.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> or <span title="numpy.array">array</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The data matrix to be harmonized, with shape (n_samples, n_features).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><span title="pandas.Series">Series</span> or <span title="numpy.array">array</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A vector of batch labels for each sample, with length n_samples.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>mod</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> or <span title="numpy.array">array</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A design matrix of covariates to adjust for, with shape (n_samples, n_covariates).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>variable_names</code>
+            </td>
+            <td>
+                  <code>list of str</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A list of column names corresponding to the covariates in <code>mod</code>, used for formula construction.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+        <p>Returns:
+    np.array: A harmonized data matrix of the same shape as the input <code>data</code>, with batch effects removed according to the fitted mixed models.</p>
+
+
+<details class="note" open>
+  <summary>Note</summary>
+  <p>This function fits a separate linear mixed model for each feature (column) in the data matrix, with the batch variable as a random effect and the covariates as fixed effects. The residuals from these models are returned as the harmonized data.</p>
+</details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.HarmonisationFunctions.lme_iqm_harmonisation" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">lme_iqm_harmonisation</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">IQMs</span><span class="p">,</span> <span class="n">mod</span><span class="p">,</span> <span class="n">variable_names</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Place holder for future implementation of LME-IQM harmonisation. 
+When batch labels not given, or when batch size is very small, IQMs may hold more information than batch labels.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

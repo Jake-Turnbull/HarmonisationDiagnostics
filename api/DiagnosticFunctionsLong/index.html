@@ -1,0 +1,2726 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../LoggingTool/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>DiagnosticFunctionsLong - DiagnoseHarmonise</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#diagnosticfunctionslong" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="DiagnoseHarmonise" class="md-header__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            DiagnoseHarmonise
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              DiagnosticFunctionsLong
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="DiagnoseHarmonise" class="md-nav__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    DiagnoseHarmonise
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../terminal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DiagnosticReport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticReport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HarmonisationFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HarmonisationFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DiagnosticFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PlotDiagnosticResults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlotDiagnosticResults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LoggingTool/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LoggingTool
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctionsLong
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctionsLong
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DiagnosticFunctionsLong
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.SubjectOrder_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SubjectOrder_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.WithinSubjVar_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WithinSubjVar_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.MultiVariateBatchDifference_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MultiVariateBatchDifference_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.build_mixed_formula" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_mixed_formula
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.MixedEffects_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MixedEffects_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.AdditiveEffect_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AdditiveEffect_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.MultiplicativeEffect_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MultiplicativeEffect_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DiagnosticFunctionsLong
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.SubjectOrder_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SubjectOrder_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.WithinSubjVar_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WithinSubjVar_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.MultiVariateBatchDifference_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MultiVariateBatchDifference_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.build_mixed_formula" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_mixed_formula
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.MixedEffects_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MixedEffects_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.AdditiveEffect_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AdditiveEffect_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.DiagnosticFunctionsLong.MultiplicativeEffect_long" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MultiplicativeEffect_long
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="diagnosticfunctionslong">DiagnosticFunctionsLong</h1>
+<p><strong>A set of diagnostic functions used in longitudinal, test-retest scenarios.</strong></p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="DiagnoseHarmonisation.DiagnosticFunctionsLong"></a>
+    <div class="doc doc-contents first">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.DiagnosticFunctionsLong.SubjectOrder_long" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">SubjectOrder_long</span><span class="p">(</span><span class="n">idp_matrix</span><span class="p">,</span> <span class="n">subjects</span><span class="p">,</span> <span class="n">timepoints</span><span class="p">,</span> <span class="n">idp_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nPerm</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Compute pairwise Spearman correlations between matched subjects across all
+ordered timepoint pairs, with permutation-based significance testing.</p>
+<p>For each pair of timepoints (order preserved from first appearance), subjects
+present at both timepoints are matched and Spearman’s rho is computed for each
+IDP (column). Significance is assessed via permutation testing by shuffling
+the second-timepoint values within matched pairs (nPerm iterations). P-values
+use the +1 correction: p = (1 + count_ge) / (1 + valid_null_count).</p>
+<p>Args:</p>
+<pre><code>idp_matrix : array-like, shape (n_samples, n_idps)
+    Numeric matrix of IDP values.
+subjects : sequence of length n_samples
+    Subject identifiers (matched across timepoints).
+timepoints : sequence of length n_samples
+    Timepoint labels (order defines comparison order).
+idp_names : sequence of length n_idps, optional
+    Names of IDPs; defaults to ["idp_1", ...].
+nPerm : int, default=10000
+    Number of permutations (&gt;=1).
+seed : int, optional
+    Random seed for reproducibility.
+</code></pre>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>pd.DataFrame
+Columns: ["TimeA","TimeB","IDP","nPairs",
+        "SpearmanRho","NullMeanRho","pValue"].
+Rows with fewer than 3 matched pairs return NaNs for statistics.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.DiagnosticFunctionsLong.WithinSubjVar_long" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">WithinSubjVar_long</span><span class="p">(</span><span class="n">idp_matrix</span><span class="p">,</span> <span class="n">subjects</span><span class="p">,</span> <span class="n">timepoints</span><span class="p">,</span> <span class="n">idp_names</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Compute within-subject variability (percent) for each IDP across timepoints.</p>
+<p>For each subject, variability is calculated per IDP using available (non-NaN)
+observations:</p>
+<ul>
+<li>If exactly 2 timepoints: absolute percent difference relative to the mean,
+  <code>|x1 - x2| / mean * 100</code>.</li>
+<li>If &gt;2 timepoints: coefficient of variation (sample SD, ddof=1) relative
+  to the mean, <code>SD / mean * 100</code>.</li>
+<li>If mean is 0 or no valid data: returns NaN.</li>
+</ul>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_matrix</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Numeric matrix of IDP values with shape
+<code>(n_samples, n_idps)</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>subjects</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Subject identifiers used to group repeated measurements.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>timepoints</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Timepoint labels required for input alignment.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_names</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Sequence">Sequence</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional names of IDPs. Defaults to <code>["idp_1", ...]</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>pd.DataFrame: One row per subject with columns `["subject", <IDP1>,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><IDP2>, ...]`, where each IDP value represents within-subject percent</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>variability.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>idp_matrix</code> is not 2-D, if input sequence lengths do not match the number of rows, or if <code>idp_names</code> length does not match the number of columns.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.DiagnosticFunctionsLong.MultiVariateBatchDifference_long" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">MultiVariateBatchDifference_long</span><span class="p">(</span><span class="n">idp_matrix</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">idp_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_info</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Compute multivariate batch/site differences as Mahalanobis distances of site
+means from the overall mean, with numerically-stable handling of covariance
+estimation and inversion.</p>
+<p>For each batch (site) this routine:</p>
+<ul>
+<li>Computes the site mean vector after dropping rows with any NaN across features.</li>
+<li>Estimates each site's covariance (zero matrix if n_samples_retained &lt;= 1).</li>
+<li>Averages site covariances to form an overall covariance.</li>
+<li>Computes the Mahalanobis distance (MD) between each site mean and the overall
+  mean. If the overall covariance is ill-conditioned or singular, the function
+  falls back to an SVD-based pseudoinverse (with tolerance-based truncation)
+  for numeric stability.</li>
+</ul>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_matrix</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Numeric matrix of features or IDPs with shape
+<code>(n_samples, n_features)</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><span title="pandas.Series">Series</span> | <span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batch or site labels for each row.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_names</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Sequence">Sequence</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional feature names used for intermediate DataFrame
+columns.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>return_info</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to also return a diagnostics dictionary containing
+site categories, retained counts, covariance conditioning metadata,
+and the averaged covariance matrix.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> | <span title="typing.Tuple">Tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]: A DataFrame with</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> | <span title="typing.Tuple">Tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>columns <code>["batch", "mdval"]</code>, optionally returned alongside a diagnostics</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> | <span title="typing.Tuple">Tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>dictionary when <code>return_info</code> is <code>True</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>idp_matrix</code> is not 2-D, if <code>batch</code> length does not match the number of rows, or if <code>idp_names</code> length does not match the number of features.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>Rows with any NaN across features are dropped when computing a site's mean</p>
+</details>        <p>and covariance. If a site has zero retained rows, a warning is emitted and
+  its mean is left as NaN (MD will be NaN). If a site has one retained row,
+  its covariance is taken to be the zero matrix.
+    The averaged covariance is the simple mean of per-site covariances.
+    Mahalanobis distances are computed as
+  <code>sqrt((mu_i - mu_overall)' Σ^{-1} (mu_i - mu_overall))</code>.
+  For numerical stability, the function attempts a direct linear solve when
+  the averaged covariance is well-conditioned; otherwise it uses an SVD-based
+  pseudoinverse with a tolerance derived from machine epsilon.
+    The function returns NaN for MD if a site's mean vector is NaN.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.DiagnosticFunctionsLong.build_mixed_formula" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">build_mixed_formula</span><span class="p">(</span><span class="n">tbl_in</span><span class="p">,</span> <span class="n">response_var</span><span class="p">,</span> <span class="n">fix_eff</span><span class="p">,</span> <span class="n">ran_eff</span><span class="p">,</span> <span class="n">batch_vars</span><span class="p">,</span> <span class="n">force_categorical</span><span class="o">=</span><span class="p">(),</span> <span class="n">force_numeric</span><span class="o">=</span><span class="p">(),</span> <span class="n">zscore_vars</span><span class="o">=</span><span class="p">(),</span> <span class="n">zscore_response</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Build the longitudinal mixed-model formulas used by the pipeline.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>tbl_in</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Input DataFrame containing the response and predictor columns.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>response_var</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Response variable to model.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fix_eff</code>
+            </td>
+            <td>
+                  <code><span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fixed-effect terms to include.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ran_eff</code>
+            </td>
+            <td>
+                  <code><span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Random-effect grouping terms to include.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch_vars</code>
+            </td>
+            <td>
+                  <code><span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batch-related terms to include in the full model only.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>force_categorical</code>
+            </td>
+            <td>
+                  <code><span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Columns to coerce to categorical dtype.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>force_numeric</code>
+            </td>
+            <td>
+                  <code><span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Columns to coerce to numeric dtype.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>zscore_vars</code>
+            </td>
+            <td>
+                  <code><span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Columns to z-score before formula construction.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>zscore_response</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to z-score the response column.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>tuple[pd.DataFrame, list[str]]: The transformed DataFrame and a list of</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.List">List</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>formulas ordered as full model, subject-only or null model, and</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Tuple">Tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="typing.List">List</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>fixed-effects-only model.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.DiagnosticFunctionsLong.MixedEffects_long" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">MixedEffects_long</span><span class="p">(</span><span class="n">idp_matrix</span><span class="p">,</span> <span class="n">subjects</span><span class="p">,</span> <span class="n">timepoints</span><span class="p">,</span> <span class="n">batches</span><span class="p">,</span> <span class="n">idp_names</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fix_eff</span><span class="o">=</span><span class="p">(),</span> <span class="n">ran_eff</span><span class="o">=</span><span class="p">(),</span> <span class="n">force_categorical</span><span class="o">=</span><span class="p">(),</span> <span class="n">force_numeric</span><span class="o">=</span><span class="p">(),</span> <span class="n">zscore_var</span><span class="o">=</span><span class="p">(),</span> <span class="n">do_zscore</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">p_thr</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">p_corr</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">reml</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Run a mixed-effects modeling pipeline per-IDP for longitudinal, multi-site data.</p>
+<p>For each IDP (column) this function:</p>
+<ol>
+<li>Builds three formulas (full, subject-only / null, no-batch) via
+   <code>build_mixed_formula</code>, honoring forced categorical/numeric conversions
+   and optional z-scoring of variables.</li>
+<li>Fits a full mixed model (fixed effects including batch + specified random
+   effects) using <code>statsmodels</code> MixedLM.</li>
+<li>Runs pairwise Wald contrasts between batch levels to count significant
+   site differences.</li>
+<li>Fits a subject-only random-intercept model to extract subject (between)
+   variance and residual (within) variance, then computes ICC and WCV.</li>
+<li>Fits a fixed-effects-only model (no batch terms) to extract coefficient
+   estimates, p-values and confidence intervals for requested fixed effects.</li>
+<li>Collects diagnostics and returns one summary row per IDP. Model failures
+   yield NaNs for that IDP but do not stop the pipeline.</li>
+</ol>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_matrix</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Numeric matrix of IDP values with shape
+<code>(n_samples, n_idps)</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>subjects</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Subject identifiers.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>timepoints</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Timepoint labels.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batches</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batch or site labels, converted internally to categorical.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_names</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Names for IDP columns.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covariates</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Sequence">Sequence</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional mapping of <code>name -&gt; sequence</code> for additional
+covariates.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fix_eff</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fixed-effect variable names to include.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ran_eff</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Random-effect grouping variables.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>force_categorical</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Columns to coerce to categorical dtype.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>force_numeric</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Columns to coerce to numeric dtype.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>zscore_var</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Variables to z-score before model fitting.</p>
+              </div>
+            </td>
+            <td>
+                  <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>do_zscore</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to use <code>zscore_...</code> columns when available.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>p_thr</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Nominal alpha for pairwise Wald tests.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.05</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>p_corr</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Multiple-comparison correction mode for pairwise tests.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>reml</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to fit <code>MixedLM</code> using REML.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>tuple[pd.DataFrame, list]: A tuple <code>(results_df, model_defs)</code> where</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>results_df</code> contains one row per IDP with mixed-model diagnostics and</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Tuple">Tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="list">list</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>fixed-effect summaries, and <code>model_defs</code> stores the formulas used for</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Tuple">Tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="list">list</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>each feature.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>idp_matrix</code> is not 2-D or if input sequence lengths do not match the number of rows.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="KeyError">KeyError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If requested variables in <code>fix_eff</code>, <code>ran_eff</code>, or <code>force_*</code> are not present in the assembled DataFrame.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>Column names exposed to users (for <code>fix_eff</code> / <code>ran_eff</code> /</p>
+</details>        <p><code>force_*</code>) are exactly: <code>'subjects'</code>, <code>'timepoints'</code>,
+  <code>'batches'</code> — these names are inserted into the working DataFrame so
+  callers should use them when referring to these variables.
+    The function reorders batch categories so the largest group becomes the
+  reference level before fitting (helps stable parameterization of
+  contrasts).
+    The primary grouping column for mixed models is the first valid entry of
+  <code>ran_eff</code> (or <code>'subjects'</code> when <code>ran_eff</code> was not specified).
+- If model fitting fails for an IDP, the pipeline records NaNs for that
+  IDP and continues (failures do not stop the whole run).
+- Pairwise contrasts are computed with <code>pairwise_site_tests</code> using the
+  fit object's parameters and covariance; p-values are two-sided Wald
+  z-tests.
+- Confidence intervals and p-values are extracted from the fitted
+  <code>statsmodels</code> result objects when available; missing names or
+  extraction failures result in NaNs for those fields.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.DiagnosticFunctionsLong.AdditiveEffect_long" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">AdditiveEffect_long</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">idp_matrix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subjects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">timepoints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batch_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">idp_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">idvar</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batchvar</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">timevar</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fix_eff</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ran_eff</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">do_zscore</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">reml</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Test for additive (mean/location) batch effects per feature using mixed models.</p>
+<p>For each feature (IDP) this routine:</p>
+<ul>
+<li>Builds a per-feature local DataFrame including the response, specified fixed
+  predictors and the batch column; numeric predictors are z-scored per-feature.</li>
+<li>Optionally z-scores the response per-feature when <code>do_zscore=True</code>
+  (default).</li>
+<li>Fits a full mixed model <code>lhs ~ &lt;fixed_terms&gt; + C(batch)</code> with random
+  effects given by <code>ran_eff</code> (defaults to <code>idvar</code> when <code>ran_eff</code> is
+  None).</li>
+<li>Fits a reduced mixed model <code>lhs ~ &lt;fixed_terms&gt;</code> (same random structure).</li>
+<li>Primary test: likelihood-ratio test (LRT) using model log-likelihoods:
+  <code>LR = 2 * (llf_full - llf_reduced)</code>,
+  <code>df = n_levels(batch) - 1</code> (fallback to 1 if unknown). If LRT is not
+  available or fails, falls back to a multivariate Wald test on the
+  batch-related parameters (or a pseudoinverse-based Wald if the covariance
+  is singular).</li>
+<li>Records test statistic, degrees of freedom, p-value and which method was
+  used: <code>"LRT"</code>, <code>"Wald"</code>, or <code>"Wald_pinv"</code>.</li>
+</ul>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pandas.DataFrame">DataFrame</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional DataFrame used directly when provided.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_matrix</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="numpy.ndarray">ndarray</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional feature matrix used when <code>data</code> is not supplied.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>subjects</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Sequence">Sequence</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional subject IDs used when building a DataFrame from
+arrays.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>timepoints</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Sequence">Sequence</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional timepoint labels used when building a DataFrame
+from arrays.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch_name</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Sequence">Sequence</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional batch labels used when building a DataFrame from
+arrays.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_names</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional feature names for <code>idp_matrix</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covariates</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Sequence">Sequence</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional mapping of <code>name -&gt; sequence</code> for additional
+covariates.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idvar</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Column name for subject IDs.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batchvar</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Column name for batch labels.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>timevar</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Column name for timepoints.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fix_eff</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fixed-effect predictors.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ran_eff</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Random-effect grouping variables.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>do_zscore</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to z-score the response per feature.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>reml</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to fit <code>MixedLM</code> using REML.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>verbose</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to print progress and model formulas.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>pd.DataFrame: One row per feature with additive batch-effect test</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>statistics, degrees of freedom, p-values, and method labels.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="KeyError">KeyError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>ran_eff</code> variables are not found in the assembled DataFrame.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>idp_matrix</code> is not 2-D or if input sequence lengths do not match the number of rows.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>Per-feature predictor z-scoring is always applied to numeric <code>fix_eff</code></p>
+</details>        <p>(local to each feature) via <code>_build_fixed_formula_terms</code>.
+    <code>do_zscore=True</code> (default): z-scores the response per feature and uses
+  the z-scored response (<code>z_&lt;feature&gt;</code>) as LHS. Set <code>do_zscore=False</code>
+  to keep original units.
+    <code>reml=False</code> (default): mixed models are fitted with REML disabled.
+  Pass <code>reml=True</code> to use REML.
+    Rows with NaN responses are dropped per-feature. Features with fewer than
+  3 retained rows are skipped and returned with NaNs.
+    If the full or reduced mixed fit fails, that feature is reported with NaNs.
+    The Wald fallback constructs contrasts for batch-related parameters found
+  in the fitted parameter names and uses the parameter covariance matrix to
+  compute a chi-square statistic; pseudoinverse is used if needed.
+    Because predictors are z-scored per-feature, coefficient magnitudes are
+  comparable across features only in the z-scored scale (unless
+  <code>do_zscore=False</code>).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.DiagnosticFunctionsLong.MultiplicativeEffect_long" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">MultiplicativeEffect_long</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">idp_matrix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subjects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">timepoints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batch_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">idp_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">idvar</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batchvar</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">timevar</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fix_eff</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ran_eff</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">do_zscore</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">reml</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Test for multiplicative (variance / heteroskedasticity) batch effects per feature.</p>
+<p>For each feature (IDP) this routine:</p>
+<ul>
+<li>Builds a per-feature local DataFrame including the response, specified fixed
+  predictors and the batch column; numeric predictors are z-scored per-feature.</li>
+<li>Optionally z-scores the response per-feature when <code>do_zscore=True</code>
+  (default).</li>
+<li>Fits a full mixed model <code>lhs ~ &lt;fixed_terms&gt; + C(batch)</code> with random
+  effects given by <code>ran_eff</code> (defaults to <code>idvar</code> when <code>ran_eff</code> is
+  None) — the residuals from this fit are used for variance comparisons.</li>
+<li>Tests whether residual variability differs across batches using Fligner's
+  test (a robust, non-parametric test for homogeneity of variances). The
+  reported statistic is the Fligner chi-square and the p-value is from that
+  test.</li>
+<li>Records test statistic, DF (n_groups - 1), p-value and method
+  <code>"Fligner"</code>.</li>
+</ul>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pandas.DataFrame">DataFrame</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional DataFrame used directly when provided.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_matrix</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="numpy.ndarray">ndarray</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional feature matrix used when <code>data</code> is not supplied.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>subjects</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Sequence">Sequence</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional subject IDs used when building a DataFrame from
+arrays.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>timepoints</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Sequence">Sequence</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional timepoint labels used when building a DataFrame
+from arrays.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch_name</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Sequence">Sequence</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional batch labels used when building a DataFrame from
+arrays.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_names</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional feature names for <code>idp_matrix</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covariates</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Sequence">Sequence</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional mapping of <code>name -&gt; sequence</code> for additional
+covariates.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idvar</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Column name for subject IDs.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batchvar</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Column name for batch labels.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>timevar</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Column name for timepoints.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fix_eff</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fixed-effect predictors.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ran_eff</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Iterable">Iterable</span>[<span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Random-effect grouping variables.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>do_zscore</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to z-score the response per feature.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>reml</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to fit <code>MixedLM</code> using REML.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>verbose</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to print progress and model formulas.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>pd.DataFrame: One row per feature with multiplicative batch-effect test</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>statistics, degrees of freedom, p-values, and method labels.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="KeyError">KeyError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>fix_eff</code> or <code>ran_eff</code> variables are not found in the assembled DataFrame.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>idp_matrix</code> is not 2-D or if input sequence lengths do not match the number of rows.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>Per-feature predictor z-scoring is always applied to numeric <code>fix_eff</code></p>
+</details>        <p>(local to each feature) via <code>_build_fixed_formula_terms</code>.
+    <code>do_zscore=True</code> (default): z-scores the response per feature and uses
+  the z-scored response (<code>z_&lt;feature&gt;</code>) as LHS. Set <code>do_zscore=False</code>
+  to keep original units.
+    <code>reml=False</code> (default): MixedLM fits are run with REML disabled.
+  Pass <code>reml=True</code> to change that.
+    <code>ran_eff</code> defaults to <code>[idvar]</code> (where <code>idvar</code> defaults to
+  <code>'subject_ids'</code>).
+    Residuals used for the variance test are extracted from the full
+  mixed-model fit. If fitting fails for a given feature, that feature is
+  returned with NaNs.
+- The Fligner test requires at least two groups and non-empty residual
+  samples for each group; otherwise the test is not run for that feature.
+- Rows with NaN responses are dropped per-feature. Features with fewer than
+  3 retained rows are skipped and returned with NaNs.
+- Because predictors and possibly responses are z-scored per-feature, the
+  residuals used for heteroskedasticity testing are on the z-scored scale
+  when <code>do_zscore=True</code>.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

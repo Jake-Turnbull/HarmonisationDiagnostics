@@ -1,0 +1,3325 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../DiagnosticFunctions/">
+      
+      
+        <link rel="next" href="../LoggingTool/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>PlotDiagnosticResults - DiagnoseHarmonise</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#plotdiagnosticresults" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="DiagnoseHarmonise" class="md-header__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            DiagnoseHarmonise
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              PlotDiagnosticResults
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="DiagnoseHarmonise" class="md-nav__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    DiagnoseHarmonise
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../terminal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DiagnosticReport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticReport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HarmonisationFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HarmonisationFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DiagnosticFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlotDiagnosticResults
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlotDiagnosticResults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlotDiagnosticResults
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.LMM_Diagnostics_Plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LMM_Diagnostics_Plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.rep_plot_wrapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rep_plot_wrapper
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.Z_Score_Plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Z_Score_Plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.Cohens_D_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cohens_D_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.variance_ratio_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        variance_ratio_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.PC_corr_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PC_corr_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_PCA" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clustering_analysis_PCA
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clustering_analysis_all
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_UMAP" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clustering_analysis_UMAP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_eigen_spectra_and_cumulative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_eigen_spectra_and_cumulative
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_covariance_frobenius" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_covariance_frobenius
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.mahalanobis_distance_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mahalanobis_distance_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.KS_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        KS_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_SubjectOrder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_SubjectOrder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.build_style_registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_style_registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_WithinSubjVar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_WithinSubjVar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_MultivariateBatchDifference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_MultivariateBatchDifference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_MixedEffectsPart1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_MixedEffectsPart1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_MixedEffectsPart2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_MixedEffectsPart2
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_AddMultEffects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_AddMultEffects
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LoggingTool/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LoggingTool
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DiagnosticFunctionsLong/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctionsLong
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlotDiagnosticResults
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.LMM_Diagnostics_Plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LMM_Diagnostics_Plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.rep_plot_wrapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rep_plot_wrapper
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.Z_Score_Plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Z_Score_Plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.Cohens_D_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cohens_D_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.variance_ratio_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        variance_ratio_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.PC_corr_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PC_corr_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_PCA" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clustering_analysis_PCA
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clustering_analysis_all
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_UMAP" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clustering_analysis_UMAP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_eigen_spectra_and_cumulative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_eigen_spectra_and_cumulative
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_covariance_frobenius" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_covariance_frobenius
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.mahalanobis_distance_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mahalanobis_distance_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.KS_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        KS_plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_SubjectOrder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_SubjectOrder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.build_style_registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_style_registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_WithinSubjVar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_WithinSubjVar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_MultivariateBatchDifference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_MultivariateBatchDifference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_MixedEffectsPart1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_MixedEffectsPart1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_MixedEffectsPart2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_MixedEffectsPart2
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#DiagnoseHarmonisation.PlotDiagnosticResults.plot_AddMultEffects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plot_AddMultEffects
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="plotdiagnosticresults">PlotDiagnosticResults</h1>
+<p><strong>A set of complimentary plotting functions for the diagnostic tests. These can be used outside of the reports if you only want one specific test. Most functions here will store a set of figures in a list for ease of adding to the HTML reports and for saving as local PNG images.</strong></p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="DiagnoseHarmonisation.PlotDiagnosticResults"></a>
+    <div class="doc doc-contents first">
+
+        <hr />
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.LMM_Diagnostics_Plot" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">LMM_Diagnostics_Plot</span><span class="p">(</span><span class="n">results_df</span><span class="p">,</span> <span class="n">feature_order</span><span class="o">=</span><span class="s1">&#39;original&#39;</span><span class="p">,</span> <span class="n">max_labels</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">include_delta_r2</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_status_summary</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plot LMM diagnostics from Run_LMM_cross_sectional output.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>results_df</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Output dataframe from Run_LMM_cross_sectional.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>feature_order</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>'original' to preserve input order, 'sorted_icc' to sort by ICC.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;original&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_labels</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Maximum number of x-axis labels to show before thinning them.</p>
+              </div>
+            </td>
+            <td>
+                  <code>50</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>include_delta_r2</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, add a delta_R2 plot.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>include_status_summary</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, add a status/notes summary plot.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="tuple">tuple</span>[<span title="str">str</span>, <span title="matplotlib.figure.Figure">Figure</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>list[tuple[str, matplotlib.figure.Figure]]: Caption and figure pairs for</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="tuple">tuple</span>[<span title="str">str</span>, <span title="matplotlib.figure.Figure">Figure</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the generated diagnostic plots.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.rep_plot_wrapper" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">rep_plot_wrapper</span><span class="p">(</span><span class="n">func</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+
+
+<details class="decorator-that" open>
+  <summary>Decorator that</summary>
+  <ul>
+<li>optionally forces show=False (if the wrapped function supports it),</li>
+<li>intercepts and removes wrapper-only kwargs (rep, log_func, caption),</li>
+<li>logs returned figure(s) into rep via rep.log_plot(fig, caption) if rep provided,</li>
+<li>closes figures after logging to free memory.</li>
+</ul>
+</details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.Z_Score_Plot" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">Z_Score_Plot</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">probablity_distribution</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">draw_PDF</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plots the median centered Z-score data as a heatmap and as a histogram of all scores.
+Re-order by batch for better visualisaion in the heatmap, also plot batch seperators on heatmap.
+Args:
+    data (np.ndarray): 2D array of Z-scored data (samples x features).
+Returns:
+    None: Displays plot of Z-scored data and a histogram of the values on different axes.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.Cohens_D_plot" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">Cohens_D_plot</span><span class="p">(</span><span class="n">cohens_d</span><span class="p">,</span> <span class="n">pair_labels</span><span class="p">,</span> <span class="n">df</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">caption</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plots Cohen's d effect sizes as a bar plot with histograms of the values.
+Args:
+    cohens_d (np.ndarray): 2D array of Cohen's d values (num_pairs x num_features).
+    pair_labels (list): List of labels for each pair of batches corresponding to rows in cohens_d.
+    df (Optional[pd.DataFrame], optional): Optional DataFrame containing additional information. Defaults to None.
+    rep (optional): Optional StatsReporter instance. Defaults to None.
+    caption (Optional[str], optional): Optional caption for the plot. Defaults to None.
+    show (bool, optional): Whether to display the plot. Defaults to False.
+Returns:
+    plt.Figure: The generated plot figure.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.variance_ratio_plot" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">variance_ratio_plot</span><span class="p">(</span><span class="n">variance_ratios</span><span class="p">,</span> <span class="n">pair_labels</span><span class="p">,</span> <span class="n">df</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">caption</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plots the explained variance ratio for each principal component as a bar plot.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>variance_ratios</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="float">float</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A sequence of explained variance ratios for each principal component.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>pair_labels</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>List of labels for each pair of batches corresponding to rows in variance_ratios.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>df</code>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Placeholder for potential future use. Defaults to None.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>rep</code>
+            </td>
+            <td>
+                  <code><span title="optional">optional</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional StatsReporter instance. Defaults to None.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>caption</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional caption for the plot. Defaults to None.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>show</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to display the plot. Defaults to False.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+        <p>Returns:</p>
+<pre><code>None: Displays plot of vario per feature and a histogram of the values on different axes.
+</code></pre>
+<p>Raises:
+    ValueError: If variance_ratios is not a sequence of numbers.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.PC_corr_plot" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">PC_corr_plot</span><span class="p">(</span><span class="n">PrincipleComponents</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">variable_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">PC_correlations</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cluster_batches</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Generate PCA diagnostic plots and return a list of (caption, fig).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>PrincipleComponents</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>2D array of shape (n_samples, n_components) containing PCA scores.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span> or <span title="list">list</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>1D array or list of batch labels corresponding to each sample.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covariates</code>
+            </td>
+            <td>
+                  <code><span title="optional">optional</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional covariate data. Can be a DataFrame, structured array, or 2D array. Defaults to None.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>variable_names</code>
+            </td>
+            <td>
+                  <code><span title="optional">optional</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional list of variable names for
+covariates and batch. If supplied with covariates, the length should
+match the number of covariate columns. If the first element is
+<code>'batch'</code>, it is used as the batch column name.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>PC_correlations</code>
+            </td>
+            <td>
+                  <code><span title="optional">optional</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional output from <code>PC_Correlations</code> used
+to add correlation summary plots.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>show</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to display the figures interactively.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cluster_batches</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to add batch-clustering
+overlays to the PCA plots.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="tuple">tuple</span>[<span title="str">str</span>, <span title="matplotlib.pyplot.Figure">Figure</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>list[tuple[str, plt.Figure]]: Caption and figure pairs for the PCA</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="tuple">tuple</span>[<span title="str">str</span>, <span title="matplotlib.pyplot.Figure">Figure</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>diagnostic plots.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_PCA" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">clustering_analysis_PCA</span><span class="p">(</span><span class="n">PrincipleComponents</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">variable_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">PC_correlations</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cluster_batches</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">UMAP_embedding</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Perform clustering analysis on PCA results and generate diagnostic plots.
+Args:
+    PrincipleComponents (np.ndarray): 2D array of shape (n_samples, n_components) containing PCA scores.
+    batch (np.ndarray or list): 1D array or list of batch labels corresponding to each sample.
+    covariates (optional): Optional covariate data. Can be a DataFrame, structured array, or 2D array. Defaults to None.
+    variable_names (optional): Optional list of variable names for covariates and batch. If covariates provided, should match number of covariate columns.
+    If first element is 'batch', it will be used as batch column name. Defaults to None.
+Returns:
+    List[Tuple[str, plt.Figure]]: A list of tuples containing captions and corresponding figures for the PCA diagnostic plots.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_all" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">clustering_analysis_all</span><span class="p">(</span><span class="n">PrincipleComponents</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">variable_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">UMAP_embedding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">UMAP_neighbors</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">UMAP_min_dist</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">UMAP_metric</span><span class="o">=</span><span class="s1">&#39;euclidean&#39;</span><span class="p">,</span> <span class="n">UMAP_tuning</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Perform clustering diagnostics in PCA and optional UMAP space.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>PrincipleComponents</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>PCA score matrix with shape
+<code>(n_samples, n_components)</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Original feature matrix used for the optional UMAP
+embedding.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span> or <span title="list">list</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batch labels for each sample.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covariates</code>
+            </td>
+            <td>
+                  <code><span title="optional">optional</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional covariate data to color the plots.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>variable_names</code>
+            </td>
+            <td>
+                  <code><span title="optional">optional</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional names for the covariates and batch
+variables.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>show</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to display the figures interactively.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>UMAP_embedding</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to compute and plot a UMAP
+embedding of the raw data.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>UMAP_neighbors</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of neighbors for UMAP.</p>
+              </div>
+            </td>
+            <td>
+                  <code>15</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>UMAP_min_dist</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Minimum distance parameter for UMAP.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.1</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>UMAP_metric</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Distance metric passed to UMAP.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;euclidean&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="tuple">tuple</span>[<span title="str">str</span>, <span title="matplotlib.pyplot.Figure">Figure</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>list[tuple[str, plt.Figure]]: Caption and figure pairs for the</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="tuple">tuple</span>[<span title="str">str</span>, <span title="matplotlib.pyplot.Figure">Figure</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>generated PCA and optional UMAP plots.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.clustering_analysis_UMAP" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">clustering_analysis_UMAP</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">covariates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">variable_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Perform UMAP dimensionality reduction and plot the embedding colored by batch and covariates.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>2D array-like (n_samples x n_features) input data for U</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>1D array-like (n_samples,) batch labels for each sample.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covariates</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional 2D array-like (n_samples x n_covariates</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>variable_names</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional list of covariate names (if covariates provided).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>rep</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional report object with rep.log_plot(plt, caption=...) method for logging</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.plot_eigen_spectra_and_cumulative" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_eigen_spectra_and_cumulative</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">rep</span><span class="p">,</span> <span class="n">max_components</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">caption_prefix</span><span class="o">=</span><span class="s1">&#39;PC spectrum&#39;</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Compute per-batch variance along PCs (scree / cumulative) and log plots to the report.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>score</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(n_samples, n_pcs) PCA score matrix returned by your PCA routine.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(n_samples,) batch labels (numeric or strings).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>rep</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>report object that has rep.log_plot(plt, caption=...) and rep.log_text(...)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_components</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>maximum number of PCs to visualise (keeps plots cheap).</p>
+              </div>
+            </td>
+            <td>
+                  <code>50</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>caption_prefix</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>prefix for plot captions.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;PC spectrum&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>dict[str, Any]: A dictionary containing per-batch variance curves,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>per-batch fraction-of-variance curves, and the number of principal</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>components used.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.plot_covariance_frobenius" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_covariance_frobenius</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">rep</span><span class="p">,</span> <span class="n">max_components</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">caption_prefix</span><span class="o">=</span><span class="s1">&#39;Covariance comparison (PC space)&#39;</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Compute pairwise Frobenius norms of covariance differences between batches</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>score</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(n_samples, n_pcs) whole data matrix in real space</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(n_samples,) batch labels.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>rep</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>report object (must support rep.log_plot and rep.log_text).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>normalize</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>if True, divide pairwise norms by Frobenius norm of pooled covariance.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>caption_prefix</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>prefix for plot captions.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;Covariance comparison (PC space)&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>dict[str, Any]: A dictionary containing the batch covariance matrices,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>pairwise Frobenius distances, optional normalized distances, and the</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>number of principal components used.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.mahalanobis_distance_plot" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">mahalanobis_distance_plot</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">annotate</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;viridis&#39;</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plot Mahalanobis distances from (...) all on ONE figure:
+  - Heatmap of pairwise RAW distances
+  - Heatmap of pairwise RESIDUAL distances (if available)
+  - Bar chart of centroid-to-global distances (raw vs residual)</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>results</code>
+            </td>
+            <td>
+                  <code><span title="dict">dict</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Output from MahalanobisDistance(...)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>annotate</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Write numeric values inside heatmap cells/bars.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>figsize</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Matplotlib figure size.</p>
+              </div>
+            </td>
+            <td>
+                  <code>(14, 5)</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cmap</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Colormap for heatmaps.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;viridis&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>show</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, plt.show(); otherwise just return (fig, axes).</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code>(<span title="fig">fig</span>, <span title="axes">axes</span>)</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The matplotlib Figure and dict of axes.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.KS_plot" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">KS_plot</span><span class="p">(</span><span class="n">ks_results</span><span class="p">,</span> <span class="n">feature_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">caption</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plot detailed KS-test results for each comparison.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>ks_results</code>
+            </td>
+            <td>
+                  <code><span title="dict">dict</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Output from <code>KS_Test</code>, keyed by tuples such as
+<code>(batch, "overall")</code> or <code>(batch1, batch2)</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>feature_names</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional feature names for plot labels.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>rep</code>
+            </td>
+            <td>
+                  <code><span title="optional">optional</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Report object used to log plots instead of returning
+them.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>caption</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional caption prefix.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>show</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to display the generated figures.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>Any</code></td>            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The report object if <code>rep</code> is provided; otherwise a list of</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+<td></td>            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>(caption, figure)</code> tuples.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.plot_SubjectOrder" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_SubjectOrder</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">idp_col</span><span class="o">=</span><span class="s1">&#39;IDP&#39;</span><span class="p">,</span> <span class="n">time_a_col</span><span class="o">=</span><span class="s1">&#39;TimeA&#39;</span><span class="p">,</span> <span class="n">time_b_col</span><span class="o">=</span><span class="s1">&#39;TimeB&#39;</span><span class="p">,</span> <span class="n">rho_col</span><span class="o">=</span><span class="s1">&#39;SpearmanRho&#39;</span><span class="p">,</span> <span class="n">p_col</span><span class="o">=</span><span class="s1">&#39;pValue&#39;</span><span class="p">,</span> <span class="n">times_order</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">significance</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">ncols</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">figsize_per_plot</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;icefire&#39;</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;.2f&#39;</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax_abs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">limit_idps</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sample_method</span><span class="o">=</span><span class="s1">&#39;first&#39;</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">combine_method</span><span class="o">=</span><span class="s1">&#39;stouffer&#39;</span><span class="p">,</span> <span class="n">p_correction</span><span class="o">=</span><span class="s1">&#39;fdr_bh&#39;</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Extended version of your function that <em>combines</em> p-values across IDPs (for each time-pair)
+and across time-pairs (for each IDP) using either Stouffer (signed) or Fisher, and optionally
+applies multiple-testing correction (BH or bonferroni).</p>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <ul>
+<li>combine_method='stouffer' uses the sign from rho (mean rho across IDPs for that cell)
+  to create signed z-scores from two-sided p-values.</li>
+<li>combine_method='fisher' uses scipy.stats.combine_pvalues(method='fisher') and ignores sign.</li>
+<li>p_correction operates separately for the time×time summary matrix and for per-IDP combined p's.</li>
+<li>For best statistical rigor with permutation-based tests, combining at the permutation-level
+  (i.e. combining test stats per permutation and building an empirical null) is preferable.</li>
+</ul>
+</details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.build_style_registry" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">build_style_registry</span><span class="p">(</span><span class="n">subjects</span><span class="p">,</span> <span class="n">idps</span><span class="p">,</span> <span class="n">subject_palette</span><span class="o">=</span><span class="s1">&#39;tab10&#39;</span><span class="p">,</span> <span class="n">idp_palette</span><span class="o">=</span><span class="s1">&#39;Set2&#39;</span><span class="p">,</span> <span class="n">subject_markers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">idp_markers</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Build color and marker registries for subjects and IDPs.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>subjects</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Subject identifiers that need plotting styles.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idps</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>IDP identifiers that need plotting styles.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>subject_palette</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Matplotlib or seaborn palette name for
+subjects.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;tab10&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_palette</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Matplotlib or seaborn palette name for
+IDPs.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;Set2&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>subject_markers</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Marker cycle for subjects.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_markers</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Marker cycle for IDPs.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="dict">dict</span>[<span title="typing.Any">Any</span>, <span title="tuple">tuple</span>[<span title="typing.Any">Any</span>, <span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>tuple[dict[Any, tuple[Any, str]], dict[Any, tuple[Any, str]]]: Subject</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="dict">dict</span>[<span title="typing.Any">Any</span>, <span title="tuple">tuple</span>[<span title="typing.Any">Any</span>, <span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>and IDP style dictionaries mapping each identifier to a `(color,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="dict">dict</span>[<span title="typing.Any">Any</span>, <span title="tuple">tuple</span>[<span title="typing.Any">Any</span>, <span title="str">str</span>]], <span title="dict">dict</span>[<span title="typing.Any">Any</span>, <span title="tuple">tuple</span>[<span title="typing.Any">Any</span>, <span title="str">str</span>]]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>marker)` pair.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.plot_WithinSubjVar" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_WithinSubjVar</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">subject_col</span><span class="o">=</span><span class="s1">&#39;subject&#39;</span><span class="p">,</span> <span class="n">idp_cols</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subject_style</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">idp_style</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">limit_subjects</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">limit_idps_for_legend</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">point_size</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="n">jitter</span><span class="o">=</span><span class="mf">0.08</span><span class="p">,</span> <span class="n">savepath</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plots within-subject variability across IDPs, showing:
+A) Per-IDP distribution across subjects (boxplot + jittered points)
+B) Per-IDP mean across subjects (boxplot + points)
+C) Per-subject mean across IDPs (boxplot + points)</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.plot_MultivariateBatchDifference" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_MultivariateBatchDifference</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">batch_col</span><span class="o">=</span><span class="s1">&#39;batch&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;mdval&#39;</span><span class="p">,</span> <span class="n">avg_label</span><span class="o">=</span><span class="s1">&#39;average_batch&#39;</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">sort_by_value</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sort_rest_desc</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">value_format</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">{:.1f}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">savepath</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+
+
+<details class="horizontal-bar-chart-with" open>
+  <summary>Horizontal bar chart with</summary>
+  <ul>
+<li>average_batch always at the top</li>
+<li>remaining batches optionally sorted by mdval</li>
+<li>value labels rounded to 1 decimal</li>
+</ul>
+</details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.plot_MixedEffectsPart1" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_MixedEffectsPart1</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">idp_col</span><span class="o">=</span><span class="s1">&#39;IDP&#39;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">plot_type</span><span class="o">=</span><span class="s1">&#39;bar&#39;</span><span class="p">,</span> <span class="n">idp_style</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">limit_idps</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">value_format_float</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">{:.1f}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">value_format_int</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">{:d}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">savepath</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">display</span><span class="o">=</span><span class="s1">&#39;subplots&#39;</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plots one figure per metric (subplots) OR separate figures per metric.</p>
+<ul>
+<li>display='subplots' : original behaviour, 1 fig with n_metrics subplots (returns Figure).</li>
+<li>display='separate' : create one Figure per metric, return dict {metric: Figure}.</li>
+<li>display='single'   : create a single Figure for the metric named in <code>metric</code>, return Figure.</li>
+</ul>
+<p>Defaults: metrics excludes 'anova_batches' by design (use AdditiveEffect_long for omnibus).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.plot_MixedEffectsPart2" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_MixedEffectsPart2</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">idp_col</span><span class="o">=</span><span class="s1">&#39;IDP&#39;</span><span class="p">,</span> <span class="n">fix_eff</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">,</span> <span class="s1">&#39;sex&#39;</span><span class="p">),</span> <span class="n">p_thr</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">effect_style</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">idp_order</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">marker_size</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span> <span class="n">cap_width</span><span class="o">=</span><span class="mf">0.03</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">xtick_rotation</span><span class="o">=</span><span class="mi">45</span><span class="p">,</span> <span class="n">highlight_color</span><span class="o">=</span><span class="s1">&#39;red&#39;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">savepath</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plot fixed-effect estimates and confidence intervals across IDPs.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>df</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>DataFrame containing <code>IDP</code> rows and effect summary columns such as
+<code>"{eff}_est"</code>, <code>"{eff}_pval"</code>, <code>"{eff}_ciL"</code>, and <code>"{eff}_ciU"</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_col</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Column containing IDP names.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;IDP&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fix_eff</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Iterable of fixed-effect names to plot.</p>
+              </div>
+            </td>
+            <td>
+                  <code>(&#39;age&#39;, &#39;sex&#39;)</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>p_thr</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>P-value threshold used to highlight significant estimates.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.05</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>effect_style</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional mapping from effect name to <code>(color, marker)</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>idp_order</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional IDP display order. If <code>None</code>, the DataFrame order is
+used.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>figsize</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Figure size passed to Matplotlib.</p>
+              </div>
+            </td>
+            <td>
+                  <code>(10, 4)</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>marker_size</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Marker size for effect estimates.</p>
+              </div>
+            </td>
+            <td>
+                  <code>80</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cap_width</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Horizontal half-width of the confidence interval caps.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.03</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>linewidth</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Line width for confidence intervals.</p>
+              </div>
+            </td>
+            <td>
+                  <code>2.0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>xtick_rotation</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Rotation angle for x-axis labels.</p>
+              </div>
+            </td>
+            <td>
+                  <code>45</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>highlight_color</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fill color used when <code>p &lt; p_thr</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;red&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>title</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional figure title.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>savepath</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional file path for saving the figure.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>rep</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional report object used to log the plot.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>show</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether to display the figure interactively.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="matplotlib.pyplot.Figure">Figure</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>tuple[plt.Figure, list[plt.Axes]]: The Matplotlib figure and the list of</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="matplotlib.pyplot.Axes">Axes</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>subplot axes in <code>fix_eff</code> order.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="DiagnoseHarmonisation.PlotDiagnosticResults.plot_AddMultEffects" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_AddMultEffects</span><span class="p">(</span><span class="n">dfs</span><span class="p">,</span> <span class="n">feature_col</span><span class="o">=</span><span class="s1">&#39;Feature&#39;</span><span class="p">,</span> <span class="n">p_col</span><span class="o">=</span><span class="s1">&#39;p-value&#39;</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">p_thr</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;Reds&#39;</span><span class="p">,</span> <span class="n">annot_fmt</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">{:.3g}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">vmax_logp</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">show_colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">savepath</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">value_scale</span><span class="o">=</span><span class="s1">&#39;p&#39;</span><span class="p">,</span> <span class="n">rep</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">annot_fontsize</span><span class="o">=</span><span class="mf">7.0</span><span class="p">,</span> <span class="n">tick_fontsize</span><span class="o">=</span><span class="mf">7.0</span><span class="p">,</span> <span class="n">cbar_shrink</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">linewidths</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">square</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Plot matrix of p-values for features across one or more dfs.</p>
+
+
+<details class="value_scale" open>
+  <summary>value_scale</summary>
+  <ul>
+<li>'p'    : heatmap colors and annotations show raw p-values (range 0..1).</li>
+<li>'logp' : heatmap colors and annotations show -log10(p). (Base 10)
+           color scale is clipped at <code>vmax_logp</code>.</li>
+</ul>
+</details>
+
+<details class="colorbar" open>
+  <summary>Colorbar</summary>
+  <ul>
+<li>Shows the same scale as the heatmap.</li>
+<li>Includes a tick marking p_thr (in 'p' mode) or -log10(p_thr) (in 'logp' mode).
+  The tick label will indicate the p_thr value for clarity.</li>
+</ul>
+</details>        <p>Other layout params control fonts / size.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
