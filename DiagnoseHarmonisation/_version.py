@@ -25,8 +25,8 @@ __all__ = [
 VERSION_TUPLE = tuple[Union[int, str], ...]
 COMMIT_ID = Union[str, None]
 
-_DIST_NAMES = ("HarmonizationDiagnostics",)
-_FALLBACK_VERSION = "0.1.1"
+_DIST_NAMES = ("DiagnoseHarmonisation", "HarmonizationDiagnostics")
+_FALLBACK_VERSION = "1.0.0"
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
