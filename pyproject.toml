@@ -3,7 +3,7 @@ requires = ["setuptools>=80", "setuptools-scm[simple]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "HarmonizationDiagnostics"
+name = "DiagnoseHarmonisation"
 dynamic = ["version"]
 description = "Diagnostics for pre- and post- Harmonisation"
 readme = { file = "README.md", content-type = "text/markdown" }
