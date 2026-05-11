@@ -2,6 +2,12 @@
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.19595960-blue)](https://doi.org/10.5281/zenodo.19595960)
 
+[![PyPI version](https://img.shields.io/pypi/v/DiagnoseHarmonisation.svg)](https://pypi.org/project/DiagnoseHarmonisation/)
+[![Python versions](https://img.shields.io/pypi/pyversions/DiagnoseHarmonisation.svg)](https://pypi.org/project/DiagnoseHarmonisation/)
+[![License](https://img.shields.io/pypi/l/DiagnoseHarmonisation.svg)](https://pypi.org/project/DiagnoseHarmonisation/)
+
+## Installation
+
 DiagnoseHarmonisation is an **in-development** library for the streamlined application and assessment of harmonisation algorithms at the summary-measure level. It also serves as a centralised location for popular, well-validated harmonisation methods from the literature. Full documentation is available here **[DiagnoseHarmonisation](https://jake-turnbull.github.io/HarmonisationDiagnostics/)**.
 
 In an upcoming paper, we plan to demonstrate that systematic evaluation and reporting of different components of batch effects is not only beneficial for choosing an appropriate harmonisation strategy, but essential for evaluating how well harmonisation has worked.
