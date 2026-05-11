@@ -8,7 +8,7 @@ In an upcoming paper, we plan to demonstrate that systematic evaluation and repo
 
 ## Installation and Usage
 
-Install by downloading directly or by running: pip install DiagnoseHarmonisation in the terminal.
+Install by downloading directly or by running: **pip install DiagnoseHarmonisation** in the terminal.
 
 Load different components of the module by calling
 
