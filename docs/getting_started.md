@@ -40,7 +40,20 @@ Using the full report:
 
 This will produce a detailed HTML file containing a full analysis of batch and covariate effects.
 
-## 4. Applying harmonisation methods
+## 4. Generate a Longitudinal Diagnostic Report
+
+To generate evaluation report on longitudinal/test-retest data:
+
+DiagnosticReport.LongitudinalReport(
+    data=X,
+    subject_ids=subject_var,
+    batch=batch,
+    timepoints=timepoint_var,
+    features=idp_names,
+    covariates=covars
+)
+
+## 5. Applying harmonisation methods
 
 Assuming you detect significant batch effects, you would then select a harmonisation method based on which you have observed. For example, if the batch effect is only additive (difference in means) you may simply revert to regression. If the effect is more complex however, you may choose a more advanced method such as CovBat:
 
