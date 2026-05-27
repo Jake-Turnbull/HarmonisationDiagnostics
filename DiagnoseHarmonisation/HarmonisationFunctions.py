@@ -2,13 +2,21 @@
 
 Script containing self contained harmonisation functions that can be used in conjunction with the diagnostic tools:
 """
+from __future__ import annotations
+
+from typing import Any, Dict, Optional, Sequence, Tuple
+
+import math
+import re
+import sys
+import warnings
 
 import numpy as np
-import pandas as pd
+import numpy.linalg as la
 import pandas as pd
 import patsy
-import sys
-import numpy.linalg as la
+import statsmodels.formula.api as smf
+from scipy.stats import chi2, zscore
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
@@ -977,13 +985,773 @@ def lme_harmonisation(data, batch, mod, variable_names):
         return residuals_df
     else:
         return residuals
-# Define LME_IQM harmonisation functions
-def lme_iqm_harmonisation(data, IQMs, mod, variable_names):
-    # Run LME harmonisation on IQMs to get resisuals:
-    """
-    Place holder for future implementation of LME-IQM harmonisation. 
-    When batch labels not given, or when batch size is very small, IQMs may hold more information than batch labels."""
-    
-    print("Place holder for future implementation of LME-IQM harmonisation")
 
-    return None
+# Define LME_IQM harmonisation functions
+def lme_iqm_harmonise(
+    data: pd.DataFrame,
+    idp_list: Sequence[str],
+    qc_list: Sequence[str],
+    preserve_covars: Sequence[str] = ("age",),
+    adjust_covars: Sequence[str] = ("timepoint",),
+    reverse_guard_covars: Optional[Sequence[str]] = None,
+    categorical_covars: Sequence[str] = ("timepoint", "batch"),
+    batch_col: str = "batch",
+    subject_col: str = "subjectID",
+    age_source_col: str = "Final_Age",
+    batch_source_col: str = "Site",
+    age_col: str = "age",
+    iqm_variance: float = 95,
+    p_thr: float = 0.05,
+    max_qcs: float = float("inf"),
+    apply_pca: bool = True,
+    outfilename: str = "iqm_harmonised.csv",
+    summary_csv: str = "qc_selection_summary.csv",
+    additive_detail_csv: str = "qc_selection_additive_details.csv",
+    multiplicative_detail_csv: str = "qc_selection_multiplicative_details.csv",
+    selected_additive_qcs_csv: str = "selected_additive_qcs_by_volume.csv",
+    selected_multiplicative_qcs_csv: str = "selected_multiplicative_qcs_by_volume.csv",
+    allow_ols_fallback: bool = True,
+    optimizer_order: Sequence[str] = ("lbfgs", "powell", "cg", "nm"),
+    maxiter: int = 2000,
+    verbose_model_fits: bool = False,
+) -> Tuple[pd.DataFrame, Dict[str, Any], pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Harmonise IDPs using IQM/QC-based additive and multiplicative correction.
+
+    The function selects QC features that:
+    - are associated with batch/site effects,
+    - do not encode preserve covariates,
+    - do not encode the response proxy,
+    - and pass reverse-guard tests when enabled.
+
+    Depending on `apply_pca`, QC variables are either:
+    - z-scored and reduced with PCA, or
+    - used directly after standardisation.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Main input dataframe containing IDPs, QC metrics, subject IDs, and covariates.
+    idp_list : Sequence[str]
+        List of IDP columns to harmonise.
+    qc_list : Sequence[str]
+        List of QC metric columns used as candidate harmonisation regressors.
+    preserve_covars : Sequence[str], default=("age",)
+        Covariates that QC variables are not allowed to encode.
+    adjust_covars : Sequence[str], default=("timepoint",)
+        Covariates included as adjustment variables in the models.
+    reverse_guard_covars : Sequence[str] | None, default=None
+        Optional subset of preserve covariates to test with reverse-response guards.
+        If None, numeric preserve covariates are used automatically.
+    categorical_covars : Sequence[str], default=("timepoint", "batch")
+        Covariates treated as categorical in regression formulas.
+    batch_col : str, default="batch"
+        Batch/site variable used as the harmonisation target.
+    subject_col : str, default="subjectID"
+        Subject identifier used for random intercepts in MixedLM.
+    age_source_col : str, default="Final_Age"
+        Source column used to create `age_col` if `age_col` is missing.
+    batch_source_col : str, default="Site"
+        Source column used to create `batch_col` if `batch_col` is missing.
+    age_col : str, default="age"
+        Working age column used in the models.
+    iqm_variance : float, default=95
+        Percentage of QC variance to retain when PCA is applied.
+    p_thr : float, default=0.05
+        P-value threshold used for QC selection and multiplicative testing.
+    max_qcs : float, default=inf
+        Maximum number of QCs allowed per volume.
+    apply_pca : bool, default=True
+        If True, run PCA on z-scored QC variables and retain enough PCs to
+        explain `iqm_variance` percent variance. If False, use z-scored raw QCs.
+    outfilename : str, default="iqm_harmonised.csv"
+        Output CSV for the harmonised dataframe.
+    summary_csv : str, default="qc_selection_summary.csv"
+        Output CSV for the per-volume summary table.
+    additive_detail_csv : str, default="qc_selection_additive_details.csv"
+        Output CSV for additive QC selection diagnostics.
+    multiplicative_detail_csv : str, default="qc_selection_multiplicative_details.csv"
+        Output CSV for multiplicative QC selection diagnostics.
+    selected_additive_qcs_csv : str, default="selected_additive_qcs_by_volume.csv"
+        Output CSV listing selected additive QCs by volume.
+    selected_multiplicative_qcs_csv : str, default="selected_multiplicative_qcs_by_volume.csv"
+        Output CSV listing selected multiplicative QCs by volume.
+    allow_ols_fallback : bool, default=True
+        If MixedLM fitting fails, fall back to OLS.
+    optimizer_order : Sequence[str], default=("lbfgs", "powell", "cg", "nm")
+        Optimizers attempted in order for MixedLM fitting.
+    maxiter : int, default=2000
+        Maximum number of optimizer iterations for MixedLM.
+    verbose_model_fits : bool, default=False
+        If True, print detailed model fitting diagnostics.
+
+    Returns
+    -------
+    data : pandas.DataFrame
+        Input dataframe with `harmonised_<IDP>` columns added.
+    qc_selection : dict[str, Any]
+        Summary of selected QCs and correction decisions.
+    add_detail_df : pandas.DataFrame
+        Additive QC selection diagnostic table.
+    mult_detail_df : pandas.DataFrame
+        Multiplicative QC selection diagnostic table.
+    summary_df : pandas.DataFrame
+        Per-volume summary table.
+
+    Examples
+    --------
+    >>> df = pd.read_csv("test_data/alldata.csv")
+    >>> idp_list = pd.read_csv("test_data/IDP_list.csv", header=None).iloc[:, 0].dropna().astype(str).str.strip().tolist()
+    >>> iqm_list = pd.read_csv("test_data/IQM_list.csv", header=None).iloc[:, 0].dropna().astype(str).str.strip().tolist()
+    >>> data_out, qc_selection, add_detail_df, mult_detail_df, summary_df = lme_iqm_harmonise(
+    ...     data=df,
+    ...     idp_list=idp_list,
+    ...     qc_list=iqm_list,
+    ...     preserve_covars=("age",),
+    ...     adjust_covars=("timepoint",),
+    ...     reverse_guard_covars=("age",),
+    ...     categorical_covars=("timepoint", "scan_session"),
+    ...     batch_col="scan_session",
+    ...     subject_col="subject",
+    ...     age_source_col="age",
+    ...     batch_source_col="scan_session",
+    ...     age_col="age",
+    ...     iqm_variance=95,
+    ...     p_thr=0.05,
+    ...     apply_pca=True,
+    ...     verbose_model_fits=True,
+    ... )
+    """
+
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+    def ordered_unique(seq):
+        seen = set()
+        out = []
+        for x in seq:
+            if x not in seen:
+                out.append(x)
+                seen.add(x)
+        return out
+
+    preserve_covars = ordered_unique(list(preserve_covars))
+    adjust_covars = ordered_unique(list(adjust_covars))
+    categorical_covars = ordered_unique(list(categorical_covars))
+
+    if batch_col not in categorical_covars:
+        categorical_covars.append(batch_col)
+
+    categorical_covars_set = set(categorical_covars)
+
+    if reverse_guard_covars is None:
+        reverse_guard_covars = [c for c in preserve_covars if c not in categorical_covars_set]
+    else:
+        reverse_guard_covars = ordered_unique(list(reverse_guard_covars))
+        reverse_guard_covars = [c for c in reverse_guard_covars if c in preserve_covars]
+        reverse_guard_covars = [c for c in reverse_guard_covars if c not in categorical_covars_set]
+
+    def term_expr(var: str) -> str:
+        return f"C({var})" if var in categorical_covars_set else var
+
+    def rhs_expr(covars: Sequence[str]) -> str:
+        covars = ordered_unique([c for c in covars if c is not None and c != ""])
+        if len(covars) == 0:
+            return "1"
+        return " + ".join(term_expr(c) for c in covars)
+
+    def strip_random_effect(formula: str) -> str:
+        out = re.sub(r"\s*\+\s*\(\s*1\s*\|\s*[\w]+\s*\)\s*", " ", formula)
+        out = re.sub(r"\s+", " ", out).strip()
+        return out
+
+    def complete_case(df_in: pd.DataFrame, cols: Sequence[str]) -> pd.DataFrame:
+        cols = list(dict.fromkeys(cols))
+        return df_in.loc[:, cols].dropna().copy()
+
+    def fixed_params(result):
+        return getattr(result, "fe_params", result.params)
+
+    def _fit_mixed_formula(df_in: pd.DataFrame, formula: str, group_col: str, method: str):
+        fixed_formula = strip_random_effect(formula)
+        model = smf.mixedlm(fixed_formula, data=df_in, groups=df_in[group_col])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            res = model.fit(reml=False, method=method, maxiter=maxiter, disp=False)
+        return res
+
+    def fit_mixed_then_ols(df_in: pd.DataFrame, formula: str, group_col: str):
+        """
+        Try multiple MixedLM optimizers first.
+        If all fail and allow_ols_fallback=True, fall back to OLS.
+        Returns result, family, used_method.
+        """
+        fixed_formula = strip_random_effect(formula)
+
+        if verbose_model_fits:
+            print("\n--------------------------------------------------")
+            print("Requested formula:")
+            print(" ", formula)
+            print("Fixed-effects formula used:")
+            print(" ", fixed_formula)
+            print("Random effects:")
+            print(f"  (1 | {group_col})")
+            print("Trying MixedLM optimizers:", list(optimizer_order))
+
+        for method in optimizer_order:
+            try:
+                if verbose_model_fits:
+                    print(f"  Trying optimizer: {method}")
+                res = _fit_mixed_formula(df_in, formula, group_col, method)
+                if getattr(res, "converged", True):
+                    if verbose_model_fits:
+                        print("  SUCCESS")
+                        print("  Fit family: MixedLM")
+                        print("  Optimizer:", method)
+                        print("  Converged:", getattr(res, "converged", True))
+                        print("--------------------------------------------------")
+                    return res, "mixed", method
+            except Exception as exc:
+                if verbose_model_fits:
+                    print(f"  FAILED ({method})")
+                    print("   Reason:", exc)
+
+        if not allow_ols_fallback:
+            raise RuntimeError(f"MixedLM failed for formula: {fixed_formula}")
+
+        if verbose_model_fits:
+            print("\n  All MixedLM optimizers failed.")
+            print("  Falling back to OLS.")
+            print("  WARNING: subject random effect removed.")
+            print("--------------------------------------------------")
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ols_res = smf.ols(fixed_formula, data=df_in).fit()
+        return ols_res, "ols", "ols"
+
+    def fit_pair_same_family(df_in: pd.DataFrame, full_formula: str, reduced_formula: str, group_col: str):
+        """
+        Fit a nested pair using the same family and same optimizer when possible.
+        First tries MixedLM for both, then OLS for both.
+        Returns full_fit, reduced_fit, family, method_full, method_reduced.
+        """
+        full_fixed = strip_random_effect(full_formula)
+        red_fixed = strip_random_effect(reduced_formula)
+
+        for method in optimizer_order:
+            try:
+                full_fit = _fit_mixed_formula(df_in, full_formula, group_col, method)
+                red_fit = _fit_mixed_formula(df_in, reduced_formula, group_col, method)
+                if getattr(full_fit, "converged", True) and getattr(red_fit, "converged", True):
+                    return full_fit, red_fit, "mixed", method, method
+            except Exception:
+                pass
+
+        if not allow_ols_fallback:
+            raise RuntimeError(
+                "MixedLM failed for nested comparison:\n"
+                f"FULL: {full_fixed}\nRED : {red_fixed}"
+            )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            full_ols = smf.ols(full_fixed, data=df_in).fit()
+            red_ols = smf.ols(red_fixed, data=df_in).fit()
+        return full_ols, red_ols, "ols", "ols", "ols"
+
+    def lrt_pvalue(full_fit, reduced_fit, family: str) -> float:
+        lr_stat = 2.0 * (full_fit.llf - reduced_fit.llf)
+        lr_stat = max(float(lr_stat), 0.0)
+
+        if family == "mixed":
+            df_full = int(getattr(full_fit, "k_fe", len(full_fit.params)))
+            df_red = int(getattr(reduced_fit, "k_fe", len(reduced_fit.params)))
+        else:
+            df_full = int(getattr(full_fit, "df_model", len(full_fit.params) - 1))
+            df_red = int(getattr(reduced_fit, "df_model", len(reduced_fit.params) - 1))
+
+        df_diff = max(df_full - df_red, 1)
+        return float(chi2.sf(lr_stat, df_diff))
+
+    def evaluate_qc_stage(
+        df_stage: pd.DataFrame,
+        response: str,
+        qcname: str,
+        proxy_term: str,
+        stage_name: str,
+    ):
+        """
+        Evaluate one QC feature for additive or multiplicative selection.
+        Returns (passed_bool, row_dict).
+        """
+        fixed_terms = ordered_unique(list(preserve_covars) + list(adjust_covars) + [batch_col, proxy_term])
+
+        row = {
+            "response": response,
+            "volume": response,   # keep a "volume" field for CSV compatibility
+            "qc": qcname,
+            "stage": stage_name,
+        }
+
+        passed = True
+        first_family = None
+        first_method = None
+
+        # Preserve covariates: QC should not explain them
+        for cov in preserve_covars:
+            full_formula = f"{qcname} ~ {rhs_expr(fixed_terms)} + (1|{subject_col})"
+            red_formula = f"{qcname} ~ {rhs_expr([t for t in fixed_terms if t != cov])} + (1|{subject_col})"
+            full_fit, red_fit, fam, method_full, method_red = fit_pair_same_family(df_stage, full_formula, red_formula, subject_col)
+            p_cov = lrt_pvalue(full_fit, red_fit, fam)
+            row[f"p_preserve_{cov}"] = p_cov
+            passed = passed and (p_cov > p_thr)
+            if first_family is None:
+                first_family = fam
+                first_method = method_full
+
+        # batch must be significant
+        full_formula = f"{qcname} ~ {rhs_expr(fixed_terms)} + (1|{subject_col})"
+        red_formula = f"{qcname} ~ {rhs_expr([t for t in fixed_terms if t != batch_col])} + (1|{subject_col})"
+        full_fit, red_fit, fam, method_full, method_red = fit_pair_same_family(df_stage, full_formula, red_formula, subject_col)
+        p_batch = lrt_pvalue(full_fit, red_fit, fam)
+        row["p_batch"] = p_batch
+        passed = passed and (p_batch < p_thr)
+        if first_family is None:
+            first_family = fam
+            first_method = method_full
+
+        # proxy term must not drive QC
+        full_formula = f"{qcname} ~ {rhs_expr(fixed_terms)} + (1|{subject_col})"
+        red_formula = f"{qcname} ~ {rhs_expr([t for t in fixed_terms if t != proxy_term])} + (1|{subject_col})"
+        full_fit, red_fit, fam, method_full, method_red = fit_pair_same_family(df_stage, full_formula, red_formula, subject_col)
+        p_proxy = lrt_pvalue(full_fit, red_fit, fam)
+        row["p_proxy"] = p_proxy
+        passed = passed and (p_proxy > p_thr)
+        if first_family is None:
+            first_family = fam
+            first_method = method_full
+
+        # reverse guards for numeric preserve covariates only
+        for cov in reverse_guard_covars:
+            reverse_terms = ordered_unique([qcname] + list(preserve_covars) + list(adjust_covars) + [batch_col, proxy_term])
+            full_formula = f"{cov} ~ {rhs_expr(reverse_terms)} + (1|{subject_col})"
+            red_formula = f"{cov} ~ {rhs_expr([t for t in reverse_terms if t != qcname])} + (1|{subject_col})"
+            full_fit, red_fit, fam, method_full, method_red = fit_pair_same_family(df_stage, full_formula, red_formula, subject_col)
+            p_rev = lrt_pvalue(full_fit, red_fit, fam)
+            row[f"p_reverse_{cov}"] = p_rev
+            passed = passed and (p_rev > p_thr)
+            if first_family is None:
+                first_family = fam
+                first_method = method_full
+
+        row["passed"] = int(passed)
+        row["fit_family"] = first_family
+        row["fit_method"] = first_method
+        return passed, row
+
+    # ------------------------------------------------------------------
+    # setup
+    # ------------------------------------------------------------------
+    data = data.copy()
+    data.columns = data.columns.astype(str).str.strip()
+
+    print("=== IQM Harmonization (Flexible Version) ===")
+    print(f"P-value threshold: {p_thr:.4f}")
+    print(f"Max QCs per volume: {max_qcs}")
+    print(f"PCA variance threshold: {iqm_variance:.1f}%")
+    print(f"Apply PCA: {apply_pca}")
+    print(f"Preserve covars: {list(preserve_covars)}")
+    print(f"Adjust covars: {list(adjust_covars)}")
+    print(f"Categorical covars: {list(categorical_covars)}")
+    print(f"Reverse-guard covars: {list(reverse_guard_covars)}")
+
+    # prepare age / batch columns
+    if age_col not in data.columns:
+        if age_source_col not in data.columns:
+            raise ValueError(f"Missing '{age_col}' and source column '{age_source_col}'")
+        data[age_col] = zscore(data[age_source_col].astype(float))
+
+    if batch_col not in data.columns:
+        if batch_source_col not in data.columns:
+            raise ValueError(f"Missing '{batch_col}' and source column '{batch_source_col}'")
+        data[batch_col] = data[batch_source_col]
+
+    # required columns
+    for c in [subject_col] + list(adjust_covars) + list(preserve_covars):
+        if c not in data.columns:
+            raise ValueError(f"Missing required covariate column: {c}")
+
+    missing_idps = [c for c in idp_list if c not in data.columns]
+    missing_qcs = [c for c in qc_list if c not in data.columns]
+    if missing_idps:
+        raise ValueError(f"Missing IDP columns: {missing_idps}")
+    if missing_qcs:
+        raise ValueError(f"Missing QC columns: {missing_qcs}")
+
+    # categorical casting
+    data[subject_col] = data[subject_col].astype("category")
+    for c in categorical_covars:
+        if c in data.columns:
+            data[c] = data[c].astype("category")
+
+    # ------------------------------------------------------------------
+    # STEP 1: QC basis (PCA or raw standardized QCs)
+    # ------------------------------------------------------------------
+    print("\nStep 1: Preparing QC metrics...")
+
+    qc_df = data.loc[:, list(qc_list)].copy()
+    if qc_df.isna().any().any():
+        raise ValueError("QC columns contain missing values. Please clean/impute before running.")
+
+    qc_matrix = qc_df.to_numpy(dtype=float)
+
+    # remove zero-variance QCs
+    stds = np.std(qc_matrix, axis=0, ddof=1)
+    zero_var_mask = stds == 0
+    removed = [q for q, keep in zip(qc_list, ~zero_var_mask) if not keep]
+    if removed:
+        print(f"  Removing {len(removed)} zero-variance QCs")
+        print(" ", removed[:20])
+
+    qc_matrix = qc_matrix[:, ~zero_var_mask]
+    qc_list_clean = [q for q, keep in zip(qc_list, ~zero_var_mask) if keep]
+
+    if qc_matrix.shape[1] == 0:
+        raise ValueError("No QC variables left after removing zero-variance columns.")
+
+    qc_z = StandardScaler().fit_transform(qc_matrix)
+
+    if apply_pca:
+        pca = PCA()
+        scores = pca.fit_transform(qc_z)
+        explained = pca.explained_variance_ratio_ * 100.0
+        cumvar = np.cumsum(explained)
+        num_qc_features = int(np.argmax(cumvar >= iqm_variance) + 1)
+
+        qc_feature_names = [f"QC{i+1}" for i in range(num_qc_features)]
+        for i, name in enumerate(qc_feature_names):
+            data[name] = scores[:, i]
+
+        qc_basis = "PCA"
+        print(f"  PCA input shape: {qc_z.shape}")
+        print(f"  Retaining PCs: {num_qc_features} ({cumvar[num_qc_features - 1]:.2f}%)")
+    else:
+        num_qc_features = qc_z.shape[1]
+        qc_feature_names = list(qc_list_clean)
+        for i, name in enumerate(qc_feature_names):
+            data[name] = qc_z[:, i]
+
+        qc_basis = "RAW"
+        cumvar = None
+        print(f"  Using raw QC variables directly: {num_qc_features} features")
+
+    # ------------------------------------------------------------------
+    # STEP 2: ADDITIVE QC SELECTION
+    # ------------------------------------------------------------------
+    print("\nStep 2: Selecting QCs for ADDITIVE correction...")
+    print("  Criteria: batch-driven, not preserve-covariate-driven")
+
+    good_pcs_add = np.zeros((num_qc_features, len(idp_list)), dtype=int)
+    all_out_add = []
+    additive_detail_rows = []
+
+    for v_idx, volname in enumerate(idp_list):
+        print(f"\n=== Additive selection: {volname} ===")
+        rows = []
+
+        for qc_i in range(num_qc_features):
+            qcname = qc_feature_names[qc_i]
+
+            df_stage = complete_case(
+                data,
+                [subject_col] + list(preserve_covars) + list(adjust_covars) + [batch_col, volname, qcname],
+            )
+
+            try:
+                passed, row = evaluate_qc_stage(df_stage, volname, qcname, proxy_term=volname, stage_name="additive")
+                good_pcs_add[qc_i, v_idx] = int(passed)
+            except Exception as exc:
+                print(f"  Additive QC check failed for {qcname}: {exc}")
+                row = {
+                    "response": volname,
+                    "volume": volname,
+                    "qc": qcname,
+                    "stage": "additive",
+                    "p_batch": np.nan,
+                    "p_proxy": np.nan,
+                    "passed": 0,
+                    "fit_family": "failed",
+                    "fit_method": "failed",
+                }
+                for cov in preserve_covars:
+                    row[f"p_preserve_{cov}"] = np.nan
+                for cov in reverse_guard_covars:
+                    row[f"p_reverse_{cov}"] = np.nan
+
+            rows.append(row)
+            additive_detail_rows.append(row)
+
+        all_out_add.append([volname, rows])
+
+    n_add = good_pcs_add.sum(axis=0)
+    print(f"  QCs selected: min={n_add.min()}, max={n_add.max()}, mean={n_add.mean():.1f}")
+
+    # ------------------------------------------------------------------
+    # STEP 3: MULTIPLICATIVE QC SELECTION
+    # ------------------------------------------------------------------
+    print("\nStep 3: Selecting QCs for MULTIPLICATIVE correction...")
+    print("  KEY: Using ORIGINAL volumes (not additive-corrected) for variance proxy")
+    print("  Criteria: batch-driven, NOT strongly variance-driven")
+
+    good_pcs_mult = np.zeros((num_qc_features, len(idp_list)), dtype=int)
+    all_out_mult = []
+    multiplicative_detail_rows = []
+
+    for v_idx, volname in enumerate(idp_list):
+        print(f"\n=== Multiplicative selection: {volname} ===")
+        rows = []
+
+        # Biology-only residuals from the original volume
+        bio_df = complete_case(
+            data,
+            [subject_col] + list(preserve_covars) + list(adjust_covars) + [volname],
+        )
+        bio_formula = f"{volname} ~ {rhs_expr(list(preserve_covars) + list(adjust_covars))} + (1|{subject_col})"
+        bio_fit, _, _ = fit_mixed_then_ols(bio_df, bio_formula, subject_col)
+
+        res = np.asarray(bio_fit.resid, dtype=float)
+        log_r2_series = pd.Series(
+            np.log(np.maximum(res ** 2, np.finfo(float).eps)),
+            index=bio_df.index,
+            name="log_r2_tmp",
+        )
+
+        for qc_i in range(num_qc_features):
+            qcname = qc_feature_names[qc_i]
+
+            df_stage = data.loc[:, [subject_col] + list(preserve_covars) + list(adjust_covars) + [batch_col, qcname]].copy()
+            df_stage = df_stage.join(log_r2_series, how="inner").dropna().copy()
+
+            try:
+                passed, row = evaluate_qc_stage(
+                    df_stage,
+                    volname,
+                    qcname,
+                    proxy_term="log_r2_tmp",
+                    stage_name="multiplicative",
+                )
+                good_pcs_mult[qc_i, v_idx] = int(passed)
+            except Exception as exc:
+                print(f"  Multiplicative QC check failed for {qcname}: {exc}")
+                row = {
+                    "response": volname,
+                    "volume": volname,
+                    "qc": qcname,
+                    "stage": "multiplicative",
+                    "p_batch": np.nan,
+                    "p_proxy": np.nan,
+                    "passed": 0,
+                    "fit_family": "failed",
+                    "fit_method": "failed",
+                }
+                for cov in preserve_covars:
+                    row[f"p_preserve_{cov}"] = np.nan
+                for cov in reverse_guard_covars:
+                    row[f"p_reverse_{cov}"] = np.nan
+
+            rows.append(row)
+            multiplicative_detail_rows.append(row)
+
+        all_out_mult.append([volname, rows])
+
+    n_mult = good_pcs_mult.sum(axis=0)
+    print(f"  QCs selected: min={n_mult.min()}, max={n_mult.max()}, mean={n_mult.mean():.1f}")
+
+    # ------------------------------------------------------------------
+    # STEP 4: APPLY CORRECTIONS
+    # ------------------------------------------------------------------
+    print("\nStep 4: Applying corrections...")
+
+    qc_selection: Dict[str, Any] = {
+        "volumes": list(idp_list),
+        "qc_basis": qc_basis,
+        "apply_pca": apply_pca,
+        "additive_qcs": [],
+        "multiplicative_qcs": [],
+        "additive_count": [],
+        "multiplicative_count": [],
+        "multiplicative_model_pval": [],
+        "multiplicative_applied": [],
+        "p_threshold": p_thr,
+        "max_qcs": max_qcs,
+        "preserve_covars": list(preserve_covars),
+        "adjust_covars": list(adjust_covars),
+        "categorical_covars": list(categorical_covars),
+        "reverse_guard_covars": list(reverse_guard_covars),
+        "qc_feature_names": list(qc_feature_names),
+        "pca_num_components": num_qc_features if apply_pca else None,
+        "pca_variance_explained": float(cumvar[num_qc_features - 1]) if apply_pca else None,
+    }
+
+    y_harmonised = np.full((len(data), len(idp_list)), np.nan, dtype=float)
+
+    for v_idx, volname in enumerate(idp_list):
+        print(f"\n=== Volume: {volname} ===")
+
+        # ----------------------------
+        # ADDITIVE CORRECTION
+        # ----------------------------
+        qc_mask_add = list(np.where(good_pcs_add[:, v_idx] == 1)[0] + 1)
+        if not math.isinf(max_qcs) and len(qc_mask_add) > int(max_qcs):
+            qc_mask_add = qc_mask_add[: int(max_qcs)]
+
+        if len(qc_mask_add) == 0:
+            print("  Additive correction: skipped (no QCs passed)")
+            tmp_no_add = data[volname].astype(float).copy()
+            qc_selection["additive_qcs"].append([])
+            qc_selection["additive_count"].append(0)
+        else:
+            qc_vars_add = [qc_feature_names[i - 1] for i in qc_mask_add]
+            print(f"  Additive correction: applying {len(qc_vars_add)} QC(s) -> {qc_vars_add}")
+
+            dfm = complete_case(
+                data,
+                [subject_col] + list(preserve_covars) + list(adjust_covars) + [volname] + qc_vars_add,
+            )
+            formula_add = f"{volname} ~ {rhs_expr(list(preserve_covars) + list(adjust_covars) + qc_vars_add)} + (1|{subject_col})"
+
+            fit_add, family_add, method_add = fit_mixed_then_ols(dfm, formula_add, subject_col)
+            beta = fixed_params(fit_add)
+            beta_qc = beta.reindex(qc_vars_add).fillna(0.0).to_numpy(dtype=float)
+            add_effect = dfm.loc[:, qc_vars_add].to_numpy(dtype=float) @ beta_qc
+
+            tmp_no_add = data[volname].astype(float).copy()
+            tmp_no_add.loc[dfm.index] = dfm[volname].to_numpy(dtype=float) - add_effect
+
+            qc_selection["additive_qcs"].append(qc_vars_add)
+            qc_selection["additive_count"].append(len(qc_mask_add))
+
+        tmp_no_add = tmp_no_add.clip(lower=1e-6)
+
+        # ----------------------------
+        # MULTIPLICATIVE CORRECTION
+        # ----------------------------
+        print("  Multiplicative selection: computing variance proxy from original volume")
+
+        bio_df = complete_case(
+            data,
+            [subject_col] + list(preserve_covars) + list(adjust_covars) + [volname],
+        )
+        bio_formula = f"{volname} ~ {rhs_expr(list(preserve_covars) + list(adjust_covars))} + (1|{subject_col})"
+        bio_fit, _, _ = fit_mixed_then_ols(bio_df, bio_formula, subject_col)
+
+        res = np.asarray(bio_fit.resid, dtype=float)
+        log_r2_series = pd.Series(
+            np.log(np.maximum(res ** 2, np.finfo(float).eps)),
+            index=bio_df.index,
+            name="log_r2_tmp",
+        )
+
+        qc_mask_mult = list(np.where(good_pcs_mult[:, v_idx] == 1)[0] + 1)
+        if not math.isinf(max_qcs) and len(qc_mask_mult) > int(max_qcs):
+            qc_mask_mult = qc_mask_mult[: int(max_qcs)]
+
+        if len(qc_mask_mult) == 0:
+            print("  Multiplicative correction: skipped (no QCs passed)")
+            y_h = tmp_no_add.copy()
+            qc_selection["multiplicative_qcs"].append([])
+            qc_selection["multiplicative_count"].append(0)
+            qc_selection["multiplicative_model_pval"].append(np.nan)
+            qc_selection["multiplicative_applied"].append(False)
+        else:
+            qc_vars_mult = [qc_feature_names[i - 1] for i in qc_mask_mult]
+            print(f"  Multiplicative selection: {len(qc_vars_mult)} QC(s) passed -> {qc_vars_mult}")
+
+            dfm = data.loc[:, [subject_col] + list(preserve_covars) + list(adjust_covars) + qc_vars_mult].copy()
+            dfm["tmp_noAdditive"] = tmp_no_add
+            dfm = dfm.join(log_r2_series, how="inner").dropna().copy()
+            dfm["log_tmp_noAdditive"] = np.log(dfm["tmp_noAdditive"].astype(float))
+
+            formula_red = f"log_tmp_noAdditive ~ {rhs_expr(list(preserve_covars) + list(adjust_covars))} + (1|{subject_col})"
+            formula_full = f"log_tmp_noAdditive ~ {rhs_expr(list(preserve_covars) + list(adjust_covars) + qc_vars_mult)} + (1|{subject_col})"
+
+            fit_full, fit_red, family_mult, method_full, method_red = fit_pair_same_family(dfm, formula_full, formula_red, subject_col)
+            model_pval = lrt_pvalue(fit_full, fit_red, family_mult)
+            qc_selection["multiplicative_model_pval"].append(model_pval)
+
+            print(f"  Multiplicative model comparison p-value: {model_pval:.6g}")
+
+            if model_pval < p_thr:
+                beta = fixed_params(fit_full)
+                beta_qc = beta.reindex(qc_vars_mult).fillna(0.0).to_numpy(dtype=float)
+                lp = dfm.loc[:, qc_vars_mult].to_numpy(dtype=float) @ beta_qc
+                lp_centered = lp - np.nanmean(lp)
+                multiplicative_effect = np.exp(lp_centered)
+
+                y_h = tmp_no_add.copy()
+                y_h.loc[dfm.index] = dfm["tmp_noAdditive"].to_numpy(dtype=float) / multiplicative_effect
+
+                qc_selection["multiplicative_qcs"].append(qc_vars_mult)
+                qc_selection["multiplicative_count"].append(len(qc_mask_mult))
+                qc_selection["multiplicative_applied"].append(True)
+                print("  Multiplicative correction: applied")
+            else:
+                y_h = tmp_no_add.copy()
+                qc_selection["multiplicative_qcs"].append([])
+                qc_selection["multiplicative_count"].append(0)
+                qc_selection["multiplicative_applied"].append(False)
+                print("  Multiplicative correction: skipped (model p >= threshold)")
+
+        data[f"harmonised_{volname}"] = y_h.to_numpy(dtype=float)
+        y_harmonised[:, v_idx] = y_h.to_numpy(dtype=float)
+
+    # ------------------------------------------------------------------
+    # STEP 5: SAVE AND SUMMARISE
+    # ------------------------------------------------------------------
+    print("\nStep 5: Saving results...")
+
+    data.to_csv(outfilename, index=False)
+    print("  Data saved:", outfilename)
+
+    summary_df = pd.DataFrame({
+        "volume": qc_selection["volumes"],
+        "additive_count": qc_selection["additive_count"],
+        "multiplicative_count": qc_selection["multiplicative_count"],
+        "multiplicative_applied": qc_selection["multiplicative_applied"],
+        "multiplicative_model_pval": qc_selection["multiplicative_model_pval"],
+    })
+    summary_df.to_csv(summary_csv, index=False)
+    print("  Summary saved:", summary_csv)
+
+    add_detail_df = pd.DataFrame(additive_detail_rows)
+    add_detail_df.to_csv(additive_detail_csv, index=False)
+    print("  Additive details saved:", additive_detail_csv)
+
+    mult_detail_df = pd.DataFrame(multiplicative_detail_rows)
+    mult_detail_df.to_csv(multiplicative_detail_csv, index=False)
+    print("  Multiplicative details saved:", multiplicative_detail_csv)
+
+    pd.DataFrame({
+        "volume": qc_selection["volumes"],
+        "selected_qcs": [";".join(x) for x in qc_selection["additive_qcs"]],
+    }).to_csv(selected_additive_qcs_csv, index=False)
+
+    pd.DataFrame({
+        "volume": qc_selection["volumes"],
+        "selected_qcs": [";".join(x) for x in qc_selection["multiplicative_qcs"]],
+    }).to_csv(selected_multiplicative_qcs_csv, index=False)
+
+    print("  Selected QC lists saved.")
+
+    print("\n=== SUMMARY ===")
+    for i, vol in enumerate(qc_selection["volumes"]):
+        print(
+            f"{vol}: "
+            f"additive={qc_selection['additive_count'][i]} QC(s), "
+            f"multiplicative={qc_selection['multiplicative_count'][i]} QC(s), "
+            f"multiplicative_applied={qc_selection['multiplicative_applied'][i]}"
+        )
+
+    print("\nDone!")
+    return data, qc_selection, add_detail_df, mult_detail_df, summary_df

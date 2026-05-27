@@ -85,3 +85,7 @@ Uniform Manifold Approximation and Projection (UMAP) is a dimension reduction te
 The last test we include here is the two sample [KS test](https://en.wikipedia.org/wiki/Kolmogorov–Smirnov_test). Once again we perform this test on the residuals after removing covariate effects in order to see deviations that are driven only by batch differences. The two sample KS test looks at the difference between the empirical distributions between batches using a step function. This test is a popular and robust technique that can assess both mean and scale differences.
 
 Here, we plot the results as log-transformed P-values for each feature. These are plotted in ascending order and as a bar chart, allowing users to see the magnitude and distributions of P-values. Here, somewhat unintuitively (and perhaps mortifying for frequentist statisticians) we define the null-hypothesis as there being no difference between the empirical distributions. In this case we define reduction in significant differences as our success metric for harmonisation.
+
+## Evaluation metrics for longitudinal data
+
+Refer to the paper (Harmonising Structural Brain MRI from Multiple Sites with Limited Sample Sizes)[https://doi.org/10.64898/2026.04.21.26351106]
