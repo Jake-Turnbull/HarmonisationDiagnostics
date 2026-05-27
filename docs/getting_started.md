@@ -1,12 +1,16 @@
 # Getting started
 
-Here we will provide a brief example of how to use DiagnoseHarmonisation within a standard workflow, giving an example of how one would use the python version (which has full functionality) and how one would use the terminal instance of the tool (on csv files).
+Here we will provide a brief example of how to use DiagnoseHarmonisation within a standard workflow, giving an example of how one would use the python version (which has full functionality) and how one would use the command-line tools on spreadsheet files.
 
 By far the easiest way to run this code is by using a python script and loading your data in as arrays.
 
 ## 1. Install from Github
 
-In terminal, run:
+In terminal, run either:
+
+    pip install DiagnoseHarmonisation
+
+    or for the development version:
 
     pip install git+https://github.com/Jake-Turnbull/HarmonisationDiagnostics.git
 
@@ -14,6 +18,14 @@ Or alternatively clone locally:
     git clone https://github.com/Jake-Turnbull/HarmonisationDiagnostics.git
     cd HarmonisationDiagnostics
     pip install -e .
+
+## 1a. Launch the desktop GUI
+
+If you would prefer not to type file paths and column names manually, you can launch the cross-sectional desktop GUI:
+
+    harmdiag gui
+
+This opens a window for selecting the data file, covariates file, output directory, batch column, subject ID columns, and covariates to include in the report.
 
 ## 2. Data requirements
 
@@ -39,6 +51,14 @@ Using the full report:
             covariates=covars)
 
 This will produce a detailed HTML file containing a full analysis of batch and covariate effects.
+
+You can also generate the same cross-sectional report without writing Python by either:
+
+    harmdiag gui
+
+or:
+
+    harmdiag run --data data.csv --covariates covariates.csv
 
 ## 4. Generate a Longitudinal Diagnostic Report
 

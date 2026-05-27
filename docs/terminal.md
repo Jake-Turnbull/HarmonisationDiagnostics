@@ -1,14 +1,36 @@
-# Using DiagnoseHarmonisation in the Terminal
+# Using DiagnoseHarmonisation from the Command Line
 
-While the ideal way we would recommend using this package is within a python script, we do offer some usage of accessing the cross-sectional reporting tool through the terminal.
+While the ideal way we would recommend using this package is within a python script, we also offer two command-line entry points for the cross-sectional report:
 
-After downloading the package and ensuring it is on your python path (check using which python), users are able to run the command 'harmdiag run' in the terminal in order to generate a report.
+- `harmdiag gui` launches a desktop GUI with file pickers, dropdowns, and checkboxes.
+- `harmdiag run` keeps the scripted terminal workflow for users who want to pass paths and options directly.
 
-## Options
+After installing the package and ensuring it is on your Python path, users can choose either mode depending on their workflow.
 
-The options for running this are seen below:
+## Desktop GUI
 
-    "harmdiag",  description="Harmonisation Diagnostics CLI — run harmonisation/reporting from the terminal."
+Run:
+
+    harmdiag gui
+
+This opens a Tkinter-based desktop window where you can:
+
+- choose the data file and covariates file
+- choose the output directory
+- select the subject ID columns
+- select the batch column or explicitly opt into no batch column
+- choose which covariates to include
+- set the report name
+- toggle whether aligned data should be saved
+- toggle timestamped report names
+
+The GUI keeps advanced report settings on sensible defaults for the first version and shows status messages while the report is running.
+
+## Scripted CLI Options
+
+The options for `harmdiag run` are shown below:
+
+    "harmdiag",  description="Harmonisation Diagnostics CLI for scripted runs and the desktop cross-sectional GUI."
   
 
     "run", help="Run the diagnostics pipeline from data and covariates CSVs"
