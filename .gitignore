@@ -97,3 +97,13 @@ tests/__pycache__/test_DiagnosticReport.cpython-313-pytest-9.0.1.pyc
 *.out
 *.err
 *.tmp
+*.html
+*.pdf
+*.docx
+*.pptx
+*.zip
+*.csv
+*.tsv
+*.json
+*.xlsx
+*.h5
