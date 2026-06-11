@@ -146,7 +146,7 @@ def design_mat(mod, numerical_covariates, batch_levels):
     sys.stderr.write("\t" + ", ".join(other_cols) + '\n')
     return design
 
-# --------------------- Placeholder helper functions ---------------------
+# --------------------- Helper functions ---------------------
 # Translated from MATLAB, need to have concistency checked with NeuroComBat
 def aprior(delta_hat):
     """Calculate the aprior parameter for the inverse gamma distribution based on the method of moments."""
@@ -168,49 +168,71 @@ def postvar(sum2, n, a, b):
     """Calculate the posterior variance for the batch effect parameters."""
     return (0.5 * sum2 + b) / (n / 2.0 + a - 1.0)
 
-def itSol(sdat_batch, gamma_hat, delta_hat, gamma_bar, t2, a, b, conv=0.001):
-    """Iteratively solve for the posterior mean and variance of the batch effect parameters."""
-    g_old = gamma_hat
-    d_old = delta_hat
+def itSol(sdat_batch, gamma_hat, delta_hat, gamma_bar, t2, a, b,
+          conv=0.001, return_hist=False):
+    """
+    Iteratively solve for posterior mean and variance of batch-effect parameters.
+
+    If return_hist=True, also returns:
+        count : number of iterations
+        hist  : dictionary storing EB values at each iteration
+    """
+    import numpy as np
+
+    g_old = gamma_hat.copy()
+    d_old = delta_hat.copy()
     change = 1
     count = 0
+    n = sdat_batch.shape[1]
+
+    hist = {
+        "iter": [],
+        "g": [],
+        "d": [],
+        "sum2": [],
+        "delta_hat": [],
+        "change": []
+    }
+
     while change > conv:
-        g_new = postmean(gamma_hat, gamma_bar, sdat_batch.shape[1], d_old, t2)
+        g_new = postmean(gamma_hat, gamma_bar, n, d_old, t2)
+
         sum2 = np.sum((sdat_batch - g_new[:, None]) ** 2, axis=1)
-        d_new = postvar(sum2, sdat_batch.shape[1], a, b)
-        change = max(np.max(np.abs(g_new - g_old) / (np.abs(g_old) + 1e-8)),
-                     np.max(np.abs(d_new - d_old) / (np.abs(d_old) + 1e-8)))
+
+        d_new = postvar(sum2, n, a, b)
+
+        change = max(
+            np.max(np.abs(g_new - g_old) / np.maximum(np.abs(g_old), np.finfo(float).eps)),
+            np.max(np.abs(d_new - d_old) / np.maximum(np.abs(d_old), np.finfo(float).eps))
+        )
+
+        count += 1
+
+        hist["iter"].append(count)
+        hist["g"].append(g_new.copy())
+        hist["d"].append(d_new.copy())
+        hist["sum2"].append(sum2.copy())
+
+        if n > 1:
+            hist["delta_hat"].append(sum2 / (n - 1))
+        else:
+            hist["delta_hat"].append(np.full_like(sum2, np.nan))
+
+        hist["change"].append(change)
+
         g_old = g_new
         d_old = d_new
-        count += 1
+
         if count > 100:
-            print('Warning: itSol did not converge after 100 iterations')
+            print("Warning: itSol did not converge after 100 iterations")
             break
-    return np.vstack([g_new, d_new])
 
-def it_sol(sdat, g_hat, d_hat, g_bar, t2, a, b, conv=0.0001):
-    """Iteratively solve for the posterior mean and variance of the batch effect parameters.
-    This version is used by CovBat and taken from: https://github.com/andy1764/CovBat_Harmonisation
-    Chen, A. A., Beer, J. C., Tustison, N. J., Cook, P. A., Shinohara, R. T., Shou, H., & Initiative, T. A. D. N. (2022). Mitigating site effects in covariance for machine learning in neuroimaging data. Human Brain Mapping, 43(4), 1179–1195. https://doi.org/10.1002/hbm.25688)
-    """
-    n = (1 - np.isnan(sdat)).sum(axis=1)
-    g_old = g_hat.copy()
-    d_old = d_hat.copy()
+    adjust = np.vstack([g_new, d_new])
 
-    change = 1
-    count = 0
-    while change > conv:
-        #print g_hat.shape, g_bar.shape, t2.shape
-        g_new = postmean(g_hat, g_bar, n, d_old, t2)
-        sum2 = ((sdat - np.dot(g_new.values.reshape((g_new.shape[0], 1)), np.ones((1, sdat.shape[1])))) ** 2).sum(axis=1)
-        d_new = postvar(sum2, n, a, b)
-       
-        change = max((abs(g_new - g_old) / g_old).max(), (abs(d_new - d_old) / d_old).max())
-        g_old = g_new #.copy()
-        d_old = d_new #.copy()
-        count = count + 1
-    adjust = (g_new, d_new)
-    return adjust 
+    if return_hist:
+        return adjust, count, hist
+
+    return adjust
 
 def adjust_nums(numerical_covariates, drop_idxs):
     # if we dropped some values, have to adjust those with a larger index.
@@ -219,9 +241,10 @@ def adjust_nums(numerical_covariates, drop_idxs):
 
 # ----------------------------- Main functions -----------------------------
 # Define ComBat harmonisation function
-def combat(data, batch, mod, parametric=True,
+# Translated from MATLAB, need to have concistency checked with NeuroComBat
+def combat(data, batch, mod=[], parametric=True,
            DeltaCorrection=True, UseEB=True, ReferenceBatch=None,
-           RegressCovariates=False, GammaCorrection=True, covbat_mode=False,return_priors=False):
+           RegressCovariates=False, GammaCorrection=True, covbat_mode=False, return_priors=False):
     """
     Run ComBat harmonisation on the data and return the harmonized data.
 
@@ -450,6 +473,7 @@ def combat(data, batch, mod, parametric=True,
     B_hat = inv_XtX @ design.T @ data.T  # shape (k, n_features) 
 
     # Reference batch handling
+    # Storage for EB iteration history
     if ReferenceBatch is not None:
         try:
             ref_idx = int(np.where(levels == ReferenceBatch)[0][0])
@@ -541,6 +565,14 @@ def combat(data, batch, mod, parametric=True,
         b_prior[i] = bprior(delta_hat[i, :])
 
     # Apply empirical Bayes estimates (parametric)
+    # Storage for EB iteration history
+    eb_hist = {
+        "by_batch": {},
+        "counts": {},
+        "levels": levels.copy()
+    }
+
+    # Apply empirical Bayes estimates (parametric)
     if parametric:
         print('[combat] Finding parametric adjustments')
         gamma_star = np.zeros_like(gamma_hat)
@@ -550,10 +582,24 @@ def combat(data, batch, mod, parametric=True,
             indices = batches[i]
             if len(indices) == 0:
                 continue
-            temp = itSol(s_data[:, indices], gamma_hat[i, :], delta_hat[i, :],
-                         gamma_bar[i], t2[i], a_prior[i], b_prior[i], conv=0.001)
+            temp, count, hist = itSol(
+                s_data[:, indices],
+                gamma_hat[i, :],
+                delta_hat[i, :],
+                gamma_bar[i],
+                t2[i],
+                a_prior[i],
+                b_prior[i],
+                conv=0.001,
+                return_hist=True
+            )
+
             gamma_star[i, :] = temp[0, :]
             delta_star[i, :] = temp[1, :]
+
+            batch_label = levels[i]
+            eb_hist["by_batch"][batch_label] = hist
+            eb_hist["counts"][batch_label] = count
 
         if ReferenceBatch is not None:
             gamma_star[ref_idx, :] = np.zeros(data.shape[0])
@@ -685,22 +731,74 @@ def combat(data, batch, mod, parametric=True,
     if dat_transposed:
         bayesdata = bayesdata.T
     if return_priors:
-        # create dictionary of priors, bayes data and beta coefficients for covariates:
-        data = {
-            'bayesdata': bayesdata,
-            'B_hat': B_hat,
-            'gamma_bar': gamma_bar,
-            't2': t2,
-            'a_prior': a_prior,
-            'b_prior': b_prior,
-            'delta_hat': delta_hat,
-            'gamma_hat': gamma_hat,
-            'delta_star': delta_star,
-            'gamma_star': gamma_star
+        priors = {
+            "levels": levels,
+            "gamma_bar": gamma_bar,
+            "t2": t2,
+            "a_prior": a_prior,
+            "b_prior": b_prior,
+            "gamma_hat": gamma_hat,
+            "delta_hat": delta_hat,
+            "gamma_star": gamma_star,
+            "delta_star": delta_star,
+            "num_iter": eb_hist["counts"],
+            "hist": eb_hist
         }
-        return data
+
+        output = {
+            "bayesdata": bayesdata,
+            "B_hat": B_hat,
+            "priors": priors,
+
+            # Optional flat copies for backwards compatibility
+            "gamma_bar": gamma_bar,
+            "t2": t2,
+            "a_prior": a_prior,
+            "b_prior": b_prior,
+            "delta_hat": delta_hat,
+            "gamma_hat": gamma_hat,
+            "delta_star": delta_star,
+            "gamma_star": gamma_star,
+            "hist": eb_hist
+        }
+
+        return output
     else:
         return bayesdata
+
+def it_sol(sdat, g_hat, d_hat, g_bar, t2, a, b, conv=0.0001):
+    """Iteratively solve for the posterior mean and variance of the batch effect parameters.
+    This version is used by CovBat and taken from: https://github.com/andy1764/CovBat_Harmonisation
+    Chen, A. A., Beer, J. C., Tustison, N. J., Cook, P. A., Shinohara, R. T., Shou, H., & Initiative, T. A. D. N. (2022). Mitigating site effects in covariance for machine learning in neuroimaging data. Human Brain Mapping, 43(4), 1179–1195. https://doi.org/10.1002/hbm.25688)
+    """
+
+
+
+    n = (1 - np.isnan(sdat)).sum(axis=1)
+    g_old = g_hat.copy()
+    d_old = d_hat.copy()
+
+    change = 1
+    count = 0
+    while change > conv:
+        #print g_hat.shape, g_bar.shape, t2.shape
+        g_new = postmean(g_hat, g_bar, n, d_old, t2)
+        sum2 = ((sdat - np.dot(g_new.values.reshape((g_new.shape[0], 1)), np.ones((1, sdat.shape[1])))) ** 2).sum(axis=1)
+        d_new = postvar(sum2, n, a, b)
+       
+        change = max((abs(g_new - g_old) / g_old).max(), (abs(d_new - d_old) / d_old).max())
+        g_old = g_new #.copy()
+        d_old = d_new #.copy()
+        count = count + 1
+    adjust = (g_new, d_new)
+    return adjust 
+
+def adjust_nums(numerical_covariates, drop_idxs):
+    # if we dropped some values, have to adjust those with a larger index.
+    if numerical_covariates is None: return drop_idxs
+    return [nc - sum(nc < di for di in drop_idxs) for nc in numerical_covariates]
+
+
 # Define CovBat harmonisation function: from Chen et al. 2022
 def covbat(data, batch, model=None, numerical_covariates=None, pct_var=0.95, n_pc=0):
 
