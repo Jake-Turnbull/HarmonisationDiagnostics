@@ -532,6 +532,11 @@ def Levenes_Test_with_residuals(
                 bars[xi].set_linewidth(1.5)
         ax.set_ylabel("Levene statistic")
         ax.set_title("Raw")
+        # add significance markers above bars for p < alpha
+        if sig_raw.any():
+            ymax = np.nanmax(stat_raw)
+            marker_y = ymax + 0.05 * max(1.0, abs(ymax))
+            ax.plot(x[sig_raw], np.full(int(np.sum(sig_raw)), marker_y), marker="v", linestyle="", color="red", markersize=6)
 
         if stat_res is not None:
             ax2 = axes[0, 1]
@@ -542,6 +547,11 @@ def Levenes_Test_with_residuals(
                     bars2[xi].set_edgecolor("red")
                     bars2[xi].set_linewidth(1.5)
             ax2.set_title("Residual (covariates removed)")
+            # add significance markers above bars for p < alpha
+            if sig_res.any():
+                ymax2 = np.nanmax(stat_res)
+                marker_y2 = ymax2 + 0.05 * max(1.0, abs(ymax2))
+                ax2.plot(x[sig_res], np.full(int(np.sum(sig_res)), marker_y2), marker="v", linestyle="", color="red", markersize=6)
 
         left_label, right_label = (comp[0], comp[1]) if isinstance(comp, (list, tuple)) and len(comp) >= 2 else (str(comp), "")
         fig.suptitle(f"Levene's test: {left_label} vs {right_label}")
