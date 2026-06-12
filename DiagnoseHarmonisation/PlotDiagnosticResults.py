@@ -453,6 +453,208 @@ def Cohens_D_plot(
                 plt.show()
     # If rep used, figs list is empty; otherwise return list for caller
     return None if rep is not None else figs
+
+
+@rep_plot_wrapper
+def Levenes_Test_with_residuals(
+    levene_results_raw: dict,
+    levene_results_resid: dict | None = None,
+    feature_names: list | None = None,
+    *,
+    alpha: float = 0.05,
+    show: bool = False,
+    rep=None,
+) -> list[tuple[str, plt.Figure]]:
+    """
+    Plot raw and residualised Levene's test results side-by-side.
+
+    Args:
+        levene_results_raw: dict of raw Levene outputs.
+        levene_results_resid: dict of Levene outputs after covariate residualisation.
+        feature_names: optional list of feature names.
+        alpha: significance threshold.
+    """
+    figs: list[tuple[str, plt.Figure]] = []
+    if not isinstance(levene_results_raw, dict):
+        raise ValueError("levene_results_raw must be a dict as returned by Levene_Test")
+
+    first = None
+    for k, v in levene_results_raw.items():
+        first = v
+        break
+    if first is None:
+        return []
+
+    stat_arr = np.asarray(first.get("stat") if "stat" in first else first.get("statistic"))
+    if stat_arr.ndim == 1:
+        n_features = stat_arr.shape[0]
+    else:
+        raise ValueError("Expected 1D arrays of per-feature statistics in levene_results values")
+
+    if feature_names is None:
+        feature_names = [f"feature_{i}" for i in range(n_features)]
+
+    for comp, res_raw in levene_results_raw.items():
+        stat_raw = np.asarray(res_raw.get("stat") if "stat" in res_raw else res_raw.get("statistic"))
+        pval_raw = None
+        for key in ("pvalue", "p_val", "pvalues", "p"):
+            if key in res_raw:
+                pval_raw = np.asarray(res_raw[key])
+                break
+        if pval_raw is None:
+            pval_raw = np.full(stat_raw.shape, 1.0)
+
+        stat_res = None
+        pval_res = None
+        if levene_results_resid is not None and comp in levene_results_resid:
+            res_res = levene_results_resid[comp]
+            stat_res = np.asarray(res_res.get("stat") if "stat" in res_res else res_res.get("statistic"))
+            for key in ("pvalue", "p_val", "pvalues", "p"):
+                if key in res_res:
+                    pval_res = np.asarray(res_res[key])
+                    break
+            if pval_res is None:
+                pval_res = np.full(stat_res.shape, 1.0)
+
+        if stat_raw.shape[0] != n_features:
+            continue
+
+        ncols = 2 if stat_res is not None else 1
+        fig, axes = plt.subplots(1, ncols, figsize=(max(6, n_features * 0.12) * ncols, 4), squeeze=False)
+        x = np.arange(n_features)
+
+        ax = axes[0, 0]
+        bars = ax.bar(x, stat_raw, color="C0", alpha=0.8)
+        sig_raw = pval_raw < alpha
+        for xi, s in enumerate(sig_raw):
+            if s:
+                bars[xi].set_edgecolor("red")
+                bars[xi].set_linewidth(1.5)
+        ax.set_ylabel("Levene statistic")
+        ax.set_title("Raw")
+
+        if stat_res is not None:
+            ax2 = axes[0, 1]
+            bars2 = ax2.bar(x, stat_res, color="C1", alpha=0.8)
+            sig_res = pval_res < alpha
+            for xi, s in enumerate(sig_res):
+                if s:
+                    bars2[xi].set_edgecolor("red")
+                    bars2[xi].set_linewidth(1.5)
+            ax2.set_title("Residual (covariates removed)")
+
+        left_label, right_label = (comp[0], comp[1]) if isinstance(comp, (list, tuple)) and len(comp) >= 2 else (str(comp), "")
+        fig.suptitle(f"Levene's test: {left_label} vs {right_label}")
+
+        for ax_plot in axes[0, :ncols]:
+            ax_plot.set_xticks(x)
+            if n_features <= 50:
+                ax_plot.set_xticklabels(feature_names, rotation=90)
+            else:
+                step = max(1, n_features // 40)
+                labels = [feature_names[i] if (i % step == 0) else "" for i in range(n_features)]
+                ax_plot.set_xticklabels(labels, rotation=90)
+
+        ax.text(0.98, 0.95, f"n_significant_raw={int(np.sum(sig_raw))}", transform=ax.transAxes, ha="right", va="top")
+        if stat_res is not None:
+            ax2.text(0.98, 0.95, f"n_significant_resid={int(np.sum(sig_res))}", transform=ax2.transAxes, ha="right", va="top")
+
+        figs.append((f"Levene: {left_label} vs {right_label}", fig))
+
+    return None if rep is not None else figs
+
+
+@rep_plot_wrapper
+def Levenes_Test(
+    levene_results: dict,
+    feature_names: list | None = None,
+    *,
+    alpha: float = 0.05,
+    show: bool = False,
+    rep=None,
+) -> list[tuple[str, plt.Figure]]:
+    """
+    Plot Levene's test results produced by DiagnosticFunctions.Levene_Test.
+
+    Args:
+        levene_results: dict keyed by comparison tuple (a,b) with values
+            containing at least 'stat' and 'pvalue' arrays (per-feature).
+        feature_names: optional list of feature names (length = n_features).
+        alpha: significance threshold to highlight features.
+        rep: optional report object used by the wrapper.
+
+    Returns:
+        list of (caption, Figure) tuples.
+    """
+    figs: list[tuple[str, plt.Figure]] = []
+
+    # Basic validation
+    if not isinstance(levene_results, dict):
+        raise ValueError("levene_results must be a dict as returned by Levene_Test")
+
+    # Determine number of features from first entry
+    first = None
+    for k, v in levene_results.items():
+        first = v
+        break
+    if first is None:
+        return []
+
+    stat_arr = np.asarray(first.get("stat") if "stat" in first else first.get("statistic"))
+    if stat_arr.ndim == 1:
+        n_features = stat_arr.shape[0]
+    else:
+        raise ValueError("Expected 1D arrays of per-feature statistics in levene_results values")
+
+    if feature_names is None:
+        feature_names = [f"feature_{i}" for i in range(n_features)]
+
+    # For each comparison create a bar plot of the test statistic and mark significant features
+    for comp, res in levene_results.items():
+        stat = np.asarray(res.get("stat") if "stat" in res else res.get("statistic"))
+        # try a few common p-value keys
+        pval = None
+        for key in ("pvalue", "p_val", "pvalues", "p"):
+            if key in res:
+                pval = np.asarray(res[key])
+                break
+        if pval is None:
+            # if absent, create non-significant mask
+            pval = np.full(stat.shape, 1.0)
+
+        if stat.shape[0] != n_features:
+            continue
+
+        fig, ax = plt.subplots(figsize=(max(6, n_features * 0.12), 4))
+        x = np.arange(n_features)
+        bars = ax.bar(x, stat, color="C0", alpha=0.8)
+
+        # highlight significant
+        sig = pval < alpha
+        for xi, s in enumerate(sig):
+            if s:
+                bars[xi].set_edgecolor("red")
+                bars[xi].set_linewidth(1.5)
+
+        left_label, right_label = (comp[0], comp[1]) if isinstance(comp, (list, tuple)) and len(comp) >= 2 else (str(comp), "")
+        ax.set_title(f"Levene's test: {left_label} vs {right_label}")
+        ax.set_xlabel("Feature")
+        ax.set_ylabel("Levene statistic")
+        ax.set_xticks(x)
+        if n_features <= 50:
+            ax.set_xticklabels(feature_names, rotation=90)
+        else:
+            step = max(1, n_features // 40)
+            labels = [feature_names[i] if (i % step == 0) else "" for i in range(n_features)]
+            ax.set_xticklabels(labels, rotation=90)
+
+        # annotate number of significant features
+        n_sig = int(np.sum(sig))
+        ax.text(0.98, 0.95, f"n_significant={n_sig}", transform=ax.transAxes, ha="right", va="top")
+
+        figs.append((f"Levene: {left_label} vs {right_label}", fig))
+
+    return None if rep is not None else figs
 """----------------------------------------------------------------------------------------------------------------------------"""
 """---------------------------------------- Plotting functions ratio of variance ----------------------------------"""
 """----------------------------------------------------------------------------------------------------------------------------"""

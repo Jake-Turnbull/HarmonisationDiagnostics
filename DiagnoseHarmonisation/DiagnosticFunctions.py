@@ -1304,7 +1304,8 @@ def Variance_Ratios(data, batch, covariates=None,
     return variance_ratios, pair_labels
 
 # Define a function to perform the Levene's test for variance differences between each unique batch pair
-def Levene_Test(data, batch, centre = 'median'):
+
+def Levenes_Test(data, batch, centre = 'median'):
     # Define a function to perform the Levene's test for variance differences between each unique batch pair
     """
     Perform Levene's test for variance differences between each unique batch pair.

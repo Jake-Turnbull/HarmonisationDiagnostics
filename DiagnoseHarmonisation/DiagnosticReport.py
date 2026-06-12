@@ -1260,6 +1260,61 @@ def CrossSectionalReport(
         # Plot using your plot function
         PlotDiagnosticResults.variance_ratio_plot(variance_ratios, pair_labels, rep=report)
         report.log_text("Variance ratio plot(s) added to report")
+
+        # ---------------------
+        # Levenes test for variance differences
+        # ---------------------
+        report.log_section("levenes_test", "Levene's test for variance differences between batches")
+        logger.info("Levene's test for variance differences between batches")
+        # Raw Levene test
+        levene_results_raw = DiagnosticFunctions.Levenes_Test(data, batch, centre='median')
+
+        # Residualise covariates (if provided) and run Levene on residuals
+        levene_results_resid = None
+        if covariates_numeric is not None:
+            try:
+                data_resid = DiagnosticFunctions.RobustOLS(data, covariates_numeric, batch, covariate_names or [], covariate_types)
+                levene_results_resid = DiagnosticFunctions.Levenes_Test(data_resid, batch, centre='median')
+            except Exception:
+                logger.exception("Failed to compute residualised Levene results; continuing with raw results only")
+
+        report.text_simple("Levene's test for variance differences between batches completed (raw and residualised if covariates supplied)")
+        # Use the combined plotting function to show raw vs residual side-by-side
+        PlotDiagnosticResults.Levenes_Test_with_residuals(levene_results_raw, levene_results_resid, feature_names=feature_names, rep=report)
+        report.log_text("Levene's test plots (raw + residual) added to report")
+
+        # Save summary arrays for downstream saving
+        data_dict = {}
+        # levene_results_raw is a dict keyed by (b1,b2)
+        for comp, res in levene_results_raw.items():
+            key = f"LeveneRaw_{comp[0]}_vs_{comp[1]}"
+            data_dict[f"{key}_stat"] = np.asarray(res.get('stat') if 'stat' in res else res.get('statistic'))
+            for pk in ('pvalue', 'p_val', 'pvalues', 'p'):
+                if pk in res:
+                    data_dict[f"{key}_pval"] = np.asarray(res[pk])
+                    break
+        if levene_results_resid is not None:
+            for comp, res in levene_results_resid.items():
+                key = f"LeveneResid_{comp[0]}_vs_{comp[1]}"
+                data_dict[f"{key}_stat"] = np.asarray(res.get('stat') if 'stat' in res else res.get('statistic'))
+                for pk in ('pvalue', 'p_val', 'pvalues', 'p'):
+                    if pk in res:
+                        data_dict[f"{key}_pval"] = np.asarray(res[pk])
+                        break
+
+        if save_data:
+            save_test_results(
+                data_dict,
+                test_name="Levenes_Test_Summary",
+                save_root=save_dir,
+                feature_names=feature_names,
+                report_date=report_date,
+                report_name=report_name,
+            )
+        report.text_simple("Levene's test summaries added to report and saved as csv if requested")
+        report.text_simple(line_break_in_text)
+
+
         # ---------------------
         # PCA and clustering
         # ---------------------
@@ -1445,6 +1500,8 @@ def CrossSectionalReport(
         if created_local_report:
             # call __exit__ on the context-managed report
             report_ctx.__exit__(None, None, None)
+
+
 # Longitudinal testing:
 from typing import Optional, Union
 def LongitudinalReport(data, batch,
