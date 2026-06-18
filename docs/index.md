@@ -37,3 +37,5 @@ This library provides a set of functions to assess the severity, nature, and dis
 Harmonisation is goal-specific, so its integration into experimental design should be carefully considered. Diagnostic reports can serve as a practical method for informing experimental design decisions.
 
 For cross-sectional workflows, the package now supports both a scripted command-line interface and a desktop GUI launcher through `harmdiag`.
+
+For longitudinal workflows, the package now supports a scripted command-line interface through `harmdiag-longitudinal`
