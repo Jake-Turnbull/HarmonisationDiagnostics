@@ -1,6 +1,4 @@
-#%%
-
-
+from __future__ import annotations
 """----------------------------------------------------------------------------------------------------------------------------"""
 """---------------------------------------- TEST WRAPPER FUNCTION ----------------------------------"""
 """----------------------------------------------------------------------------------------------------------------------------"""
@@ -2113,713 +2111,1349 @@ def KS_plot(
 
     return figs
 
-##########################################################################
-# Plotting for longitudinal metrics
-###########################################################################
-@rep_plot_wrapper
-def plot_SubjectOrder(df,
-                      idp_col='IDP',
-                      time_a_col='TimeA',
-                      time_b_col='TimeB',
-                      rho_col='SpearmanRho',
-                      p_col='pValue',
-                      times_order=None,
-                      significance=0.05,
-                      ncols=2,
-                      figsize_per_plot=(4,4),
-                      cmap="icefire",
-                      fmt=".2f",
-                      center=0,
-                      vmax_abs=None,
-                      limit_idps=None,
-                      sample_method='first',   # 'first' or 'random'
-                      random_state=None,
-                      rep=None,
-                      show: bool = False,
-                      combine_method: str = "stouffer",   # 'stouffer' or 'fisher'
-                      p_correction: str = "fdr_bh"        # 'fdr_bh', 'bonferroni', or None
-                      ):
-    """
-    Extended version of your function that *combines* p-values across IDPs (for each time-pair)
-    and across time-pairs (for each IDP) using either Stouffer (signed) or Fisher, and optionally
-    applies multiple-testing correction (BH or bonferroni).
+"""
+plotting_harmonisation.py
+=========================
+Plotting functions for longitudinal neuroimaging harmonisation metrics.
 
-    Notes:
-      - combine_method='stouffer' uses the sign from rho (mean rho across IDPs for that cell)
-        to create signed z-scores from two-sided p-values.
-      - combine_method='fisher' uses scipy.stats.combine_pvalues(method='fisher') and ignores sign.
-      - p_correction operates separately for the time×time summary matrix and for per-IDP combined p's.
-      - For best statistical rigor with permutation-based tests, combining at the permutation-level
-        (i.e. combining test stats per permutation and building an empirical null) is preferable.
-    """
-    import math
-    import random
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import seaborn as sns
+Visual style is controlled centrally via STYLE and apply_plot_theme().
+All public functions follow the same call convention:
+  - rep    : optional report object; if provided the figure is logged and closed
+  - show   : bool, call plt.show() before returning
+  - return : Figure (or None when rep is not None)
+"""
 
-    # --- additional imports for combination ---
-    try:
-        from scipy.stats import combine_pvalues, norm
-        from scipy.stats import chi2
-    except Exception as e:
-        raise ImportError("This function requires scipy. Please install scipy (pip install scipy).") from e
+from typing import Any
 
-    # --- simple BH implementation and Bonferroni ---
-    def bh_adjust(pvals):
-        """Benjamini-Hochberg FDR correction. Returns adjusted p-values (same shape as input)."""
-        p = np.asarray(pvals, dtype=float)
-        flat = p.flatten()
-        nanmask = np.isnan(flat)
-        idx = np.where(~nanmask)[0]
-        if idx.size == 0:
-            return p  # nothing to do
-        pv = flat[~nanmask]
-        order = np.argsort(pv)
-        ranked = np.empty_like(order)
-        ranked[order] = np.arange(pv.size) + 1  # ranks 1..m
-        m = pv.size
-        adj = np.empty_like(pv)
-        # BH adjusted p-values (step-up)
-        adj_vals = pv * m / ranked
-        # enforce monotonicity (cumulative minimum from largest to smallest)
-        adj_vals_sorted = np.empty_like(adj_vals)
-        adj_vals_sorted[order] = adj_vals
-        # cumulative minimum from the end
-        cummin = np.minimum.accumulate(adj_vals_sorted[::-1])[::-1]
-        adj[order] = np.minimum(cummin, 1.0)
-        flat_adj = flat.copy()
-        flat_adj[~nanmask] = adj
-        return flat_adj.reshape(p.shape)
+import math
+import random
+import warnings
 
-    def bonferroni_adjust(pvals):
-        p = np.asarray(pvals, dtype=float)
-        flat = p.flatten()
-        nanmask = np.isnan(flat)
-        idx = np.where(~nanmask)[0]
-        if idx.size == 0:
-            return p
-        pv = flat[~nanmask]
-        m = pv.size
-        adj = np.minimum(pv * m, 1.0)
-        flat_adj = flat.copy()
-        flat_adj[~nanmask] = adj
-        return flat_adj.reshape(p.shape)
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numpy as np
+import pandas as pd
+import seaborn as sns
 
-    def apply_correction(p_matrix, method):
-        if method is None:
-            return p_matrix
-        if method == 'fdr_bh':
-            return bh_adjust(p_matrix)
-        elif method == 'bonferroni':
-            return bonferroni_adjust(p_matrix)
-        else:
-            raise ValueError("p_correction must be 'fdr_bh', 'bonferroni', or None")
+# ============================================================================
+# CENTRAL STYLE CONSTANTS
+# ============================================================================
 
-    # ---------- Validate and list IDPs ----------
-    all_idps = sorted(df[idp_col].unique())
-    if len(all_idps) == 0:
-        raise ValueError("No IDPs found in dataframe.")
+class STYLE:
+    # Palette (three-colour, colour-blind friendly)
+    PRIMARY   = "#4C78A8"
+    SECONDARY = "#F58518"
+    ACCENT    = "#54A24B"
+    NEUTRAL   = "#BDBDBD"
 
-    # choose idps_to_plot according to limit_idps and sample_method
-    if limit_idps is None:
-        idps_to_plot = all_idps.copy()
-    else:
-        if not (isinstance(limit_idps, int) and limit_idps >= 1):
-            raise ValueError("limit_idps must be None or a positive integer.")
-        limit = min(limit_idps, len(all_idps))
-        if sample_method == 'first':
-            idps_to_plot = all_idps[:limit]
-        elif sample_method == 'random':
-            rng = random.Random(random_state)
-            idps_to_plot = rng.sample(all_idps, limit)
-        else:
-            raise ValueError("sample_method must be 'first' or 'random'.")
+    # ICC threshold colours
+    ICC_EXCELLENT = "#54A24B"   # >=0.90
+    ICC_GOOD      = "#F2CF5B"   # 0.75–0.90
+    ICC_LOWER     = "#E45756"   # <0.75
 
-    n_idp_plot = len(idps_to_plot)
+    # Typography — one consistent hierarchy
+    SUPTITLE_SIZE  = 13   # figure-level suptitle
+    TITLE_SIZE     = 12   # axes title
+    AXIS_SIZE      = 10   # axis labels (x/y)
+    TICK_SIZE      = 9    # tick labels
+    ANNOT_SIZE     = 8    # in-cell heatmap annotations
+    LABEL_SIZE     = 9    # bar / scatter value labels
 
-    # ---------- Determine time ordering ----------
-    if times_order is None:
-        times = sorted(set(df[time_a_col].unique()) | set(df[time_b_col].unique()))
-    else:
-        times = list(times_order)
-    n_times = len(times)
-    if n_times == 0:
-        raise ValueError("No time points found.")
+    # Layout
+    GRID_ALPHA     = 0.18
+    BAR_ALPHA      = 0.88
+    DPI            = 150
+    TIGHT_RECT     = (0.0, 0.0, 0.92, 0.95)   # common tight_layout rect
 
-    # ---------- Build matrices for ALL IDPs (used for summaries) ----------
-    rho_mats_all = {}
-    p_mats_all = {}
-    all_rho_values = []
-    for idp in all_idps:
-        sub = df[df[idp_col] == idp].copy()
-        rho = sub.pivot(index=time_a_col, columns=time_b_col, values=rho_col)
-        pmat = sub.pivot(index=time_a_col, columns=time_b_col, values=p_col)
-        rho = rho.reindex(index=times, columns=times)
-        pmat = pmat.reindex(index=times, columns=times)
-        # symmetrize if needed (use transpose to fill missing)
-        rho = rho.combine_first(rho.T)
-        pmat = pmat.combine_first(pmat.T)
-        np.fill_diagonal(rho.values, np.nan)
-        np.fill_diagonal(pmat.values, np.nan)
-        rho_mats_all[idp] = rho.astype(float)
-        p_mats_all[idp] = pmat.astype(float)
-        all_rho_values.extend(rho.values.flatten()[~np.isnan(rho.values.flatten())])
+    # Heatmap
+    HEATMAP_CMAP        = "viridis"
+    HEATMAP_LINEWIDTHS  = 0.25
+    HEATMAP_LINECOLOR   = "white"
+    ANNOT_KWS           = dict(fontsize=ANNOT_SIZE, fontweight="bold")
 
-    if len(all_rho_values) == 0:
-        raise ValueError("No numeric SpearmanRho values found.")
+    # Bar labels
+    BAR_LABEL_PAD = 0.01   # fraction of axis range used as right-pad for h-bars
 
-    # ---------- Color scale ----------
-    if vmax_abs is None:
-        vmax_abs = max(abs(np.nanmin(all_rho_values)), abs(np.nanmax(all_rho_values)))
-    vmin, vmax = -vmax_abs, vmax_abs
 
-    # ---------- Summary calculations (use ALL IDPs) ----------
-    stacked = np.stack([rho_mats_all[idp].values for idp in all_idps], axis=0)    # shape (n_idps, n_times, n_times)
-    stacked_p = np.stack([p_mats_all[idp].values for idp in all_idps], axis=0)
+def apply_plot_theme() -> None:
+    """Apply the shared visual theme to all subsequent Matplotlib/Seaborn plots."""
+    sns.set_theme(style="whitegrid", context="notebook")
+    plt.rcParams.update({
+        # background
+        "figure.facecolor":  "white",
+        "axes.facecolor":    "white",
+        # fonts
+        "font.size":         STYLE.TICK_SIZE,
+        "axes.titlesize":    STYLE.TITLE_SIZE,
+        "axes.titleweight":  "bold",
+        "axes.labelsize":    STYLE.AXIS_SIZE,
+        "xtick.labelsize":   STYLE.TICK_SIZE,
+        "ytick.labelsize":   STYLE.TICK_SIZE,
+        "legend.fontsize":   STYLE.TICK_SIZE,
+        # spines
+        "axes.spines.top":   False,
+        "axes.spines.right": False,
+        # grid
+        "grid.alpha":        STYLE.GRID_ALPHA,
+        # spacing
+        "axes.titlepad":     10,
+        "axes.labelpad":     6,
+        "xtick.major.pad":   3,
+        "ytick.major.pad":   3,
+        "legend.frameon":    False,
+        # output
+        "savefig.dpi":       STYLE.DPI,
+    })
 
-    # Helper: ensure p in (0,1]; replace exact zeros by tiny value to avoid -inf/log issues
-    tiny = 1e-300
-    sp = stacked_p.copy()
-    sp[np.isnan(sp)] = np.nan  # leave nans
-    sp[sp == 0] = tiny
+# ============================================================================
+# SHARED HELPERS
+# ============================================================================
 
-    # Combined p-values per time-pair across IDPs
-    combined_p_matrix = np.full((n_times, n_times), np.nan)
-    combined_rho_matrix = np.nanmean(stacked, axis=0)  # keep mean rho (for sign in Stouffer)
-    if combine_method.lower() == 'fisher':
-        # use scipy combine_pvalues for Fisher (ignores sign)
-        for i in range(n_times):
-            for j in range(n_times):
-                pv = sp[:, i, j]
-                pv = pv[~np.isnan(pv)]
-                if pv.size == 0:
-                    combined_p_matrix[i, j] = np.nan
-                else:
-                    # combine_pvalues returns (stat, p)
-                    _, p_comb = combine_pvalues(pv, method='fisher')
-                    combined_p_matrix[i, j] = p_comb
-    elif combine_method.lower() == 'stouffer':
-        # signed Stouffer: convert two-sided p to z, use sign of mean rho across IDPs for that cell
-        # z_i = sign_i * norm.ppf(1 - p_i/2)
-        for i in range(n_times):
-            for j in range(n_times):
-                pv = sp[:, i, j]
-                pv = pv[~np.isnan(pv)]
-                if pv.size == 0:
-                    combined_p_matrix[i, j] = np.nan
-                else:
-                    # determine sign from mean rho across IDPs for that cell
-                    rhos = stacked[:, i, j]
-                    rhos_nonan = rhos[~np.isnan(rhos)]
-                    sign_cell = 0
-                    if rhos_nonan.size > 0:
-                        mean_rho = np.nanmean(rhos_nonan)
-                        sign_cell = np.sign(mean_rho) if not np.isnan(mean_rho) else 1.0
-                        if sign_cell == 0:
-                            sign_cell = 1.0
-                    else:
-                        sign_cell = 1.0
-                    # convert p to z's, protect from p==0 or p==1
-                    p_clip = np.clip(pv, tiny, 1 - 1e-16)
-                    zs = norm.ppf(1.0 - p_clip / 2.0)  # two-sided -> two-tailed z magnitude
-                    # apply sign
-                    signed_zs = sign_cell * zs
-                    # combine (equal weights)
-                    z_comb = np.sum(signed_zs) / math.sqrt(zs.size)
-                    # two-sided combined p:
-                    p_comb = 2.0 * (1.0 - norm.cdf(abs(z_comb)))
-                    combined_p_matrix[i, j] = float(np.clip(p_comb, tiny, 1.0))
-    else:
-        raise ValueError("combine_method must be 'stouffer' or 'fisher'")
+def _bar_label_offset(ax: plt.Axes, axis: str = "x") -> float:
+    """Return a consistent absolute offset for bar-end labels."""
+    lo, hi = ax.get_xlim() if axis == "x" else ax.get_ylim()
+    return (hi - lo) * STYLE.BAR_LABEL_PAD
 
-    # Optional multiple-comparison correction across time×time combined p-matrix
-    combined_p_matrix_adj = apply_correction(combined_p_matrix, p_correction)
 
-    # ---------- Per-IDP: combine its off-diagonal p-values into a single p -----
-    idp_combined_ps = []
-    idp_mean_rhos = []
-    for idp in all_idps:
-        pmat = p_mats_all[idp].values
-        rho = rho_mats_all[idp].values
-        mask = ~np.eye(n_times, dtype=bool)  # exclude diagonal
-        pv = pmat[mask]
-        pv = pv[~np.isnan(pv)]
-        rhos = rho[mask]
-        rhos = rhos[~np.isnan(rhos)]
-        if pv.size == 0:
-            idp_combined_ps.append(np.nan)
-            idp_mean_rhos.append(np.nan)
+def _annotate_hbar(ax: plt.Axes, bars, fmt: str = "{:.1f}") -> None:
+    """Add right-aligned value labels to horizontal bars (uniform style)."""
+    offset = _bar_label_offset(ax, "x")
+    for bar in bars:
+        v = bar.get_width()
+        ax.text(
+            v + offset,
+            bar.get_y() + bar.get_height() / 2,
+            fmt.format(v),
+            va="center", ha="left",
+            fontsize=STYLE.LABEL_SIZE, fontweight="bold",
+        )
+
+
+def _annotate_vbar(ax: plt.Axes, bars, fmt_int: str = "{:d}", fmt_float: str = "{:.1f}") -> None:
+    """Add top-aligned value labels to vertical bars (uniform style)."""
+    for bar in bars:
+        v = bar.get_height()
+        if np.isnan(v):
             continue
-        if combine_method.lower() == 'fisher':
-            # fisher combine
-            _, p_comb = combine_pvalues(np.clip(pv, tiny, 1.0), method='fisher')
-            idp_combined_ps.append(float(p_comb))
-        else:  # stouffer signed
-            mean_rho = np.nanmean(rho[mask])
-            idp_mean_rhos.append(mean_rho)
-            sign_cell = np.sign(mean_rho) if not np.isnan(mean_rho) else 1.0
-            if sign_cell == 0:
-                sign_cell = 1.0
-            p_clip = np.clip(pv, tiny, 1.0 - 1e-16)
-            zs = norm.ppf(1.0 - p_clip / 2.0)
-            signed_zs = sign_cell * zs
-            z_comb = np.sum(signed_zs) / math.sqrt(zs.size)
-            p_comb = 2.0 * (1.0 - norm.cdf(abs(z_comb)))
-            idp_combined_ps.append(float(np.clip(p_comb, tiny, 1.0)))
-    # if mean rhos list wasn't filled (Fisher branch), compute idp_mean_rhos now
-    if combine_method.lower() == 'fisher':
-        idp_mean_rhos = []
-        for idp in all_idps:
-            rho = rho_mats_all[idp].values
-            mask = ~np.eye(n_times, dtype=bool)
-            idp_mean_rhos.append(np.nanmean(rho[mask]) if ~np.all(np.isnan(rho[mask])) else np.nan)
-    else:
-        # ensure lengths correct
-        if len(idp_mean_rhos) != len(all_idps):
-            # fallback compute
-            idp_mean_rhos = []
-            for idp in all_idps:
-                rho = rho_mats_all[idp].values
-                mask = ~np.eye(n_times, dtype=bool)
-                idp_mean_rhos.append(np.nanmean(rho[mask]) if ~np.all(np.isnan(rho[mask])) else np.nan)
+        label = fmt_int.format(int(round(v))) if float(v).is_integer() else fmt_float.format(v)
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            v,
+            label,
+            ha="center", va="bottom",
+            fontsize=STYLE.LABEL_SIZE, fontweight="bold",
+        )
 
-    idp_combined_ps = np.array(idp_combined_ps, dtype=float)
-    idp_combined_ps_adj = idp_combined_ps.copy()
-    if p_correction is not None:
-        # apply correction across IDPs (treating them as a family)
-        idp_combined_ps_adj = apply_correction(idp_combined_ps.reshape(-1, 1), p_correction).reshape(-1)
 
-    # ---------- Prepare mean_rho_matrix (mean across IDPs) ----------
-    mean_rho_matrix = np.nanmean(stacked, axis=0)
-    np.fill_diagonal(mean_rho_matrix, np.nan)
+def _strip_spines(ax: plt.Axes) -> None:
+    """Remove top and right spines explicitly (belt-and-braces over rcParams)."""
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
-    # ---------- Figure layout ----------
-    nrows = math.ceil(n_idp_plot / ncols) if n_idp_plot > 0 else 0
-    fig_w = figsize_per_plot[0] * ncols
-    fig_h = max(1, nrows) * figsize_per_plot[1] + 1.6 * figsize_per_plot[1]
-    fig = plt.figure(figsize=(fig_w, fig_h))
-    gs = fig.add_gridspec(max(1, nrows) + 2, ncols,
-                          height_ratios=[1]*max(1, nrows) + [0.9, 0.9],
-                          hspace=0.35, wspace=0.3)
 
-    # ---------- Plot individual IDP heatmaps (ONLY idps_to_plot) ----------
-    for idx, idp in enumerate(idps_to_plot):
-        r = idx // ncols
-        c = idx % ncols
-        ax = fig.add_subplot(gs[r, c])
-        rho = rho_mats_all[idp]
-        pmat = p_mats_all[idp]
-        annot = np.full(rho.shape, "", dtype=object)
-        for i in range(n_times):
-            for j in range(n_times):
-                val = rho.iat[i, j]
-                pval = pmat.iat[i, j]
-                if np.isnan(val):
-                    annot[i, j] = ""
-                else:
-                    star = "*" if (not pd.isna(pval) and pval < significance) else ""
-                    annot[i, j] = f"{val:{fmt}}{star}"
-        sns.heatmap(rho,
-                    ax=ax,
-                    annot=annot,
-                    fmt="",
-                    cmap=cmap,
-                    center=center,
-                    vmin=vmin,
-                    vmax=vmax,
-                    linewidths=0.35,
-                    linecolor="gray",
-                    cbar=False,
-                    square=False)
-        ax.set_title(idp, fontsize=9)
-        ax.set_xlabel("")   # explicit: no xlabel
-        ax.set_ylabel("")   # explicit: no ylabel
-        ax.set_xticklabels(times, rotation=45, ha='right', fontsize=7)
-        ax.set_yticklabels(times, rotation=0, fontsize=7)
+def _apply_hbar_style(
+    ax: plt.Axes,
+    title: str,
+    xlabel: str,
+    yticklabels: list[str] | None = None,
+) -> None:
+    ax.set_title(title, fontsize=STYLE.TITLE_SIZE, fontweight="bold", pad=10)
+    ax.set_xlabel(xlabel, fontsize=STYLE.AXIS_SIZE)
+    ax.set_ylabel("", fontsize=STYLE.AXIS_SIZE)
+    ax.tick_params(axis="x", labelsize=STYLE.TICK_SIZE, pad=4)
+    ax.tick_params(axis="y", labelsize=STYLE.TICK_SIZE, pad=4)
+    if yticklabels is not None:
+        ax.set_yticklabels(yticklabels, fontsize=STYLE.TICK_SIZE)
+    ax.grid(axis="x", linestyle="--", alpha=STYLE.GRID_ALPHA)
+    _strip_spines(ax)
 
-    # hide unused axes inside the idp grid
-    total_idp_slots = max(1, nrows) * ncols
-    if n_idp_plot < total_idp_slots:
-        for k in range(n_idp_plot, total_idp_slots):
-            r = k // ncols
-            c = k % ncols
-            ax = fig.add_subplot(gs[r, c])
-            ax.axis('off')
 
-    # ---------- Summary 1: mean across ALL IDPs (time x time) ----------
-    row_for_summaries = max(0, nrows)
-    ax_mean_timepair = fig.add_subplot(gs[row_for_summaries, :])
-    annot_mean = np.full(mean_rho_matrix.shape, "", dtype=object)
-    # use combined_p_matrix_adj (corrected) to mark significance
-    for i in range(n_times):
-        for j in range(n_times):
-            val = mean_rho_matrix[i, j]
-            pval = combined_p_matrix_adj[i, j]
-            if np.isnan(val):
-                annot_mean[i, j] = ""
-            else:
-                star = "*" if (not np.isnan(pval) and pval < significance) else ""
-                annot_mean[i, j] = f"{val:{fmt}}{star}"
-    sns.heatmap(mean_rho_matrix,
-                ax=ax_mean_timepair,
-                annot=annot_mean,
-                fmt="",
-                cmap=cmap,
-                center=center,
-                vmin=vmin,
-                vmax=vmax,
-                linewidths=0.35,
-                linecolor="gray",
-                cbar=False,
-                square=False)
-    ax_mean_timepair.set_title(f"Mean across  {len(all_idps)} IDPs (per time-pair) — combined p: {combine_method}, correction: {p_correction}", fontsize=10)
-    ax_mean_timepair.set_xlabel("")
-    ax_mean_timepair.set_ylabel("")
-    ax_mean_timepair.set_xticklabels(times, rotation=45, ha='right', fontsize=7)
-    ax_mean_timepair.set_yticklabels(times, rotation=0, fontsize=7)
+def _finalise(fig: plt.Figure, suptitle: str | None = None) -> None:
+    """Apply suptitle (if any) and a standard tight_layout rect."""
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=STYLE.SUPTITLE_SIZE, fontweight="bold")
+    fig.tight_layout(rect=list(STYLE.TIGHT_RECT))
 
-    # ---------- Summary 2: per-IDP mean across time-pairs (ALL IDPs) ----------
-    ax_idp_mean = fig.add_subplot(gs[row_for_summaries+1, :])
-    idp_mean_matrix = np.array(idp_mean_rhos).reshape(-1, 1)
-    annot_idp = np.array([f"{v:{fmt}}{'*' if (not np.isnan(p) and p < significance) else ''}"
-                          for v, p in zip(idp_mean_rhos, idp_combined_ps_adj)]).reshape(-1, 1)
-    sns.heatmap(idp_mean_matrix,
-                ax=ax_idp_mean,
-                annot=annot_idp,
-                fmt="",
-                cmap=cmap,
-                center=center,
-                vmin=vmin,
-                vmax=vmax,
-                linewidths=0.35,
-                linecolor="gray",
-                cbar=False,
-                yticklabels=all_idps,
-                xticklabels=["MeanAcrossTimePairs"],
-                square=False)
-    ax_idp_mean.set_title(f"Per-IDP mean across time-pairs ({len(all_idps)} IDPs) — combined p: {combine_method}, correction: {p_correction}", fontsize=8)
-    ax_idp_mean.set_xlabel("")
-    ax_idp_mean.set_ylabel("")
-    ax_idp_mean.set_xticklabels([""], rotation=0)
 
-    # ---------- Shared colorbar ----------
-    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
-    sm.set_array([])
-    fig.colorbar(sm, cax=cbar_ax, label='Spearman Rho')
-
-    plt.suptitle(f"Subject order consistency summaries computed from {len(all_idps)} IDPs\n('*' indicates p < {significance} from permutation testing)", fontsize=8)
-    plt.tight_layout(rect=[0, 0, 0.90, 0.96])
-
+def _handle_rep_show(fig: plt.Figure, rep, label: str, show: bool):
+    """Log to report or optionally show; return None when rep is set."""
     if rep is not None:
-        rep.log_plot(fig, "Subject order consistency")
+        rep.log_plot(fig, label)
         plt.close(fig)
         return None, None
     if show:
         plt.show()
     return fig
 
-### plot within subject variability
-import seaborn as sns
-def build_style_registry(subjects,
-                         idps,
-                         subject_palette="tab10",
-                         idp_palette="Set2",
-                         subject_markers=None,
-                         idp_markers=None) -> tuple[dict[Any, tuple[Any, str]], dict[Any, tuple[Any, str]]]:
+
+def _set_ticklabels(
+    ax: plt.Axes,
+    axis: str,
+    labels,
+    rotation: float | int = 0,
+    ha: str = "center",
+    fontsize: int = STYLE.TICK_SIZE,
+) -> None:
+    """Apply tick labels in one place so size/rotation stay consistent."""
+    if axis == "x":
+        ax.set_xticklabels(labels, rotation=rotation, ha=ha, fontsize=fontsize)
+    elif axis == "y":
+        ax.set_yticklabels(labels, rotation=rotation, ha=ha, fontsize=fontsize)
+    else:
+        raise ValueError("axis must be 'x' or 'y'")
+
+
+def _adaptive_rotation(labels, *, threshold: int = 8, steep: int = 35, mild: int = 20) -> int:
+    """Choose a conservative tick rotation based on label count and length."""
+    labels = [str(x) for x in labels]
+    if not labels:
+        return 0
+    longest = max(len(x) for x in labels)
+    if len(labels) > threshold or longest > 12:
+        return steep
+    if longest > 8:
+        return mild
+    return 0
+
+
+def _icc_legend_handles() -> list:
+    """Legend handles explaining ICC bar colours and threshold bands."""
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+
+    return [
+        Patch(facecolor=STYLE.ICC_EXCELLENT, edgecolor="none", label="ICC ≥ 0.90"),
+        Patch(facecolor=STYLE.ICC_GOOD, edgecolor="none", label="0.75 ≤ ICC < 0.90"),
+        Patch(facecolor=STYLE.ICC_LOWER, edgecolor="none", label="ICC < 0.75"),
+        Patch(facecolor=STYLE.NEUTRAL, edgecolor="none", label="Missing / NaN"),
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.9, alpha=0.5, label="Threshold lines"),
+    ]
+
+
+def _batch_difference_legend_handles() -> list:
+    """Legend handles for the multivariate batch difference bar colours."""
+    from matplotlib.patches import Patch
+    return [
+        Patch(facecolor=STYLE.SECONDARY, edgecolor="none", label="Average batch"),
+        Patch(facecolor=STYLE.PRIMARY, edgecolor="none", label="Other batches"),
+    ]
+
+
+def _configure_hbar_panel(
+    ax: plt.Axes,
+    title: str,
+    xlabel: str,
+    yticklabels: list[str],
+    *,
+    xlim_pad: float = 0.0,
+    show_legend=None,
+    legend_loc: str = "lower right",
+    legend_title: str | None = None,
+) -> None:
+    """Standardise horizontal bar panels so titles/ticks look uniform."""
+    ax.set_title(title, fontsize=STYLE.TITLE_SIZE, fontweight="bold", pad=12)
+    ax.set_xlabel(xlabel, fontsize=STYLE.AXIS_SIZE)
+    ax.set_ylabel("", fontsize=STYLE.AXIS_SIZE)
+    ax.tick_params(axis="both", labelsize=STYLE.TICK_SIZE, pad=4)
+    ax.set_yticklabels(yticklabels, fontsize=STYLE.TICK_SIZE)
+    ax.grid(axis="x", linestyle="--", alpha=STYLE.GRID_ALPHA)
+    _strip_spines(ax)
+
+    if xlim_pad:
+        lo, hi = ax.get_xlim()
+        ax.set_xlim(lo, hi + xlim_pad)
+
+    if show_legend is not None:
+        if legend_loc == "center left":
+            ax.legend(
+                handles=show_legend,
+                title=legend_title,
+                loc="center left",
+                bbox_to_anchor=(1.02, 0.5),
+                frameon=False,
+                fontsize=STYLE.TICK_SIZE,
+                title_fontsize=STYLE.TICK_SIZE,
+                handlelength=1.5,
+                borderaxespad=0.25,
+            )
+        else:
+            ax.legend(
+                handles=show_legend,
+                loc=legend_loc,
+                frameon=False,
+                fontsize=STYLE.TICK_SIZE,
+                title=legend_title,
+                title_fontsize=STYLE.TICK_SIZE,
+                handlelength=1.5,
+                borderaxespad=0.25,
+            )
+
+
+# ============================================================================
+# STYLE REGISTRY FOR SUBJECTS / IDPs
+# ============================================================================
+
+def build_style_registry(
+    subjects,
+    idps,
+    subject_palette: str = "tab10",
+    idp_palette: str = "Set2",
+    subject_markers: list | None = None,
+    idp_markers: list | None = None,
+) -> tuple[dict[Any, tuple[Any, str]], dict[Any, tuple[Any, str]]]:
     """
-    Build color and marker registries for subjects and IDPs.
+    Build colour and marker registries for subjects and IDPs.
 
-    Args:
-        subjects: Subject identifiers that need plotting styles.
-        idps: IDP identifiers that need plotting styles.
-        subject_palette (str, optional): Matplotlib or seaborn palette name for
-            subjects.
-        idp_palette (str, optional): Matplotlib or seaborn palette name for
-            IDPs.
-        subject_markers (list, optional): Marker cycle for subjects.
-        idp_markers (list, optional): Marker cycle for IDPs.
-
-    Returns:
-        tuple[dict[Any, tuple[Any, str]], dict[Any, tuple[Any, str]]]: Subject
-        and IDP style dictionaries mapping each identifier to a `(color,
-        marker)` pair.
+    Returns
+    -------
+    subject_style, idp_style : dicts mapping each identifier to (color, marker).
     """
-
     if subject_markers is None:
-        subject_markers = ['o', 's', 'D', '^', 'v', '<', '>', 'P', 'X', '*', 'h']
+        subject_markers = ["o", "s", "D", "^", "v", "<", ">", "P", "X", "*", "h"]
     if idp_markers is None:
-        idp_markers = ['o', 's', '^', 'D', 'P', 'X', 'v', '<', '>', '*']
+        idp_markers = ["o", "s", "^", "D", "P", "X", "v", "<", ">", "*"]
 
     subj_colors = sns.color_palette(subject_palette, len(subjects))
-    idp_colors = sns.color_palette(idp_palette, len(idps))
+    idp_colors  = sns.color_palette(idp_palette,     len(idps))
 
     subject_style = {
-        s: (subj_colors[i % len(subj_colors)],
-            subject_markers[i % len(subject_markers)])
+        s: (subj_colors[i % len(subj_colors)], subject_markers[i % len(subject_markers)])
         for i, s in enumerate(subjects)
     }
-
     idp_style = {
-        i_name: (idp_colors[i % len(idp_colors)],
-                 idp_markers[i % len(idp_markers)])
-        for i, i_name in enumerate(idps)
+        n: (idp_colors[i % len(idp_colors)], idp_markers[i % len(idp_markers)])
+        for i, n in enumerate(idps)
     }
-
     return subject_style, idp_style
 
 
-@rep_plot_wrapper
+def _build_default_idp_style(idps, palette: str = "Set2", markers: list | None = None) -> dict:
+    if markers is None:
+        markers = ["o", "s", "^", "D", "P", "X", "v", "<", ">", "*", "h", "H"]
+    colors = sns.color_palette(palette, max(2, len(idps)))
+    return {idp: (colors[i % len(colors)], markers[i % len(markers)]) for i, idp in enumerate(idps)}
+
+
+# ============================================================================
+# P-VALUE COMBINATION / CORRECTION UTILITIES
+# ============================================================================
+
+try:
+    from scipy.stats import combine_pvalues, norm as _scipy_norm
+    _SCIPY_OK = True
+except ImportError:
+    _SCIPY_OK = False
+
+
+def _bh_adjust(pvals: np.ndarray) -> np.ndarray:
+    p = np.asarray(pvals, dtype=float)
+    flat = p.flatten()
+    nanmask = np.isnan(flat)
+    idx = np.where(~nanmask)[0]
+    if idx.size == 0:
+        return p
+    pv = flat[~nanmask]
+    order = np.argsort(pv)
+    ranked = np.empty_like(order)
+    ranked[order] = np.arange(pv.size) + 1
+    m = pv.size
+    adj_vals = pv * m / ranked
+    adj_vals_sorted = np.empty_like(adj_vals)
+    adj_vals_sorted[order] = adj_vals
+    cummin = np.minimum.accumulate(adj_vals_sorted[::-1])[::-1]
+    adj = np.empty_like(pv)
+    adj[order] = np.minimum(cummin, 1.0)
+    flat_adj = flat.copy()
+    flat_adj[~nanmask] = adj
+    return flat_adj.reshape(p.shape)
+
+
+def _bonferroni_adjust(pvals: np.ndarray) -> np.ndarray:
+    p = np.asarray(pvals, dtype=float)
+    flat = p.flatten()
+    nanmask = np.isnan(flat)
+    pv = flat[~nanmask]
+    flat_adj = flat.copy()
+    flat_adj[~nanmask] = np.minimum(pv * pv.size, 1.0)
+    return flat_adj.reshape(p.shape)
+
+import json
+import textwrap
+from collections import Counter
+from matplotlib.colors import ListedColormap, BoundaryNorm
+
+
+def _build_pairwise_pair_matrix(
+    df: pd.DataFrame,
+    idp_col: str = "IDP",
+    records_col: str = "pairwise_site_tests",
+    sig_key: str = "sig_bonf",
+    top_n: int = 20,
+    max_full_pairs: int = 50,
+) -> tuple[pd.DataFrame, dict[str, str], bool]:
+    """
+    Build a binary 0/1 matrix of significant pairwise site differences.
+
+    Returns
+    -------
+    mat : pd.DataFrame
+        Rows = IDPs, columns = pair codes like '1-2'
+    site_code_map : dict
+        Maps code -> original site name, e.g. '1' -> 'siteA'
+    use_compact : bool
+        True when top-N compact mode is used.
+    """
+    rows = []
+    pair_freq = Counter()
+    all_sites = []
+
+    for _, r in df.iterrows():
+        recs = r.get(records_col, [])
+        if isinstance(recs, str):
+            try:
+                recs = json.loads(recs)
+            except Exception:
+                recs = []
+
+        row_map = {}
+        for rec in recs:
+            a = str(rec.get("siteA", ""))
+            b = str(rec.get("siteB", ""))
+            if not a or not b:
+                continue
+
+            all_sites.extend([a, b])
+            pair_name = tuple(sorted((a, b)))
+            is_sig = bool(rec.get(sig_key, False))
+
+            pair_freq[pair_name] += int(is_sig)
+            row_map[pair_name] = 1.0 if is_sig else 0.0
+
+        rows.append((str(r[idp_col]), row_map))
+
+    unique_sites = list(dict.fromkeys(all_sites))
+    site_code_map = {str(i + 1): s for i, s in enumerate(unique_sites)}
+    site_to_code = {v: k for k, v in site_code_map.items()}
+
+    all_pairs = sorted(pair_freq.keys())
+    use_compact = len(all_pairs) > max_full_pairs
+
+    if use_compact:
+        selected_pairs = [p for p, _ in pair_freq.most_common(top_n)]
+    else:
+        selected_pairs = all_pairs
+
+    pair_codes = [f"{site_to_code[a]}-{site_to_code[b]}" for a, b in selected_pairs]
+
+    mat = pd.DataFrame(index=[x[0] for x in rows], columns=pair_codes, dtype=float)
+
+    for idp, row_map in rows:
+        for (a, b), code in zip(selected_pairs, pair_codes):
+            mat.at[idp, code] = row_map.get((a, b), 0.0)
+
+    if len(mat) > 0 and len(mat.columns) > 0:
+        pair_rank = mat.sum(axis=0).sort_values(ascending=False)
+        idp_rank = mat.sum(axis=1).sort_values(ascending=False)
+        mat = mat.loc[idp_rank.index, pair_rank.index]
+
+    return mat, site_code_map, use_compact
+
+
+def _apply_correction(p_matrix: np.ndarray, method: str | None) -> np.ndarray:
+    if method is None:
+        return p_matrix
+    if method == "fdr_bh":
+        return _bh_adjust(p_matrix)
+    if method == "bonferroni":
+        return _bonferroni_adjust(p_matrix)
+    raise ValueError("p_correction must be 'fdr_bh', 'bonferroni', or None")
+# ============================================================================
+# 1.  RAW IDP DISTRIBUTIONS ACROSS SITES
+# ============================================================================
+
+def plot_RawIDPBoxplotsAcrossSites(
+    df,
+    batch_col: str = "batch",
+    subject_col: str | None = "subject",
+    idp_cols: list | None = None,
+    site_order: list | None = None,
+    ncols: int = 2,
+    figsize_per_panel: tuple = (6.0, 4.5),
+    show_points: bool = True,
+    point_size: float = 2.2,
+    point_alpha: float = 0.18,
+    point_jitter: float = 0.22,
+    savepath: str | None = None,
+    rep=None,
+    show: bool = False,
+    site_threshold_for_horizontal: int = 12,
+    feature_display_limit: int = 10,
+    add_pca_summary: bool = True,
+):
+    """
+    Raw IDP distributions across sites/batches.
+
+    Behaviour
+    ----------
+    - If the number of sites is small, boxplots are shown vertically.
+    - If the number of sites is large, boxplots are shown horizontally.
+    - If there are many features, only the top features by site dispersion are shown.
+    - Optionally adds a PCA summary panel for the full feature set when truncated.
+
+    Notes
+    -----
+    The batch/site order is deterministic:
+    - if site_order is provided, it is used as-is
+    - otherwise sites are ordered alphabetically
+    This keeps colors and tick-label order consistent across raw and harmonised runs.
+    """
+    apply_plot_theme()
+
+    if batch_col not in df.columns:
+        raise ValueError(f"'{batch_col}' not found in dataframe columns.")
+
+    if idp_cols is None:
+        idp_cols = [c for c in df.columns if c != batch_col and c != subject_col]
+
+    idp_cols = list(idp_cols)
+    if len(idp_cols) == 0:
+        raise ValueError("No IDP columns found to plot.")
+
+    plot_df = df.copy()
+    plot_df[batch_col] = plot_df[batch_col].astype(str)
+
+    if subject_col is not None and subject_col in plot_df.columns:
+        plot_df[subject_col] = plot_df[subject_col].astype(str)
+    else:
+        subject_col = None
+
+    # ------------------------------------------------------------------
+    # Site ordering (deterministic)
+    # ------------------------------------------------------------------
+    if site_order is None:
+        site_order = sorted(plot_df[batch_col].dropna().astype(str).unique().tolist())
+    else:
+        site_order = [str(s) for s in site_order]
+
+    n_sites = len(site_order)
+    use_horizontal = n_sites > site_threshold_for_horizontal
+
+    # Batch-size summary for user awareness
+    batch_counts = plot_df.groupby(batch_col).size().reindex(site_order).fillna(0).astype(int)
+    min_batch = int(batch_counts.min()) if len(batch_counts) else 0
+    med_batch = int(batch_counts.median()) if len(batch_counts) else 0
+    max_batch = int(batch_counts.max()) if len(batch_counts) else 0
+    n_lt5 = int((batch_counts < 5).sum())
+    n_lt10 = int((batch_counts < 10).sum())
+    n_lt20 = int((batch_counts < 20).sum())
+
+    summary_text = (
+        f"Batch size check: min={min_batch}, median={med_batch}, max={max_batch}   |   "
+        f"Batches <5: {n_lt5}   <10: {n_lt10}   <20: {n_lt20}"
+    )
+
+    # ------------------------------------------------------------------
+    # Feature ranking if there are many IDPs
+    # ------------------------------------------------------------------
+    shown_idps = idp_cols
+    truncated = False
+
+    if len(idp_cols) > feature_display_limit:
+        med = plot_df.groupby(batch_col)[idp_cols].median(numeric_only=True)
+        if isinstance(med, pd.DataFrame) and not med.empty:
+            disp = med.max(axis=0) - med.min(axis=0)
+            shown_idps = disp.sort_values(ascending=False).head(feature_display_limit).index.tolist()
+        else:
+            shown_idps = idp_cols[:feature_display_limit]
+        truncated = True
+
+    n_idps = len(shown_idps)
+
+    # ------------------------------------------------------------------
+    # Optional PCA summary for all features
+    # ------------------------------------------------------------------
+    pca_summary = None
+    if truncated and add_pca_summary:
+        X = plot_df[idp_cols].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+        row_mask = ~np.isnan(X).any(axis=1)
+        Xc = X[row_mask]
+
+        if Xc.shape[0] >= 2 and Xc.shape[1] >= 2:
+            Xc = Xc - Xc.mean(axis=0, keepdims=True)
+            U, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+            scores = U[:, :2] * S[:2]
+
+            var = (S ** 2) / max(Xc.shape[0] - 1, 1)
+            total_var = var.sum() if var.size else 1.0
+            explained = (var[:2] / total_var * 100.0) if total_var > 0 else np.array([0.0, 0.0])
+
+            pca_summary = {
+                "scores": scores,
+                "explained": explained,
+                "sites": plot_df.loc[row_mask, batch_col].astype(str).to_numpy(),
+            }
+
+    # ------------------------------------------------------------------
+    # Figure layout
+    # ------------------------------------------------------------------
+    n_plot_panels = n_idps + (1 if (truncated and add_pca_summary and pca_summary is not None) else 0)
+    max_site_label_len = max((len(s) for s in site_order), default=0)
+    left_margin = min(0.42, max(0.22, 0.10 + 0.008 * max_site_label_len))
+
+    if use_horizontal:
+        fig_w = max(8.0, figsize_per_panel[0] * 1.25)
+        fig_h = max(4.0, figsize_per_panel[1] * n_plot_panels)
+        fig, axes = plt.subplots(n_plot_panels, 1, figsize=(fig_w, fig_h), squeeze=False)
+        axes = axes.flatten()
+    else:
+        ncols = max(1, min(int(ncols), n_idps))
+        nrows = int(math.ceil(n_idps / ncols))
+        extra_rows = 1 if (truncated and add_pca_summary and pca_summary is not None) else 0
+
+        fig_w = figsize_per_panel[0] * ncols
+        fig_h = figsize_per_panel[1] * (nrows + extra_rows)
+        fig, axes_grid = plt.subplots(nrows + extra_rows, ncols, figsize=(fig_w, fig_h), squeeze=False)
+        axes = axes_grid.flatten()
+
+    # Make room for the batch-size note
+    fig.subplots_adjust(top=0.93 if use_horizontal else 0.94)
+
+    fig.text(
+        0.5, 0.995,
+        summary_text,
+        ha="center",
+        va="top",
+        fontsize=max(7, STYLE.TICK_SIZE - 1),
+        fontstyle="italic",
+        bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="0.85"),
+    )
+
+    # Palette by site (stable mapping because site_order is stable)
+    palette = sns.color_palette("Set2", n_colors=max(3, len(site_order)))
+    site_palette = {site: palette[i % len(palette)] for i, site in enumerate(site_order)}
+
+    # ------------------------------------------------------------------
+    # Plot each IDP
+    # ------------------------------------------------------------------
+    for i, idp in enumerate(shown_idps):
+        ax = axes[i]
+
+        if use_horizontal:
+            sns.boxplot(
+                data=plot_df,
+                y=batch_col,
+                x=idp,
+                order=site_order,
+                ax=ax,
+                palette=site_palette,
+                width=0.65,
+                fliersize=0,
+                linewidth=1.0,
+                orient="h",
+            )
+
+            if show_points:
+                sns.stripplot(
+                    data=plot_df,
+                    y=batch_col,
+                    x=idp,
+                    order=site_order,
+                    ax=ax,
+                    color="black",
+                    size=point_size,
+                    alpha=point_alpha,
+                    jitter=point_jitter,
+                    orient="h",
+                )
+
+            ax.set_title(idp, fontsize=STYLE.TITLE_SIZE, fontweight="bold", pad=12)
+            ax.set_xlabel("IDP value", fontsize=STYLE.AXIS_SIZE)
+            ax.set_ylabel("Site", fontsize=STYLE.AXIS_SIZE)
+            _set_ticklabels(
+                ax,
+                "y",
+                site_order,
+                fontsize=max(7, STYLE.TICK_SIZE - 1),
+                ha="right",
+            )
+            ax.tick_params(axis="y", pad=8, labelsize=max(7, STYLE.TICK_SIZE - 1))
+            ax.tick_params(axis="x", labelsize=STYLE.TICK_SIZE)
+            ax.grid(axis="x", linestyle="--", alpha=STYLE.GRID_ALPHA)
+        else:
+            sns.boxplot(
+                data=plot_df,
+                x=batch_col,
+                y=idp,
+                order=site_order,
+                ax=ax,
+                palette=site_palette,
+                width=0.65,
+                fliersize=0,
+                linewidth=1.0,
+            )
+
+            if show_points:
+                sns.stripplot(
+                    data=plot_df,
+                    x=batch_col,
+                    y=idp,
+                    order=site_order,
+                    ax=ax,
+                    color="black",
+                    size=point_size,
+                    alpha=point_alpha,
+                    jitter=point_jitter,
+                )
+
+            ax.set_title(idp, fontsize=STYLE.TITLE_SIZE, fontweight="bold", pad=10)
+            ax.set_xlabel("Site", fontsize=STYLE.AXIS_SIZE)
+            ax.set_ylabel("Raw value", fontsize=STYLE.AXIS_SIZE)
+            rot = _adaptive_rotation(site_order, threshold=7, steep=45, mild=30)
+            _set_ticklabels(ax, "x", site_order, rotation=rot, ha="right" if rot else "center")
+            ax.tick_params(axis="y", labelsize=STYLE.TICK_SIZE)
+            ax.grid(axis="y", linestyle="--", alpha=STYLE.GRID_ALPHA)
+
+        _strip_spines(ax)
+
+    # ------------------------------------------------------------------
+    # PCA summary panel if truncated
+    # ------------------------------------------------------------------
+    if truncated and add_pca_summary:
+        ax = axes[n_idps]
+
+        if pca_summary is None:
+            ax.axis("off")
+            ax.text(
+                0.5, 0.5,
+                "PCA summary unavailable\n(insufficient complete data)",
+                ha="center", va="center",
+                fontsize=STYLE.AXIS_SIZE,
+                transform=ax.transAxes,
+            )
+        else:
+            scores = pca_summary["scores"]
+            sites = pca_summary["sites"]
+            explained = pca_summary["explained"]
+            color_map = {site: site_palette.get(site, STYLE.NEUTRAL) for site in site_order}
+
+            for site in site_order:
+                idx = sites == site
+                if np.any(idx):
+                    ax.scatter(
+                        scores[idx, 0],
+                        scores[idx, 1],
+                        s=18,
+                        alpha=0.6,
+                        color=color_map[site],
+                        label=site,
+                    )
+
+            ax.axhline(0, color="gray", linewidth=0.8, alpha=0.5)
+            ax.axvline(0, color="gray", linewidth=0.8, alpha=0.5)
+            ax.set_title(
+                f"PCA summary of all IDPs\n"
+                f"PC1: {explained[0]:.1f}%  |  PC2: {explained[1]:.1f}%",
+                fontsize=STYLE.TITLE_SIZE,
+                fontweight="bold",
+                pad=10,
+            )
+            ax.set_xlabel("PC1 score", fontsize=STYLE.AXIS_SIZE)
+            ax.set_ylabel("PC2 score", fontsize=STYLE.AXIS_SIZE)
+            ax.tick_params(axis="both", labelsize=STYLE.TICK_SIZE)
+            ax.legend(
+                title="Site",
+                fontsize=STYLE.TICK_SIZE,
+                title_fontsize=STYLE.TICK_SIZE,
+                bbox_to_anchor=(1.02, 1),
+                loc="upper left",
+                frameon=False,
+            )
+            _strip_spines(ax)
+
+        for j in range(n_idps + 1, len(axes)):
+            axes[j].axis("off")
+    else:
+        for j in range(n_idps, len(axes)):
+            axes[j].axis("off")
+
+    # ------------------------------------------------------------------
+    # Final layout
+    # ------------------------------------------------------------------
+    if use_horizontal:
+        fig.subplots_adjust(left=left_margin, right=0.98, top=0.93, bottom=0.06, hspace=0.35)
+    else:
+        fig.subplots_adjust(left=0.06, right=0.98, top=0.92, bottom=0.06, hspace=0.38)
+
+    _finalise(fig, "Raw IDP distributions across sites")
+
+    if savepath:
+        plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")
+
+    return _handle_rep_show(fig, rep, "", show)
+
+
+# ============================================================================
+# 1.  SUBJECT ORDER CONSISTENCY
+# ============================================================================
+
+def plot_SubjectOrder(
+    df,
+    idp_col:          str   = "IDP",
+    time_a_col:       str   = "TimeA",
+    time_b_col:       str   = "TimeB",
+    rho_col:          str   = "SpearmanRho",
+    p_col:            str   = "pValue",
+    times_order             = None,
+    significance:     float = 0.05,
+    ncols:            int   = 2,
+    figsize_per_plot: tuple = (5, 5),
+    cmap:             str   = STYLE.HEATMAP_CMAP,
+    fmt:              str   = ".1f",
+    center:           float = 0,
+    limit_idps:       int | None = None,
+    sample_method:    str   = "first",
+    random_state            = None,
+    rep                     = None,
+    show:             bool  = False,
+    combine_method:   str   = "stouffer",
+    p_correction:     str   = "fdr_bh",
+):
+    """
+    Subject order consistency heatmaps with combined p-values.
+
+    Per-feature heatmaps show raw permutation p-values.
+    Summary heatmaps show combined p-values corrected by p_correction.
+    """
+    apply_plot_theme()
+
+    if not _SCIPY_OK:
+        raise ImportError("scipy is required. Run: pip install scipy")
+
+    _TINY = 1e-300
+
+    all_idps = sorted(df[idp_col].unique())
+    if not all_idps:
+        raise ValueError("No IDPs found in dataframe.")
+
+    if times_order is None:
+        times = sorted(set(df[time_a_col].unique()) | set(df[time_b_col].unique()))
+    else:
+        times = list(times_order)
+    n_times = len(times)
+    if not n_times:
+        raise ValueError("No time points found.")
+
+    rho_mats_all: dict[str, pd.DataFrame] = {}
+    p_mats_all: dict[str, pd.DataFrame] = {}
+    all_rho_vals: list[float] = []
+
+    for idp in all_idps:
+        sub = df[df[idp_col] == idp].copy()
+        rho = sub.pivot(index=time_a_col, columns=time_b_col, values=rho_col)
+        pmat = sub.pivot(index=time_a_col, columns=time_b_col, values=p_col)
+        rho = rho.reindex(index=times, columns=times).combine_first(rho.T.reindex(index=times, columns=times))
+        pmat = pmat.reindex(index=times, columns=times).combine_first(pmat.T.reindex(index=times, columns=times))
+        np.fill_diagonal(rho.values, np.nan)
+        np.fill_diagonal(pmat.values, np.nan)
+        rho_mats_all[idp] = rho.astype(float)
+        p_mats_all[idp] = pmat.astype(float)
+        vals = rho.values.flatten()
+        all_rho_vals.extend(vals[~np.isnan(vals)].tolist())
+
+    if not all_rho_vals:
+        raise ValueError("No numeric SpearmanRho values found.")
+
+    if limit_idps is None:
+        if len(all_idps) > 10:
+            ranked = sorted(
+                all_idps,
+                key=lambda idp: np.nanmean(rho_mats_all[idp].values),
+                reverse=True,
+            )
+            idps_to_plot = ranked[:10]
+        else:
+            idps_to_plot = list(all_idps)
+    else:
+        if not (isinstance(limit_idps, int) and limit_idps >= 1):
+            raise ValueError("limit_idps must be None or a positive int.")
+        limit = min(limit_idps, len(all_idps))
+        if sample_method == "first":
+            idps_to_plot = list(all_idps[:limit])
+        elif sample_method == "random":
+            idps_to_plot = random.Random(random_state).sample(all_idps, limit)
+        else:
+            raise ValueError("sample_method must be 'first' or 'random'.")
+
+    n_idp_plot = len(idps_to_plot)
+
+    stacked = np.stack([rho_mats_all[idp].values for idp in all_idps], axis=0)
+    stacked_p = np.stack([p_mats_all[idp].values for idp in all_idps], axis=0)
+    sp = stacked_p.copy()
+    sp[sp == 0] = _TINY
+
+    combined_p = np.full((n_times, n_times), np.nan)
+    mean_rho_mx = np.nanmean(stacked, axis=0)
+
+    for i in range(n_times):
+        for j in range(n_times):
+            pv = sp[:, i, j]
+            pv = pv[~np.isnan(pv)]
+            if pv.size == 0:
+                continue
+            if combine_method.lower() == "fisher":
+                _, combined_p[i, j] = combine_pvalues(pv, method="fisher")
+            elif combine_method.lower() == "stouffer":
+                rhos_ij = stacked[:, i, j]
+                mean_r = np.nanmean(rhos_ij[~np.isnan(rhos_ij)]) if np.any(~np.isnan(rhos_ij)) else 0.0
+                sign = np.sign(mean_r) if not np.isnan(mean_r) and mean_r != 0 else 1.0
+                p_clip = np.clip(pv, _TINY, 1 - 1e-16)
+                zs = _scipy_norm.ppf(1.0 - p_clip / 2.0)
+                z_comb = np.sum(sign * zs) / math.sqrt(zs.size)
+                combined_p[i, j] = float(np.clip(2.0 * (1.0 - _scipy_norm.cdf(abs(z_comb))), _TINY, 1.0))
+            else:
+                raise ValueError("combine_method must be 'stouffer' or 'fisher'")
+
+    combined_p_adj = _apply_correction(combined_p, p_correction)
+    np.fill_diagonal(mean_rho_mx, np.nan)
+
+    idp_combined_ps: list[float] = []
+    idp_mean_rhos: list[float] = []
+    offdiag = ~np.eye(n_times, dtype=bool)
+
+    for idp in all_idps:
+        pm = p_mats_all[idp].values[offdiag]
+        rho = rho_mats_all[idp].values[offdiag]
+        pm = pm[~np.isnan(pm)]
+        rho = rho[~np.isnan(rho)]
+        idp_mean_rhos.append(float(np.nanmean(rho)) if rho.size else np.nan)
+        if pm.size == 0:
+            idp_combined_ps.append(np.nan)
+            continue
+        if combine_method.lower() == "fisher":
+            _, p_c = combine_pvalues(np.clip(pm, _TINY, 1.0), method="fisher")
+        else:
+            mean_r = float(np.nanmean(rho)) if rho.size else 0.0
+            sign = np.sign(mean_r) if not np.isnan(mean_r) and mean_r != 0 else 1.0
+            zs = _scipy_norm.ppf(1.0 - np.clip(pm, _TINY, 1 - 1e-16) / 2.0)
+            z_c = np.sum(sign * zs) / math.sqrt(zs.size)
+            p_c = float(np.clip(2.0 * (1.0 - _scipy_norm.cdf(abs(z_c))), _TINY, 1.0))
+        idp_combined_ps.append(p_c)
+
+    idp_combined_ps_arr = np.asarray(idp_combined_ps, dtype=float)
+    idp_combined_ps_adj = _apply_correction(idp_combined_ps_arr.reshape(-1, 1), p_correction).reshape(-1)
+
+    max_idp_len = max((len(str(x)) for x in all_idps), default=0)
+    extra_gap = 1 if max_idp_len > 18 else 0
+
+    nrows = math.ceil(n_idp_plot / ncols) if n_idp_plot else 0
+    fig_w = figsize_per_plot[0] * ncols
+    fig_h = max(1, nrows) * figsize_per_plot[1] + 1.8 * figsize_per_plot[1]
+
+    fig = plt.figure(figsize=(fig_w, fig_h))
+    gs = fig.add_gridspec(
+        max(1, nrows) + 2 + extra_gap,
+        ncols,
+        height_ratios=[1] * max(1, nrows) + ([0.18] if extra_gap else []) + [0.9, 0.9],
+        hspace=0.55,
+        wspace=0.35,
+    )
+
+    _hm_kws = dict(
+        fmt="",
+        cmap=cmap,
+        center=center,
+        vmin=0,
+        vmax=1,
+        linewidths=STYLE.HEATMAP_LINEWIDTHS,
+        linecolor=STYLE.HEATMAP_LINECOLOR,
+        annot_kws=STYLE.ANNOT_KWS,
+        cbar=False,
+        square=False,
+    )
+
+    def _make_annot(rho_df: pd.DataFrame, pmat_df: pd.DataFrame) -> np.ndarray:
+        a = np.full(rho_df.shape, "", dtype=object)
+        for i in range(n_times):
+            for j in range(n_times):
+                v = rho_df.iat[i, j]
+                pv = pmat_df.iat[i, j]
+                if not np.isnan(v):
+                    star = "*" if (not pd.isna(pv) and pv < significance) else ""
+                    a[i, j] = f"{v:{fmt}}{star}"
+        return a
+
+    idp_tick_size = max(7, STYLE.TICK_SIZE - 1) if max_idp_len > 18 else STYLE.TICK_SIZE
+
+    for idx, idp in enumerate(idps_to_plot):
+        ax = fig.add_subplot(gs[idx // ncols, idx % ncols])
+        rho = rho_mats_all[idp]
+        pmat = p_mats_all[idp]
+        sns.heatmap(rho, ax=ax, annot=_make_annot(rho, pmat), **_hm_kws)
+        ax.set_title(idp, fontsize=STYLE.TITLE_SIZE, fontweight="bold")
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_xticklabels(times, rotation=45, ha="right", fontsize=idp_tick_size)
+        ax.set_yticklabels(times, rotation=0, fontsize=STYLE.TICK_SIZE)
+        ax.tick_params(axis="x", pad=3)
+
+    for k in range(n_idp_plot, max(1, nrows) * ncols):
+        ax = fig.add_subplot(gs[k // ncols, k % ncols])
+        ax.axis("off")
+
+    summary_row = max(0, nrows) + extra_gap
+
+    ax_tt = fig.add_subplot(gs[summary_row, :])
+    annot_mean = np.full(mean_rho_mx.shape, "", dtype=object)
+    for i in range(n_times):
+        for j in range(n_times):
+            v = mean_rho_mx[i, j]
+            pv = combined_p_adj[i, j]
+            if not np.isnan(v):
+                star = "*" if (not np.isnan(pv) and pv < significance) else ""
+                annot_mean[i, j] = f"{v:{fmt}}{star}"
+
+    sns.heatmap(
+        mean_rho_mx, ax=ax_tt, annot=annot_mean,
+        linewidths=0.35, linecolor="gray",
+        **{k: v for k, v in _hm_kws.items() if k not in ("linewidths", "linecolor")},
+    )
+    ax_tt.set_title(
+        "Mean subject order consistency across timepoints and IDPs",
+        fontsize=STYLE.TITLE_SIZE,
+        fontweight="bold",
+    )
+    ax_tt.set_xlabel("")
+    ax_tt.set_ylabel("")
+    ax_tt.set_xticklabels(times, rotation=45, ha="right", fontsize=STYLE.TICK_SIZE)
+    ax_tt.set_yticklabels(times, rotation=0, fontsize=STYLE.TICK_SIZE)
+
+    ax_idp = fig.add_subplot(gs[summary_row + 1, :])
+    idp_mean_mat = np.array(idp_mean_rhos, dtype=float).reshape(-1, 1)
+    annot_idp = np.array([
+        f"{v:{fmt}}{'*' if (not np.isnan(p) and p < significance) else ''}"
+        for v, p in zip(idp_mean_rhos, idp_combined_ps_adj)
+    ]).reshape(-1, 1)
+
+    sns.heatmap(
+        idp_mean_mat, ax=ax_idp, annot=annot_idp,
+        yticklabels=all_idps, xticklabels=["Mean across time-pairs"],
+        **_hm_kws,
+    )
+    ax_idp.set_title(
+        "Per-IDP mean subject order consistency",
+        fontsize=STYLE.TITLE_SIZE,
+        fontweight="bold",
+    )
+    ax_idp.set_xlabel("")
+    ax_idp.set_ylabel("")
+    ax_idp.set_xticklabels([""], rotation=0)
+    ax_idp.tick_params(axis="y", labelsize=STYLE.TICK_SIZE)
+
+    cbar_ax = fig.add_axes([0.93, 0.15, 0.018, 0.7])
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=1))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, cax=cbar_ax)
+    cbar.set_label("Spearman ρ", fontsize=STYLE.AXIS_SIZE)
+    cbar.ax.tick_params(labelsize=STYLE.TICK_SIZE)
+
+    corr_name = {
+        "fdr_bh": "FDR (Benjamini-Hochberg)",
+        "bonferroni": "Bonferroni",
+        None: "none",
+    }.get(p_correction, str(p_correction))
+
+    note = (
+        f"Per-feature heatmaps: raw permutation p-values (α = {significance:g})\n"
+        f"Summary heatmaps: combined p-values corrected by {corr_name}"
+    )
+    fig.text(
+        0.985, 0.985, note,
+        ha="right", va="top",
+        fontsize=max(7, STYLE.TICK_SIZE - 2),
+        fontstyle="italic",
+    )
+
+    plt.suptitle(
+        f"Subject order consistency  ({len(all_idps)} features analysed)",
+        fontsize=STYLE.TITLE_SIZE,
+        fontweight="bold",
+        y=0.995,
+    )
+    plt.tight_layout(rect=[0.0, 0.0, 0.90, 0.94])
+
+    return _handle_rep_show(fig, rep, "", show)
+
+
+# ============================================================================
+# 2.  WITHIN-SUBJECT VARIABILITY
+# ============================================================================
+
 def plot_WithinSubjVar(
     df,
-    subject_col='subject',
-    idp_cols=None,
-    subject_style=None,
-    idp_style=None,
-    limit_subjects=10,
-    limit_idps_for_legend=10,
-    figsize=(14,6),
-    point_size=60,
-    jitter=0.08,
-    savepath=None,
-    rep=None,
-    show: bool = False):
+    subject_col:           str        = "subject",
+    idp_cols:              list | None = None,
+    subject_style:         dict | None = None,
+    idp_style:             dict | None = None,
+    limit_subjects:        int        = 10,
+    limit_idps_for_legend: int        = 10,
+    figsize:               tuple      = (16, 13),
+    savepath:              str | None = None,
+    rep                               = None,
+    show:                  bool       = False,
+):
+    """
+    Within-subject variability across IDPs.
 
-    """Plots within-subject variability across IDPs, showing:
-  A) Per-IDP distribution across subjects (boxplot + jittered points)
-  B) Per-IDP mean across subjects (boxplot + points)
-  C) Per-subject mean across IDPs (boxplot + points)"""
+    Panel A — per-IDP distribution (violin + strip).
+    Panel B — per-IDP mean across subjects.
+    Panel C — highest-variability subjects (horizontal bar).
+    """
+    apply_plot_theme()
+
     if idp_cols is None:
         idp_cols = [c for c in df.columns if c != subject_col]
-    subjects = df['subject'].tolist()
-    idps = [c for c in df.columns if c != 'subject']
-    subject_style, idp_style = build_style_registry(
-        subjects,
-        idps,
-        subject_palette="tab10",
-        idp_palette="Set2"
-)
 
-    subjects = df[subject_col].unique().tolist()
-    idps = list(idp_cols)
+    subjects_all = df[subject_col].unique().tolist()
+    idps_all     = list(idp_cols)
 
     if subject_style is None or idp_style is None:
-        raise ValueError("Provide subject_style and idp_style from build_style_registry()")
+        subject_style, idp_style = build_style_registry(subjects_all, idps_all)
 
-    n_subjects = len(subjects)
-    n_idps = len(idps)
-
-    long = df.melt(id_vars=subject_col, value_vars=idps,
-                   var_name='IDP', value_name='value')
+    long = df.melt(
+        id_vars=subject_col,
+        value_vars=idp_cols,
+        var_name="IDP",
+        value_name="value",
+    )
 
     fig = plt.figure(figsize=figsize)
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.4, 1], hspace=0.35, wspace=0.3)
+    gs = fig.add_gridspec(
+        3, 1,
+        height_ratios=[1.40, 0.75, 1.50],
+        hspace=0.65
+    )
 
-    axA = fig.add_subplot(gs[:, 0])
-    axB = fig.add_subplot(gs[0, 1])
-    axC = fig.add_subplot(gs[1, 1])
+    axA = fig.add_subplot(gs[0, 0])
+    axB = fig.add_subplot(gs[1, 0])
+    axC = fig.add_subplot(gs[2, 0])
 
-    # -------- A: Per-IDP boxplots + subject points --------
-    sns.boxplot(x='IDP', y='value', data=long, ax=axA, boxprops={'alpha':0.6})
-    axA.set_title("Per-IDP distribution (subjects)")
-    axA.set_xlabel("")
-    axA.set_ylabel("WSV (%)")
+    # ---- Panel A : per-IDP violin + strip --------------------------------
+    sns.violinplot(
+        x="IDP", y="value", data=long, ax=axA,
+        inner="quartile", cut=0, linewidth=1.0,
+        color=STYLE.PRIMARY, width=0.55,
+    )
+    sns.stripplot(
+        x="IDP", y="value", data=long, ax=axA,
+        color="black", size=4.5, alpha=0.28, jitter=0.15,
+    )
+    axA.set_title(
+        "Within-subject variability across IDPs",
+        fontsize=STYLE.TITLE_SIZE,
+        fontweight="bold",
+        pad=10,
+    )
+    axA.set_xlabel("", fontsize=STYLE.AXIS_SIZE)
+    axA.set_ylabel("WSV (%)", fontsize=STYLE.AXIS_SIZE)
+    rotA = _adaptive_rotation(idp_cols, threshold=8, steep=40, mild=25)
+    axA.tick_params(axis="x", labelrotation=rotA, labelsize=STYLE.TICK_SIZE)
+    axA.tick_params(axis="y", labelsize=STYLE.TICK_SIZE)
+    _strip_spines(axA)
+    axA.margins(x=0.02, y=0.06)
 
-    show_subject_legend = n_subjects <= limit_subjects
-    idp_x = {idp: i for i, idp in enumerate(idps)}
+    if len(subjects_all) <= limit_subjects:
+        axA.legend(
+            title="Subject",
+            loc="upper right",
+            frameon=False,
+            fontsize=STYLE.TICK_SIZE,
+            title_fontsize=STYLE.TICK_SIZE,
+        )
 
-    for subj in subjects:
-        row = df[df[subject_col] == subj]
-        xs, ys = [], []
-        for idp in idps:
-            xs.append(idp_x[idp] + np.random.uniform(-jitter, jitter))
-            ys.append(row[idp].values[0])
-
-        if show_subject_legend:
-            color, marker = subject_style[subj]
-            axA.scatter(xs, ys, s=point_size, marker=marker,
-                        color=color, edgecolor='k', label=subj, zorder=3)
-        else:
-            axA.scatter(xs, ys, s=point_size*0.7, marker='o',
-                        color='gray', edgecolor='k', alpha=0.8)
-
-    if show_subject_legend:
-        axA.legend(title="Subject", bbox_to_anchor=(1.02, 1), loc='best')
-
-    # -------- B: Mean across subjects per IDP --------
-    idp_means = df[idps].mean(axis=0)
-    sns.boxplot(x=idp_means.values, ax=axB, orient='h', boxprops={'alpha':0.6})
-    axB.set_title("Per-IDP mean (across subjects)")
+    # ---- Panel B : per-IDP mean across subjects --------------------------
+    idp_means = df[idp_cols].mean(axis=0)
+    sns.violinplot(
+        x=idp_means.values, ax=axB, orient="h",
+        color=STYLE.PRIMARY, inner="quartile", linewidth=1.0, width=0.45,
+    )
     axB.set_yticks([])
+    axB.set_title(
+        "Mean variability per-feature (across datapoints)",
+        fontsize=STYLE.TITLE_SIZE,
+        fontweight="bold",
+        pad=8,
+    )
+    axB.set_xlabel("WSV (%)", fontsize=STYLE.AXIS_SIZE)
+    axB.set_ylabel("", fontsize=STYLE.AXIS_SIZE)
+    axB.tick_params(axis="both", labelsize=STYLE.TICK_SIZE)
+    _strip_spines(axB)
+    axB.margins(x=0.03, y=0.10)
 
-    show_idp_legend = n_idps <= limit_idps_for_legend
+    show_idp_legend = len(idps_all) <= limit_idps_for_legend
     for idp, mean_val in idp_means.items():
         if show_idp_legend:
             color, marker = idp_style[idp]
-            axB.scatter(mean_val, 0, s=90, marker=marker,
-                        color=color, edgecolor='k', label=idp)
+            axB.scatter(
+                mean_val, 0, s=65, marker=marker,
+                color=color, edgecolor="k", linewidths=0.6,
+                label=idp, zorder=3
+            )
         else:
-            axB.scatter(mean_val, 0, s=70, marker='o',
-                        color='gray', edgecolor='k')
+            axB.scatter(
+                mean_val, 0, s=52, marker="o",
+                color=STYLE.NEUTRAL, edgecolor="k", linewidths=0.6,
+                zorder=3
+            )
 
     if show_idp_legend:
-        axB.legend(title="IDP", bbox_to_anchor=(1.02, 1), loc='best')
+        axB.legend(
+            title="IDP",
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False,
+            fontsize=STYLE.TICK_SIZE,
+            title_fontsize=STYLE.TICK_SIZE,
+        )
+        fig.subplots_adjust(right=0.83)
 
-    # -------- C: Mean across IDPs per subject --------
-    subj_means = df.set_index(subject_col)[idps].mean(axis=1)
-    sns.boxplot(x=subj_means.values, ax=axC, orient='h', boxprops={'alpha':0.6})
-    axC.set_title("Per-subject mean (across IDPs)")
-    axC.set_yticks([])
+    # ---- Panel C : highest-variability subjects --------------------------
+    subj_means = df.set_index(subject_col)[idp_cols].mean(axis=1)
+    top_subjects = subj_means.sort_values(ascending=False).head(10)
 
-    show_subject_legend = n_subjects <= limit_subjects
-    for subj, mean_val in subj_means.items():
-        if show_subject_legend:
-            color, marker = subject_style[subj]
-            axC.scatter(mean_val, 0, s=90, marker=marker,
-                        color=color, edgecolor='k', label=subj)
-        else:
-            axC.scatter(mean_val, 0, s=70, marker='o',
-                        color='gray', edgecolor='k')
+    bars = axC.barh(
+        top_subjects.index.astype(str),
+        top_subjects.values,
+        color=STYLE.PRIMARY,
+        alpha=STYLE.BAR_ALPHA,
+        height=0.82,
+    )
+    axC.invert_yaxis()
+    axC.set_title(
+        "Top 10 datapoints with the highest variability across all features",
+        fontsize=STYLE.TITLE_SIZE,
+        fontweight="bold",
+        pad=10,
+    )
+    axC.set_xlabel("Mean WSV (%)", fontsize=STYLE.AXIS_SIZE)
+    axC.set_ylabel("", fontsize=STYLE.AXIS_SIZE)
+    axC.tick_params(axis="both", labelsize=STYLE.TICK_SIZE)
+    _strip_spines(axC)
+    axC.margins(y=0.08)
+    _annotate_hbar(axC, bars, fmt="{:.1f}")
 
-    # if show_subject_legend:
-    #     axC.legend(title="Subject", bbox_to_anchor=(1.02, 1), loc='best')
-    plt.suptitle("Within subject variability", fontsize=13)
-    plt.tight_layout(rect=[0, 0, 0.88, 0.95])
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
 
     if savepath:
-        plt.savefig(savepath, dpi=300, bbox_inches="tight")
+        plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")
 
-    if rep is not None:
-        rep.log_plot(fig, "Within subject variability")
-        plt.close(fig)
-        return None, None  # or return a small marker that it was logged
-    if show:
-        plt.show()
-    return fig
+    return _handle_rep_show(fig, rep, "", show)
 
-### Multivariate Site difference: MD
-@rep_plot_wrapper
-def plot_MultivariateBatchDifference(df,
-                         batch_col='batch',
-                         value_col='mdval',
-                         avg_label='average_batch',
-                         figsize=(8,6),
-                         sort_by_value=True,
-                         sort_rest_desc=True,
-                         value_format="{:.1f}",
-                         savepath=None,
-                         rep=None,
-                         show: bool = False):
+# ============================================================================
+# 3.  MULTIVARIATE BATCH DIFFERENCE (MAHALANOBIS)
+# ============================================================================
+
+def plot_MultivariateBatchDifference(
+    df,
+    batch_col:    str        = "batch",
+    value_col:    str        = "mdval",
+    avg_label:    str        = "average_batch",
+    figsize:      tuple      = (8, 6),
+    sort_by_value:bool       = True,
+    sort_rest_desc:bool      = True,
+    value_format: str        = "{:.1f}",
+    savepath:     str | None = None,
+    rep                      = None,
+    show:         bool       = False,
+):
     """
-    Horizontal bar chart with:
-      - average_batch always at the top
-      - remaining batches optionally sorted by mdval
-      - value labels rounded to 1 decimal
+    Horizontal bar chart of Mahalanobis distances per batch.
+    The average batch is pinned to the top; remaining batches are optionally sorted.
     """
-    avg_color='tab:red'
-    bar_color='tab:blue'
+    apply_plot_theme()
+
     if batch_col not in df.columns or value_col not in df.columns:
-        raise ValueError("DataFrame must contain specified batch and value columns.")
+        raise ValueError("DataFrame must contain the specified batch and value columns.")
 
-    df_plot = df[[batch_col, value_col]].copy()
-
-    # --- split average vs rest ---
-    avg_df = df_plot[df_plot[batch_col] == avg_label]
-    rest_df = df_plot[df_plot[batch_col] != avg_label]
+    avg_df  = df[df[batch_col] == avg_label][[batch_col, value_col]]
+    rest_df = df[df[batch_col] != avg_label][[batch_col, value_col]].copy()
 
     if sort_by_value:
         rest_df = rest_df.sort_values(value_col, ascending=not sort_rest_desc)
 
-    # --- recombine: average always first ---
     plot_df = pd.concat([avg_df, rest_df], ignore_index=True)
-
     batches = plot_df[batch_col].astype(str).tolist()
-    values = plot_df[value_col].astype(float).tolist()
-    y_pos = np.arange(len(batches))
+    values  = plot_df[value_col].astype(float).tolist()
+    y_pos   = np.arange(len(batches))
 
     fig, ax = plt.subplots(figsize=figsize)
-
-    colors = [avg_color if b == avg_label else bar_color for b in batches]
-    bars = ax.barh(y_pos, values, color=colors, edgecolor='k', alpha=0.9)
-
-    # --- numeric labels ---
-    x_offset = max(values) * 0.01
-    for bar, val in zip(bars, values):
-        ax.text(bar.get_width() + x_offset,
-                bar.get_y() + bar.get_height()/2,
-                value_format.format(val),
-                va='center', ha='left',
-                fontsize=9, weight='bold')
+    colors  = [STYLE.SECONDARY if b == avg_label else STYLE.PRIMARY for b in batches]
+    bars    = ax.barh(
+        y_pos, values, color=colors,
+        edgecolor="none", alpha=STYLE.BAR_ALPHA, height=0.78,
+    )
 
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(batches, fontsize=9)
-    ax.invert_yaxis()  # average stays visually on top
-    ax.set_xlabel(value_col)
-    ax.set_ylabel(batch_col)
-    ax.set_title(f"{value_col} per {batch_col}")
+    ax.invert_yaxis()
+    _configure_hbar_panel(
+        ax,
+        title="Multivariate batch differences",
+        xlabel="Mahalanobis distance",
+        yticklabels=batches,
+        show_legend=_batch_difference_legend_handles(),
+        legend_loc="lower right",
+        legend_title="Colour key",
+    )
+    _annotate_hbar(ax, bars, fmt=value_format)
+    ax.text(
+        0.01, 0.98,
+        "Mahalanobis distance per batch",
+        transform=ax.transAxes,
+        fontsize=STYLE.TICK_SIZE,
+        fontstyle="italic",
+        va="bottom",
+        ha="left",
+    )
 
-    plt.tight_layout()
-
+    _finalise(fig)
     if savepath:
-        plt.savefig(savepath, dpi=300, bbox_inches='tight')
-    #plt.show()
-    
-    if rep is not None:
-        rep.log_plot(fig, "Multivariate batch differences (with overall distribution) using Mahalanobis distances")
-        plt.close(fig)
-        return None, None  # or return a small marker that it was logged
-    if show:
-        plt.show()
-    return fig
+        plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")
 
-### mixed effects models plots
-def _build_default_idp_style(idps, palette="Set2", markers=None):
-    """Helper to build a default idp_style dict if not provided."""
-    if markers is None:
-        markers = ['o','s','^','D','P','X','v','<','>','*','h','H']
-    colors = sns.color_palette(palette, max(2, len(idps)))
-    idp_style = {idp: (colors[i % len(colors)], markers[i % len(markers)]) for i, idp in enumerate(idps)}
-    return idp_style
+    return _handle_rep_show(fig, rep, "", show)
 
-@rep_plot_wrapper
-def plot_MixedEffectsPart1(df,
-                          idp_col='IDP',
-                          metrics=None,
-                          plot_type='bar',           # 'bar' or 'box'
-                          idp_style=None,           # dict {idp: (color, marker)}
-                          limit_idps=10,            # for legend in box mode
-                          figsize=(14,4),
-                          value_format_float="{:.1f}",
-                          value_format_int="{:d}",
-                          seed=None,
-                          savepath=None,
-                          rep=None,
-                          show: bool=False,
-                          # new args
-                          display: str = "subplots",   # 'subplots' (default), 'separate', or 'single'
-                          metric: str = None           # required when display == 'single'
-                          ):
+# ============================================================================
+# 4.  MIXED EFFECTS — PART 1  (ICC / n_sig / WCV)
+# ============================================================================
+
+def plot_MixedEffectsPart1(
+    df,
+    idp_col:          str        = "IDP",
+    metrics:          list | None = None,
+    plot_type:        str        = "bar",
+    idp_style:        dict | None = None,
+    limit_idps:       int         = 10,
+    figsize:          tuple       = (4, 6),
+    seed:             int | None  = None,
+    savepath:         str | None  = None,
+    rep                          = None,
+    show:             bool       = False,
+    display:          str        = "subplots",
+    metric:           str | None = None,
+    show_pairwise_heatmap: bool = True,
+):
     """
-    Plots one figure per metric (subplots) OR separate figures per metric.
+    Plot ICC, residual batch significance counts, and WCV per IDP.
 
-    - display='subplots' : original behaviour, 1 fig with n_metrics subplots (returns Figure).
-    - display='separate' : create one Figure per metric, return dict {metric: Figure}.
-    - display='single'   : create a single Figure for the metric named in `metric`, return Figure.
-
-    Defaults: metrics excludes 'anova_batches' by design (use AdditiveEffect_long for omnibus).
+    display : 'subplots' (all metrics in one figure),
+              'separate'  (one figure per metric),
+              'single'    (one figure for `metric`).
     """
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
+    apply_plot_theme()
 
     if display not in ("subplots", "separate", "single"):
-        raise ValueError("display must be 'subplots', 'separate' or 'single'")
+        raise ValueError("display must be 'subplots', 'separate', or 'single'.")
 
-    # sensible default metrics (remove anova_batches)
     if metrics is None:
-        metrics = ['n_is_batchSig', 'ICC', 'WCV']  # default excludes 'anova_batches'
+        metrics = ["n_is_batchSig", "ICC", "WCV"]
 
     missing = [m for m in metrics if m not in df.columns]
     if missing:
@@ -2827,560 +3461,748 @@ def plot_MixedEffectsPart1(df,
 
     idps = list(df[idp_col].astype(str).values)
     n_idps = len(idps)
+
     if idp_style is None:
         idp_style = _build_default_idp_style(idps)
 
     rng = np.random.RandomState(seed) if seed is not None else np.random
 
-    # helper to draw one metric into an axis
-    def _draw_metric_ax(ax, metric_name):
-        vals = pd.to_numeric(df[metric_name], errors='coerce').values
+    def _draw(ax: plt.Axes, metric_name: str) -> None:
+        vals = pd.to_numeric(df[metric_name], errors="coerce").values
+        y_pos = np.arange(n_idps)
 
-        if plot_type == 'bar':
-            x_pos = np.arange(n_idps)
-            colors = [idp_style[idp][0] for idp in idps]
-            bars = ax.bar(x_pos, vals, color=colors, edgecolor='k', alpha=0.9)
-            ax.set_xticks(x_pos)
-            ax.set_xticklabels(idps, rotation=45, ha='right', fontsize=9)
-            ax.set_title(metric_name)
-            ax.set_ylabel(metric_name)
+        if plot_type == "bar":
+            # ------------------------------------------------------------
+            # Pairwise batch/site-count plot
+            # ------------------------------------------------------------
+            if metric_name == "n_is_batchSig":
+                bars = ax.barh(
+                    y_pos, vals, height=0.85,
+                    color=STYLE.PRIMARY, edgecolor="none", alpha=STYLE.BAR_ALPHA
+                )
+                ax.set_yticks(y_pos)
+                ax.invert_yaxis()
 
-            # numeric labels above bars; compute margin
-            if np.all(np.isnan(vals)) or np.nanmax(np.abs(vals)) == 0:
-                y_top = 1.0
-            else:
-                y_top = np.nanmax(vals)
-            margin = 0.12 * (y_top if y_top != 0 else 1.0)
-            cur_ylim = ax.get_ylim()
-            ax.set_ylim(cur_ylim[0], cur_ylim[1] + margin)
+                _configure_hbar_panel(
+                    ax,
+                    title="Site-pairwise batch effects",
+                    xlabel="Number of significant pairwise site differences\n(Bonferroni-adjusted within each feature)",
+                    yticklabels=idps,
+                )
+                ax.margins(y=0.12)
 
-            for bar, v in zip(bars, vals):
-                if pd.isna(v):
-                    label = ""
-                else:
-                    if float(v).is_integer():
-                        label = value_format_int.format(int(round(v)))
-                    else:
-                        label = value_format_float.format(float(v))
-                x = bar.get_x() + bar.get_width()/2
-                y = bar.get_height()
-                ax.text(x, y + 0.01*(y_top if y_top!=0 else 1.0), label,
-                        ha='center', va='bottom', fontsize=8, fontweight='bold')
-
-        elif plot_type == 'box':
-            metric_vals = pd.Series(vals, index=idps)
-            clean_vals = metric_vals.dropna().values
-            if len(clean_vals) == 0:
-                ax.text(0.5,0.5,"No data", ha='center')
+                offset = _bar_label_offset(ax, "x")
+                for bar, v in zip(bars, vals):
+                    if np.isnan(v):
+                        continue
+                    ax.text(
+                        v + offset,
+                        bar.get_y() + bar.get_height() / 2,
+                        f"{int(v)}",
+                        va="center", ha="left",
+                        fontsize=STYLE.LABEL_SIZE, fontweight="bold",
+                    )
                 return
-            bp = ax.boxplot(clean_vals, vert=True, widths=0.6, patch_artist=True)
+
+            # ------------------------------------------------------------
+            # ICC plot
+            # ------------------------------------------------------------
+            if metric_name.upper() == "ICC":
+                colors = [
+                    (STYLE.NEUTRAL if np.isnan(v)
+                     else STYLE.ICC_EXCELLENT if v >= 0.90
+                     else STYLE.ICC_GOOD if v >= 0.75
+                     else STYLE.ICC_LOWER)
+                    for v in vals
+                ]
+                bars = ax.barh(
+                    y_pos, vals, height=0.85,
+                    color=colors, edgecolor="none", alpha=STYLE.BAR_ALPHA
+                )
+                for thr in (0.50, 0.75, 0.90):
+                    ax.axvline(thr, color="gray", linestyle="--", linewidth=0.8, alpha=0.35)
+
+                ax.set_yticks(y_pos)
+                ax.set_xlim(0, 1.05)
+                ax.invert_yaxis()
+
+                _configure_hbar_panel(
+                    ax,
+                    title="Between-subject reliability",
+                    xlabel="Intraclass correlation (ICC)",
+                    yticklabels=idps,
+                    show_legend=_icc_legend_handles(),
+                    legend_loc="center left",
+                    legend_title="ICC color key",
+                )
+                ax.margins(y=0.12)
+
+                offset = _bar_label_offset(ax, "x")
+                for bar, v in zip(bars, vals):
+                    if not np.isnan(v):
+                        ax.text(
+                            v + offset,
+                            bar.get_y() + bar.get_height() / 2,
+                            f"{v:.2f}",
+                            va="center", ha="left",
+                            fontsize=STYLE.LABEL_SIZE, fontweight="bold",
+                        )
+                return
+
+            # ------------------------------------------------------------
+            # Generic bar plot
+            # ------------------------------------------------------------
+            colors_g = [idp_style[idp][0] for idp in idps]
+            bars = ax.bar(
+                y_pos, vals,
+                color=colors_g, edgecolor="none", alpha=STYLE.BAR_ALPHA
+            )
+            ax.set_xticks(y_pos)
+            ax.set_xticklabels(idps, rotation=45, ha="right", fontsize=STYLE.TICK_SIZE)
+            ax.set_ylabel(metric_name, fontsize=STYLE.AXIS_SIZE)
+            ax.set_title(metric_name, fontsize=STYLE.TITLE_SIZE, fontweight="bold", pad=10)
+            ax.tick_params(axis="y", labelsize=STYLE.TICK_SIZE)
+            ax.grid(axis="y", linestyle="--", alpha=STYLE.GRID_ALPHA)
+            _strip_spines(ax)
+            _annotate_vbar(ax, bars)
+
+        elif plot_type == "box":
+            clean = vals[~np.isnan(vals)]
+            if clean.size == 0:
+                ax.text(0.5, 0.5, "No data", ha="center", transform=ax.transAxes)
+                return
+
+            ax.boxplot(clean, vert=True, widths=0.6, patch_artist=True)
             ax.set_xticks([])
-            ax.set_title(metric_name)
-            ax.set_ylabel(metric_name)
+            ax.set_ylabel(metric_name, fontsize=STYLE.AXIS_SIZE)
+            ax.set_title(metric_name, fontsize=STYLE.TITLE_SIZE, fontweight="bold", pad=10)
+            ax.tick_params(axis="both", labelsize=STYLE.TICK_SIZE)
+            ax.grid(axis="y", linestyle="--", alpha=STYLE.GRID_ALPHA)
+            _strip_spines(ax)
 
-            show_idp_legend = (n_idps <= limit_idps)
-            legend_handles = []
-            legend_labels = []
-            for i, idp in enumerate(idps):
-                v = metric_vals.loc[idp]
-                if pd.isna(v):
+            series = pd.Series(vals, index=idps)
+            show_legend = n_idps <= limit_idps
+            handles, labels_l = [], []
+
+            for idp in idps:
+                v = series.loc[idp]
+                if np.isnan(v):
                     continue
-                jitter_x = rng.uniform(-0.06, 0.06)
-                x = 1.0 + jitter_x
-                if show_idp_legend:
+                jx = rng.uniform(-0.06, 0.06) + 1.0
+                if show_legend:
                     color, marker = idp_style[idp]
-                    sc = ax.scatter(x, v, marker=marker, color=color, edgecolor='k', s=80, zorder=5)
-                    if idp not in legend_labels:
-                        legend_handles.append(sc)
-                        legend_labels.append(idp)
+                    sc = ax.scatter(
+                        jx, v, marker=marker, color=color,
+                        edgecolor="k", s=70, linewidths=0.6, zorder=5
+                    )
+                    if idp not in labels_l:
+                        handles.append(sc)
+                        labels_l.append(idp)
                 else:
-                    ax.scatter(x, v, marker='o', color='gray', edgecolor='k', s=40, zorder=4)
+                    ax.scatter(
+                        jx, v, marker="o", color=STYLE.NEUTRAL,
+                        edgecolor="k", s=40, linewidths=0.6, zorder=4
+                    )
 
-            # autoscale y limits with margin
-            vmin = np.nanmin(clean_vals)
-            vmax = np.nanmax(clean_vals)
-            rngv = vmax - vmin if vmax > vmin else max(abs(vmax), 1.0)
-            ax.set_ylim(vmin - 0.06*rngv, vmax + 0.12*rngv)
+            vmin, vmax_ = np.nanmin(clean), np.nanmax(clean)
+            rng_ = vmax_ - vmin if vmax_ != vmin else max(abs(vmax_), 1.0)
+            ax.set_ylim(vmin - 0.06 * rng_, vmax_ + 0.12 * rng_)
 
-            # If legend desired and small number of idps, add it to the bottom of this axis
-            if show_idp_legend and len(legend_handles) > 0:
-                # place legend underneath this axis (tight placement)
-                ax_legend = ax.figure.add_axes([ax.get_position().x0, ax.get_position().y0 - 0.12,
-                                                ax.get_position().width, 0.08])
-                ax_legend.axis('off')
-                ax_legend.legend(legend_handles, legend_labels, ncol=min(6, len(legend_labels)),
-                                 frameon=False, loc='center')
-
-        ax.grid(axis='y', linestyle='--', alpha=0.25)
-
-    # --- dispatch display modes ---
+    # ------------------------------------------------------------------
+    # SUBPLOTS MODE
+    # ------------------------------------------------------------------
     if display == "subplots":
-        n_metrics = len(metrics)
-        # ensure at least one row/col layout works even for 1 metric
-        fig, axes = plt.subplots(1, n_metrics, figsize=figsize, squeeze=False)
+        n_met = len(metrics)
+        fig_h = max(figsize[1], 4.8 * n_met)
+        fig_w = max(figsize[0], 8.0)
+
+        fig, axes = plt.subplots(
+            n_met, 1,
+            figsize=(fig_w, fig_h),
+            squeeze=False
+        )
         axes = axes.flatten()
-        for ax_idx, metric in enumerate(metrics):
-            _draw_metric_ax(axes[ax_idx], metric)
-        plt.suptitle(f"Number of pairs of batches significant ({plot_type} plot)", fontsize=13)
-        plt.tight_layout(rect=[0,0,0.95,0.95])
+
+        for i, m in enumerate(metrics):
+            _draw(axes[i], m)
+
+        fig.tight_layout()
 
         if savepath:
-            plt.savefig(savepath, dpi=300, bbox_inches='tight')
+            plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")
 
         if rep is not None:
-            rep.log_plot(fig, "Results from the mixed effects models")
+            rep.log_plot(fig, "")
             plt.close(fig)
+
+            # optional pairwise heatmap
+            if show_pairwise_heatmap and "pairwise_site_tests" in df.columns and "n_is_batchSig" in metrics:
+                heatmap_fig = plot_PairwiseSiteDifferencesHeatmap(
+                    df,
+                    idp_col=idp_col,
+                    records_col="pairwise_site_tests",
+                    sig_key="sig_bonf",
+                    rep=None,
+                    show=False,
+                )
+                if heatmap_fig is not None:
+                    rep.log_plot(heatmap_fig, "")
+                    plt.close(heatmap_fig)
+
             return None, None
+
         if show:
             plt.show()
-        return fig
+        return fig, axes[:len(metrics)].tolist()
 
+    # ------------------------------------------------------------------
+    # SINGLE MODE
+    # ------------------------------------------------------------------
     elif display == "single":
-        if metric is None:
-            raise ValueError("When display=='single' you must provide a metric name via `metric` argument.")
-        if metric not in metrics:
-            raise ValueError(f"Requested metric '{metric}' not present in metrics list or DataFrame.")
+        if metric is None or metric not in metrics:
+            raise ValueError(f"Provide a valid metric name via `metric=`; got {metric!r}.")
+
         fig, ax = plt.subplots(1, 1, figsize=figsize)
-        _draw_metric_ax(ax, metric)
-        plt.suptitle(f"IDP metric: {metric} ({plot_type})", fontsize=13)
-        plt.tight_layout(rect=[0,0,0.95,0.95])
+        _draw(ax, metric)
+        _finalise(fig)
 
         if savepath:
-            # if savepath is provided and display is 'single', save with metric name suffix
             import os
             base, ext = os.path.splitext(savepath)
-            spath = f"{base}_{metric}{ext or '.png'}"
-            plt.savefig(spath, dpi=300, bbox_inches='tight')
+            plt.savefig(f"{base}_{metric}{ext or '.png'}", dpi=STYLE.DPI, bbox_inches="tight")
 
         if rep is not None:
             rep.log_plot(fig, f"Mixed effects metric {metric}")
             plt.close(fig)
+
+            if show_pairwise_heatmap and metric == "n_is_batchSig" and "pairwise_site_tests" in df.columns:
+                heatmap_fig = plot_PairwiseSiteDifferencesHeatmap(
+                    df,
+                    idp_col=idp_col,
+                    records_col="pairwise_site_tests",
+                    sig_key="sig_bonf",
+                    rep=None,
+                    show=False,
+                )
+                if heatmap_fig is not None:
+                    rep.log_plot(heatmap_fig, "Pairwise site-difference heatmap")
+                    plt.close(heatmap_fig)
+
             return None, None
+
         if show:
             plt.show()
-        return fig
+        return fig, [ax]
 
-    else:  # display == "separate"
-        figs = {}
-        for metric in metrics:
+    # ------------------------------------------------------------------
+    # SEPARATE MODE
+    # ------------------------------------------------------------------
+    else:
+        figs: dict[str, plt.Figure] = {}
+        for m in metrics:
             fig_i, ax_i = plt.subplots(1, 1, figsize=figsize)
-            _draw_metric_ax(ax_i, metric)
-            plt.suptitle(f"IDP metric: {metric} ({plot_type})", fontsize=13)
-            plt.tight_layout(rect=[0,0,0.95,0.95])
-            figs[metric] = fig_i
+            _draw(ax_i, m)
+            _finalise(fig_i)
+            figs[m] = fig_i
 
             if savepath:
                 import os
                 base, ext = os.path.splitext(savepath)
-                spath = f"{base}_{metric}{ext or '.png'}"
-                fig_i.savefig(spath, dpi=300, bbox_inches='tight')
+                fig_i.savefig(f"{base}_{m}{ext or '.png'}", dpi=STYLE.DPI, bbox_inches="tight")
 
             if rep is not None:
-                rep.log_plot(fig_i, f"Mixed effects metric {metric}")
+                rep.log_plot(fig_i, f"Mixed effects metric {m}")
                 plt.close(fig_i)
-
-        # If rep was set we already logged and closed each fig; return None, None consistent with rep
-        if rep is not None:
-            return None, None
-
-        # If show requested, show all (note: may block depending on environment)
-        if show:
-            for fig_i in figs.values():
+            elif show:
                 fig_i.show()
 
-        # Return dict of figs, caller can pick whichever one they want
+        if rep is not None and show_pairwise_heatmap and "pairwise_site_tests" in df.columns and "n_is_batchSig" in metrics:
+            heatmap_fig = plot_PairwiseSiteDifferencesHeatmap(
+                df,
+                idp_col=idp_col,
+                records_col="pairwise_site_tests",
+                sig_key="sig_bonf",
+                rep=None,
+                show=False,
+            )
+            if heatmap_fig is not None:
+                rep.log_plot(heatmap_fig, "Pairwise site-difference heatmap")
+                plt.close(heatmap_fig)
+
+        if rep is not None:
+            return None, None
         return figs
 
-
-@rep_plot_wrapper
-def plot_MixedEffectsPart2(df,
-                                         idp_col='IDP',
-                                         fix_eff=('age','sex'),
-                                         p_thr=0.05,
-                                         effect_style=None,    # dict eff -> (color, marker)
-                                         idp_order=None,
-                                         figsize=(10, 4),
-                                         marker_size=80,
-                                         cap_width=0.03,
-                                         linewidth=2.0,
-                                         xtick_rotation=45,
-                                         highlight_color='red',
-                                         title=None,
-                                         savepath=None,
-                                         rep=None,
-                                         show: bool=False) -> tuple[plt.Figure, list[plt.Axes]]:
+def plot_PairwiseSiteDifferencesHeatmap(
+    df: pd.DataFrame,
+    idp_col: str = "IDP",
+    records_col: str = "pairwise_site_tests",
+    sig_key: str = "sig_bonf",
+    title: str = "Pairwise site differences by feature",
+    p_thr: float = 0.05,
+    figsize: tuple = (10, 8),
+    top_n: int = 20,
+    max_full_pairs: int = 50,
+    rep=None,
+    show: bool = False,
+):
     """
-    Plot fixed-effect estimates and confidence intervals across IDPs.
-
-    Args:
-        df: DataFrame containing `IDP` rows and effect summary columns such as
-            `"{eff}_est"`, `"{eff}_pval"`, `"{eff}_ciL"`, and `"{eff}_ciU"`.
-        idp_col: Column containing IDP names.
-        fix_eff: Iterable of fixed-effect names to plot.
-        p_thr: P-value threshold used to highlight significant estimates.
-        effect_style: Optional mapping from effect name to `(color, marker)`.
-        idp_order: Optional IDP display order. If `None`, the DataFrame order is
-            used.
-        figsize: Figure size passed to Matplotlib.
-        marker_size: Marker size for effect estimates.
-        cap_width: Horizontal half-width of the confidence interval caps.
-        linewidth: Line width for confidence intervals.
-        xtick_rotation: Rotation angle for x-axis labels.
-        highlight_color: Fill color used when `p < p_thr`.
-        title: Optional figure title.
-        savepath: Optional file path for saving the figure.
-        rep: Optional report object used to log the plot.
-        show: Whether to display the figure interactively.
-
-    Returns:
-        tuple[plt.Figure, list[plt.Axes]]: The Matplotlib figure and the list of
-        subplot axes in `fix_eff` order.
+    Discrete binary heatmap:
+    grey = not significant
+    red  = significant after Bonferroni correction
     """
-    import warnings
+    apply_plot_theme()
+
+    mat, site_code_map, use_compact = _build_pairwise_pair_matrix(
+        df,
+        idp_col=idp_col,
+        records_col=records_col,
+        sig_key=sig_key,
+        top_n=top_n,
+        max_full_pairs=max_full_pairs,
+    )
+
+    if mat.empty:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.axis("off")
+        ax.text(0.5, 0.5, "No pairwise site-test records found.", ha="center", va="center")
+        return _handle_rep_show(fig, rep, "", show)
+
+    fig_h = max(figsize[1], 0.35 * len(mat.index) + 2.5)
+    fig_w = max(figsize[0], 0.35 * len(mat.columns) + 4.0)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+
+    annot = mat.replace({0.0: "", 1.0: "•"})
+
+    cmap = ListedColormap(["#f2f2f2", "#b2182b"])
+    norm = BoundaryNorm([-0.5, 0.5, 1.5], cmap.N)
+
+    sns.heatmap(
+        mat,
+        ax=ax,
+        cmap=cmap,
+        norm=norm,
+        linewidths=0.25,
+        linecolor="white",
+        annot=annot,
+        fmt="",
+        cbar=False,
+        annot_kws=dict(fontsize=max(7, STYLE.ANNOT_SIZE), fontweight="bold"),
+    )
+
+    mode_text = (
+        f"Compact view: top {top_n} most frequent pairs"
+        if use_compact else
+        "Full view: all pairwise site comparisons"
+    )
+
+    ax.set_title(
+        f"{title}\n"
+        f"({mode_text}; • = significant after Bonferroni correction, grey = not significant)",
+        fontsize=STYLE.TITLE_SIZE,
+        fontweight="bold",
+        pad=12,
+    )
+    ax.set_xlabel("Pair code", fontsize=STYLE.AXIS_SIZE)
+    ax.set_ylabel("Feature / IDP", fontsize=STYLE.AXIS_SIZE)
+    ax.tick_params(axis="x", labelsize=STYLE.TICK_SIZE, rotation=45)
+    ax.tick_params(axis="y", labelsize=STYLE.TICK_SIZE)
+    _strip_spines(ax)
+
+    key_lines = [f"{code} = {site}" for code, site in site_code_map.items()]
+    key_text = "Site code key: " + ", ".join(key_lines)
+
+    fig.text(
+        0.99, -0.04,
+        textwrap.fill(key_text, width=110),
+        ha="right", va="bottom",
+        fontsize=max(7, STYLE.TICK_SIZE - 2),
+        style="italic",
+    )
+    fig.subplots_adjust(bottom=0.16)
+
+    _finalise(fig)
+    return _handle_rep_show(fig, rep, "", show)
+
+# ============================================================================
+# 5.  MIXED EFFECTS — PART 2  (fixed-effect estimates + CIs)
+# ============================================================================
+
+def plot_MixedEffectsPart2(
+    df,
+    idp_col:         str        = "IDP",
+    fix_eff:         tuple      = ("age", "sex"),
+    p_thr:           float      = 0.05,
+    effect_style:    dict | None = None,
+    idp_order:       list | None = None,
+    marker_size:     int         = 160,
+    figsize:         tuple       = (9.0, 3.2),
+    cap_width:       float       = 0.03,
+    linewidth:       float       = 2.4,
+    xtick_rotation:  int         = 25,
+    highlight_color: str         = "red",
+    savepath:        str | None  = None,
+    rep                          = None,
+    show:            bool        = False,
+) -> tuple[plt.Figure, list[plt.Axes]]:
+    """
+    Fixed-effect estimates and 95% confidence intervals per IDP.
+
+    Significant estimates (p < p_thr) are filled red; non-significant are open.
+    One covariate per row, compact layout.
+    """
+    apply_plot_theme()
+
+    from matplotlib.lines import Line2D
 
     effs = list(fix_eff)
-    # idp ordering
+
     if idp_order is None:
         idps = list(df[idp_col].astype(str).values)
     else:
-        missing_idps = [i for i in idp_order if i not in df[idp_col].values]
-        if missing_idps:
-            raise ValueError(f"idp_order contains unknown IDPs: {missing_idps}")
+        bad = [i for i in idp_order if i not in df[idp_col].values]
+        if bad:
+            raise ValueError(f"Unknown IDPs in idp_order: {bad}")
         idps = list(idp_order)
-    n_idps = len(idps)
-    if n_idps == 0:
-        raise ValueError("No IDPs provided/available.")
 
-    # build default styles for effects if needed
+    n_idps = len(idps)
+    if not n_idps:
+        raise ValueError("No IDPs provided.")
+
     if effect_style is None:
         palette = sns.color_palette("tab10", max(3, len(effs)))
-        markers = ['o','s','D','^','v','P','X','*','h','<','>']
-        effect_style = {eff: (palette[i % len(palette)], markers[i % len(markers)]) for i, eff in enumerate(effs)}
-    else:
-        # fill missing effects with defaults
-        palette = sns.color_palette("tab10", max(3, len(effs)))
-        markers = ['o','s','D','^','v','P','X','*','h','<','>']
-        for i, eff in enumerate(effs):
-            if eff not in effect_style:
-                effect_style[eff] = (palette[i % len(palette)], markers[i % len(markers)])
+        markers = ["o", "s", "D", "^", "v", "P", "X", "*", "h"]
+        effect_style = {
+            e: (palette[i % len(palette)], markers[i % len(markers)])
+            for i, e in enumerate(effs)
+        }
 
-    n_eff = len(effs)
-    # layout: try a single row; if many effects stack into rows of up to 3
-    ncols = min(3, n_eff)
-    nrows = int(np.ceil(n_eff / ncols))
-    fig, axes_grid = plt.subplots(nrows=nrows, ncols=ncols, figsize=(figsize[0]*ncols, figsize[1]*nrows),
-                                  squeeze=False)
+    nrows = len(effs)
+    ncols = 1
+
+    fig_w = max(7.5, figsize[0])
+    fig_h = max(3.2 * nrows, 3.0)
+
+    fig, axes_grid = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=(fig_w, fig_h),
+        squeeze=False,
+    )
     axes = axes_grid.flatten()
-
-    legend_handles = []
-    legend_labels = []
 
     for idx, eff in enumerate(effs):
         ax = axes[idx]
         est_col = f"{eff}_est"
-        p_col = f"{eff}_pval"
+        p_col   = f"{eff}_pval"
         ciL_col = f"{eff}_ciL"
         ciU_col = f"{eff}_ciU"
 
-        missing_cols = [c for c in (est_col, p_col, ciL_col, ciU_col) if c not in df.columns]
-        if missing_cols:
-            warnings.warn(f"Skipping effect '{eff}' — missing columns: {missing_cols}")
+        missing = [c for c in (est_col, p_col, ciL_col, ciU_col) if c not in df.columns]
+        if missing:
+            warnings.warn(f"Skipping effect '{eff}' — missing columns: {missing}")
             ax.set_visible(False)
             continue
 
-        color, marker = effect_style[eff]
-        # gather arrays in idps order
-        ests = []
-        pvals = []
-        ciLs = []
-        ciUs = []
-        for idp in idps:
+        def _get(idp: str, col: str) -> float:
             row = df[df[idp_col] == idp]
-            if row.shape[0] == 0:
-                ests.append(np.nan); pvals.append(np.nan); ciLs.append(np.nan); ciUs.append(np.nan)
-            else:
-                r0 = row.iloc[0]
-                ests.append(pd.to_numeric(r0.get(est_col, np.nan), errors='coerce'))
-                pvals.append(pd.to_numeric(r0.get(p_col, np.nan), errors='coerce'))
-                ciLs.append(pd.to_numeric(r0.get(ciL_col, np.nan), errors='coerce'))
-                ciUs.append(pd.to_numeric(r0.get(ciU_col, np.nan), errors='coerce'))
+            return pd.to_numeric(row.iloc[0].get(col, np.nan), errors="coerce") if row.shape[0] else np.nan
 
-        ests = np.array(ests, dtype=float)
-        pvals = np.array(pvals, dtype=float)
-        ciLs = np.array(ciLs, dtype=float)
-        ciUs = np.array(ciUs, dtype=float)
+        ests  = np.array([_get(i, est_col) for i in idps], dtype=float)
+        pvals = np.array([_get(i, p_col)   for i in idps], dtype=float)
+        ciLs  = np.array([_get(i, ciL_col) for i in idps], dtype=float)
+        ciUs  = np.array([_get(i, ciU_col) for i in idps], dtype=float)
+        x     = np.arange(n_idps)
 
-        x = np.arange(n_idps)
-        # plot CI lines with caps
-        for xi, low, high in zip(x, ciLs, ciUs):
-            if np.isnan(low) and np.isnan(high):
+        for xi, lo, hi in zip(x, ciLs, ciUs):
+            if np.isnan(lo) and np.isnan(hi):
                 continue
-            ax.plot([xi, xi], [low, high], color=color, linewidth=linewidth, zorder=1)
-            # caps
-            ax.plot([xi - cap_width, xi + cap_width], [low, low], color=color, linewidth=linewidth, zorder=1)
-            ax.plot([xi - cap_width, xi + cap_width], [high, high], color=color, linewidth=linewidth, zorder=1)
+            ax.plot([xi, xi], [lo, hi], color="black", linewidth=linewidth, zorder=1)
+            ax.plot([xi - cap_width, xi + cap_width], [lo, lo], color="black", linewidth=linewidth, zorder=1)
+            ax.plot([xi - cap_width, xi + cap_width], [hi, hi], color="black", linewidth=linewidth, zorder=1)
 
-        # plot estimates
-        for xi, est, p in zip(x, ests, pvals):
+        for xi, est, pv in zip(x, ests, pvals):
             if np.isnan(est):
                 continue
-            if not np.isnan(p) and p < p_thr:
-                ax.scatter(xi, est, marker=marker, s=marker_size, color=highlight_color, edgecolor='k', zorder=5)
-            else:
-                ax.scatter(xi, est, marker=marker, s=marker_size, facecolors='none',
-                           edgecolors=color, linewidths=1.5, zorder=5)
+            sig = not np.isnan(pv) and pv < p_thr
+            fc = highlight_color if sig else "white"
+            lw_m = 1.4 if sig else 1.8
+            ax.scatter(
+                xi, est,
+                marker="o",
+                s=marker_size,
+                facecolors=fc,
+                edgecolors="black",
+                linewidths=lw_m,
+                zorder=5,
+            )
 
-        # aesthetics
         ax.set_xticks(x)
-        ax.set_xticklabels(idps, rotation=xtick_rotation, ha='right')
+        rot = xtick_rotation if xtick_rotation is not None else _adaptive_rotation(idps, threshold=7, steep=45, mild=25)
+        _set_ticklabels(ax, "x", idps, rotation=rot, ha="right" if rot else "center")
         ax.set_xlim(-0.6, n_idps - 1 + 0.6)
-        # autoscale y to include CIs comfortably
-        finite_vals = np.concatenate([ciLs[~np.isnan(ciLs)], ciUs[~np.isnan(ciUs)], ests[~np.isnan(ests)]]) if (np.any(~np.isnan(ciLs)) or np.any(~np.isnan(ciUs))) else ests[~np.isnan(ests)]
-        if finite_vals.size > 0:
-            vmin = np.nanmin(finite_vals); vmax = np.nanmax(finite_vals)
-            vrange = vmax - vmin if vmax != vmin else max(abs(vmax), 1.0)
-            ax.set_ylim(vmin - 0.12*vrange, vmax + 0.12*vrange)
+        ax.axhline(0, color="gray", linewidth=0.7, alpha=0.6)
 
-        ax.axhline(0, color='gray', linewidth=0.6, alpha=0.6)
-        ax.set_title(eff)
-        ax.set_ylabel("Estimate")
-        ax.grid(axis='y', linestyle='--', alpha=0.3)
+        ax.set_title(
+            eff.replace("_", " ").title(),
+            fontsize=STYLE.TITLE_SIZE,
+            fontweight="bold",
+            pad=6,
+        )
+        ax.set_ylabel("Effect size (β)", fontsize=STYLE.AXIS_SIZE)
+        ax.grid(axis="y", linestyle="--", alpha=STYLE.GRID_ALPHA)
+        _strip_spines(ax)
 
-        # prepare legend handle for this subplot (sample marker)
-        lg = plt.Line2D([0], [0], marker=marker, color='w',
-                        markerfacecolor=color, markeredgecolor='k', markersize=8, linestyle='None')
-        legend_handles.append(lg)
-        legend_labels.append(eff)
+        all_vals = np.concatenate([v[~np.isnan(v)] for v in (ciLs, ciUs, ests)])
+        if all_vals.size:
+            vmin, vmax_ = np.nanmin(all_vals), np.nanmax(all_vals)
+            vr = vmax_ - vmin if vmax_ != vmin else max(abs(vmax_), 1.0)
+            ax.set_ylim(vmin - 0.10 * vr, vmax_ + 0.10 * vr)
 
-    # hide unused axes
     for j in range(len(effs), len(axes)):
         axes[j].set_visible(False)
 
-    # overall title and legend (effects legend may be redundant since each subplot is labeled,
-    # but keep an optional legend on the side if desired)
-    if title is None:
-        title = f"Fixed effects (p < {p_thr} highlighted)"
-    fig.suptitle(title, fontsize=13)
+    legend_handles = [
+        Line2D([0], [0], marker="o", color="black", markerfacecolor=highlight_color,
+               markersize=8, linestyle="None", label=f"p < {p_thr}"),
+        Line2D([0], [0], marker="o", color="black", markerfacecolor="white",
+               markersize=8, linestyle="None", label=f"p ≥ {p_thr}"),
+    ]
+    fig.legend(handles=legend_handles, loc="upper right", frameon=False, fontsize=STYLE.TICK_SIZE)
 
-    # place a small legend for effects colors/markers on the right if there are multiple effects
-    if len(legend_handles) > 0 and len(effs) > 1:
-        fig.legend(legend_handles, legend_labels, title='Effect', bbox_to_anchor=(0.95, 0.5),
-                   loc='center left', frameon=False)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
 
-    plt.tight_layout(rect=[0,0,0.92,0.95])
-   # if savepath:
-   #    plt.savefig(savepath, dpi=300, bbox_inches='tight')
+    if savepath:
+        plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")
+
     if rep is not None:
-        rep.log_plot(fig, "Results from the mixed effects models")
+        rep.log_plot(fig, "")
         plt.close(fig)
-        return None, None  # or return a small marker that it was logged
+        return None, None
+
     if show:
         plt.show()
-    return fig, axes[:len(effs)]
 
-@rep_plot_wrapper
-def plot_AddMultEffects(dfs,
-                       feature_col='Feature',
-                       p_col='p-value',
-                       labels=None,
-                       p_thr=0.05,
-                       cmap='Reds',
-                       annot_fmt="{:.3g}",
-                       vmax_logp=10,
-                       figsize=(4,8),
-                       show_colorbar=True,
-                       savepath=None,
-                       # new: only two modes allowed
-                       value_scale='p',   # 'p' or 'logp' (mutually exclusive)
-                       rep=None,
-                       show: bool=False,
-                       # layout controls
-                       annot_fontsize: float = 7.0,
-                       tick_fontsize: float = 7.0,
-                       cbar_shrink: float = 0.8,
-                       linewidths: float = 0.5,
-                       square: bool = False
-                       ):
+    return fig, axes[:len(effs)].tolist()
+
+
+# ============================================================================
+# 6.  ADDITIVE / MULTIPLICATIVE EFFECTS  (p-value matrix)
+# ============================================================================
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+
+def plot_AddMultEffects(
+    dfs,
+    feature_col:    str        = "Feature",
+    p_col:          str        = "p-value",
+    labels:         list | None = None,
+    p_thr:          float       = 0.05,
+    cmap:           str         = "viridis",
+    annot_fmt:      str         = "{:.1g}",
+    vmax_logp:      float       = 10,
+    figsize:        tuple       = (10, 8),
+    show_colorbar:  bool        = True,
+    savepath:       str | None  = None,
+    value_scale:    str         = "p",
+    rep                         = None,
+    show:           bool        = False,
+    annot_fontsize: float       = STYLE.ANNOT_SIZE,
+    tick_fontsize:  float       = STYLE.TICK_SIZE,
+    cbar_shrink:    float       = 0.2,
+    linewidths:     float       = STYLE.HEATMAP_LINEWIDTHS,
+    square:         bool        = False,
+):
     """
-    Plot matrix of p-values for features across one or more dfs.
+    Feature significance heatmap (one or multiple DataFrames).
 
-    value_scale:
-      - 'p'    : heatmap colors and annotations show raw p-values (range 0..1).
-      - 'logp' : heatmap colors and annotations show -log10(p). (Base 10)
-                 color scale is clipped at `vmax_logp`.
-
-    Colorbar:
-      - Shows the same scale as the heatmap.
-      - Includes a tick marking p_thr (in 'p' mode) or -log10(p_thr) (in 'logp' mode).
-        The tick label will indicate the p_thr value for clarity.
-
-    Other layout params control fonts / size.
+    value_scale : 'p'    — raw p-values in [0, 1]
+                  'logp' — -log10(p) clipped at vmax_logp
     """
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import seaborn as sns
+    apply_plot_theme()
 
-    if value_scale not in ('p', 'logp'):
-        raise ValueError("value_scale must be 'p' or 'logp'")
+    if value_scale not in ("p", "logp"):
+        raise ValueError("value_scale must be 'p' or 'logp'.")
 
-    # Normalize input to list
     if isinstance(dfs, pd.DataFrame):
         dfs = [dfs]
+
     if labels is None:
         labels = [f"col{i+1}" for i in range(len(dfs))]
+
     if len(labels) != len(dfs):
-        raise ValueError("labels length must match number of dataframes")
+        raise ValueError("labels must have the same length as dfs.")
 
-    # Collect all features (sorted for stable order)
-    all_features = []
-    for df in dfs:
-        all_features.extend(df[feature_col].astype(str).tolist())
-    features = sorted(set(all_features), key=lambda x: x)
+    # Preserve first-seen feature order; do not sort by significance
+    all_features = list(dict.fromkeys(
+        str(f) for df in dfs for f in df[feature_col]
+    ))
 
-    # Build matrix of p-values (rows=features, cols=dataframes)
-    pv_mat = pd.DataFrame(index=features, columns=labels, dtype=float)
+    _TINY = 1e-300
+
+    # ---- single DF: horizontal bar plot ----------------------------------
+    if len(dfs) == 1:
+        s = dfs[0].set_index(feature_col)[p_col]
+
+        plot_df = (
+            pd.DataFrame({
+                "Feature": all_features,
+                "p": [s.get(f, np.nan) for f in all_features],
+            })
+            .assign(logp=lambda d: -np.log10(np.maximum(d["p"], _TINY)))
+        )
+
+        sig_color = "#E45756"   # red
+        ns_color  = "#54A24B"   # green
+        colors = np.where(plot_df["p"] < p_thr, sig_color, ns_color)
+
+        fig, ax = plt.subplots(figsize=(6, max(3, 0.42 * len(plot_df))))
+
+        bars = ax.barh(
+            plot_df["Feature"], plot_df["logp"],
+            color=colors, alpha=STYLE.BAR_ALPHA, height=0.85
+        )
+        ax.axvline(
+            -np.log10(p_thr),
+            color="black",
+            linestyle="--",
+            linewidth=1.2,
+            label=f"p = {p_thr}"
+        )
+
+        _apply_hbar_style(
+            ax,
+            title=f"Batch effect significance per feature (p < {p_thr})",
+            xlabel=r"$-\log_{10}(p-value)$",
+        )
+
+        legend_handles = [
+            Patch(facecolor=sig_color, edgecolor="none", label=f"p < {p_thr}"),
+            Patch(facecolor=ns_color, edgecolor="none", label=f"p ≥ {p_thr}"),
+            Line2D([0], [0], color="black", linestyle="--", linewidth=1.2,
+                   label=f"threshold = {p_thr}"),
+        ]
+        ax.legend(handles=legend_handles, frameon=False, fontsize=STYLE.TICK_SIZE)
+
+        # annotate, using ">" for clipped values
+        offset = _bar_label_offset(ax, "x")
+        for bar in bars:
+            v = bar.get_width()
+            label = ">300" if v >= 299.5 else f"{v:.2f}"
+            ax.text(
+                v + offset,
+                bar.get_y() + bar.get_height() / 2,
+                label,
+                va="center", ha="left",
+                fontsize=STYLE.LABEL_SIZE, fontweight="bold",
+            )
+
+        if savepath:
+            plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")
+        return _handle_rep_show(fig, rep, "", show)
+
+    # ---- multiple DFs: heatmap -------------------------------------------
+    pv_mat = pd.DataFrame(index=all_features, columns=labels, dtype=float)
+
     for df, lab in zip(dfs, labels):
-        tmp = df[[feature_col, p_col]].drop_duplicates(subset=feature_col)
-        tmp = tmp.set_index(feature_col)[p_col].astype(float)
-        for feat in features:
+        tmp = (
+            df[[feature_col, p_col]]
+            .drop_duplicates(subset=feature_col)
+            .set_index(feature_col)[p_col]
+            .astype(float)
+        )
+        for feat in all_features:
             pv_mat.at[feat, lab] = tmp.get(feat, np.nan)
 
-    # sanitise tiny zeros
-    eps = 1e-300
     pv_safe = pv_mat.copy().astype(float)
-    pv_safe = pv_safe.where(~np.isclose(pv_safe, 0.0), eps)
+    pv_safe[np.isclose(pv_safe, 0.0)] = _TINY
+    logp_mat = (-np.log10(pv_safe)).clip(upper=vmax_logp)
 
-    # Build annotation matrices for the two modes
-    annot_p = pv_mat.copy().astype(object)
-    for r in features:
-        for c in labels:
-            v = pv_mat.at[r, c]
-            if pd.isna(v):
-                annot_p.at[r, c] = ""
-            else:
-                try:
-                    txt = annot_fmt.format(float(v))
-                except Exception:
-                    txt = str(v)
-                star = "*" if (not pd.isna(v) and v < p_thr) else ""
-                annot_p.at[r, c] = f"{txt}{star}"
+    def _star(p_orig: float) -> str:
+        return "*" if (not pd.isna(p_orig) and p_orig < p_thr) else ""
 
-    # compute -log10(p) matrix (base 10) and annotations for it
-    logp_mat = -np.log10(pv_safe)
-    # clip to vmax_logp so extremely small p's don't blow up the scale
-    logp_mat = logp_mat.clip(upper=vmax_logp)
-    annot_logp = logp_mat.copy().astype(object)
-    for r in features:
-        for c in labels:
-            v = logp_mat.at[r, c]
-            if pd.isna(v):
-                annot_logp.at[r, c] = ""
-            else:
-                try:
-                    txt = "{:.3f}".format(float(v))
-                except Exception:
-                    txt = str(v)
-                orig_p = pv_mat.at[r, c]
-                star = "*" if (not pd.isna(orig_p) and orig_p < p_thr) else ""
-                annot_logp.at[r, c] = f"{txt}{star}"
-
-    # Select which matrix to plot and annotations
-    if value_scale == 'p':
+    if value_scale == "p":
         plot_mat = pv_mat.copy().fillna(1.0).clip(lower=0.0, upper=1.0)
-        annot_to_use = annot_p
+        annot = pv_mat.copy().astype(object)
+        for r in all_features:
+            for c in labels:
+                v = pv_mat.at[r, c]
+                annot.at[r, c] = "" if pd.isna(v) else f"{annot_fmt.format(float(v))}{_star(v)}"
         cbar_label = "p-value"
-    else:  # 'logp'
+    else:
         plot_mat = logp_mat.copy().fillna(0.0)
-        annot_to_use = annot_logp
-        cbar_label = "-log10(p-value)"
+        annot = logp_mat.copy().astype(object)
+        for r in all_features:
+            for c in labels:
+                v = logp_mat.at[r, c]
+                p_orig = pv_mat.at[r, c]
+                annot.at[r, c] = "" if pd.isna(v) else f"{v:.3f}{_star(p_orig)}"
+        cbar_label = "-log\u2081\u2080(p-value)"
 
-    # create figure
     fig, ax = plt.subplots(figsize=figsize)
-
-    # draw heatmap
-    sns_heatmap = sns.heatmap(
-        plot_mat,
-        ax=ax,
-        annot=annot_to_use,
-        fmt="",
-        cmap=cmap,
-        cbar=show_colorbar,
-        linewidths=linewidths,
-        linecolor="gray",
-        xticklabels=labels,
-        yticklabels=features,
-        square=square,
-        annot_kws={"fontsize": annot_fontsize}
+    sns.heatmap(
+        plot_mat, ax=ax, annot=annot, fmt="", cmap=cmap,
+        cbar=show_colorbar, linewidths=linewidths, linecolor="white",
+        xticklabels=labels, yticklabels=all_features,
+        square=square, annot_kws=dict(fontsize=annot_fontsize),
     )
 
-    # adjust colorbar ticks and label: ensure p_thr is shown as tick
     if show_colorbar:
         cbar = ax.collections[0].colorbar
-        cbar.set_label(cbar_label)
-        # determine sensible tick locations depending on scale
-        if value_scale == 'p':
-            # prefer ticks that include p_thr; choose 5 ticks between 0 and 1 or max present
-            max_val = min(1.0, np.nanmax(plot_mat.values))
-            ticks = np.linspace(0.0, max_val, num=5)
-            # ensure p_thr is included (or very near): insert it if missing
+        cbar.set_label(cbar_label, fontsize=STYLE.AXIS_SIZE)
+
+        max_val = float(np.nanmax(plot_mat.values))
+        if value_scale == "p":
+            ticks = np.linspace(0.0, min(1.0, max_val), num=5)
             if not np.isclose(ticks, p_thr).any():
-                ticks = np.unique(np.concatenate((ticks, [p_thr])))
-                ticks = np.sort(ticks)
-            cbar.set_ticks(ticks)
-            # label the p_thr tick specially
-            tick_labels = [f"{t:.2g}" for t in ticks]
-            # if p_thr present, annotate its label
-            # find index
-            idx = np.where(np.isclose(ticks, p_thr))[0]
-            if idx.size > 0:
-                tick_labels[idx[0]] = f"p_thr={p_thr:g}"
-            cbar.set_ticklabels(tick_labels)
-            cbar.ax.tick_params(labelsize=tick_fontsize)
+                ticks = np.sort(np.unique(np.append(ticks, p_thr)))
+            tick_labels = [
+                f"p_thr={p_thr:g}" if np.isclose(t, p_thr) else f"{t:.2g}"
+                for t in ticks
+            ]
         else:
-            # value_scale == 'logp': ticks on -log10 scale, include thr_log
-            max_val = min(vmax_logp, np.nanmax(plot_mat.values))
-            ticks = np.linspace(0.0, max_val, num=5)
-            thr_log = -np.log10(p_thr) if (p_thr is not None and p_thr > 0) else None
+            ticks = np.linspace(0.0, min(vmax_logp, max_val), num=5)
+            thr_log = -np.log10(p_thr) if p_thr and p_thr > 0 else None
             if thr_log is not None and not np.isclose(ticks, thr_log).any():
-                ticks = np.unique(np.concatenate((ticks, [thr_log])))
-                ticks = np.sort(ticks)
-            cbar.set_ticks(ticks)
-            # convert ticks back to p for label alongside log value
+                ticks = np.sort(np.unique(np.append(ticks, thr_log)))
             tick_labels = []
             for t in ticks:
                 if thr_log is not None and np.isclose(t, thr_log):
-                    # label with both representations for clarity
-                    tick_labels.append(f"p_thr={p_thr:g}\n(-log10={t:.3f})")
+                    tick_labels.append(f"p={p_thr:g}\n(−log₁₀={t:.2f})")
                 else:
                     tick_labels.append(f"{t:.2f}")
-            cbar.set_ticklabels(tick_labels)
-            cbar.ax.tick_params(labelsize=tick_fontsize)
 
-        # shrink colorbar a bit to save room (works with Matplotlib colorbar)
+        cbar.set_ticks(ticks)
+        cbar.set_ticklabels(tick_labels)
+        cbar.ax.tick_params(labelsize=tick_fontsize)
+
         try:
-            cb_axes = cbar.ax
-            pos = cb_axes.get_position()
-            cb_axes.set_position([pos.x0, pos.y0, pos.width * cbar_shrink, pos.height])
+            pos = cbar.ax.get_position()
+            cbar.ax.set_position([pos.x0, pos.y0, pos.width * cbar_shrink, pos.height])
         except Exception:
             pass
 
-    # axis formatting
-    ax.set_xlabel("")
-    ax.set_ylabel("")
-    ax.set_title(f"Feature p-values (* = p < {p_thr})")
-    ax.tick_params(axis='x', labelsize=tick_fontsize, rotation=45)
-    ax.tick_params(axis='y', labelsize=tick_fontsize)
+    ax.set_xlabel("", fontsize=STYLE.AXIS_SIZE)
+    ax.set_ylabel("", fontsize=STYLE.AXIS_SIZE)
+    ax.set_title(
+        f"Feature significance (p < {p_thr})",
+        fontsize=STYLE.TITLE_SIZE,
+        fontweight="bold",
+        pad=10,
+    )
 
-    plt.tight_layout()
+    rot = _adaptive_rotation(labels, threshold=6, steep=45, mild=25)
+    ax.tick_params(axis="x", labelsize=tick_fontsize, rotation=rot)
+    ax.tick_params(axis="y", labelsize=tick_fontsize)
+
+    _finalise(fig)
 
     if savepath:
-        plt.savefig(savepath, dpi=300, bbox_inches='tight')
+        plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")
 
-    if rep is not None:
-        rep.log_plot(fig, "Results from the mixed effects models")
-        plt.close(fig)
-        return None, None
-    if show:
-        plt.show()
-    return fig, ax
+    return _handle_rep_show(fig, rep, "", show)
+
+
+
+
+
