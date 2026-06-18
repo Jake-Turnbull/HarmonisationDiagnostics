@@ -64,6 +64,7 @@ or:
 
 To generate evaluation report on longitudinal/test-retest data:
 
+```
 DiagnosticReport.LongitudinalReport(
     data=X,
     subject_ids=subject_var,
@@ -72,6 +73,21 @@ DiagnosticReport.LongitudinalReport(
     features=idp_names,
     covariates=covars
 )
+```
+This will produce a detailed HTML file containing a full analysis of batch and covariate effects.
+
+You can also generate the same longitudinal data report without writing Python (in bash cell) by:
+
+```
+harmdiag-longitudinal run \
+  --data idps_with_batch_included.csv \
+  --subject-id-col subjectid_column_name \
+  --timepoint-col timepoint_column_name \
+  --batch-col batch_column_name \
+  --features-file idps_list.txt \
+  --covariates-file covariates_list.txt
+
+```
 
 ## 5. Applying harmonisation methods
 
