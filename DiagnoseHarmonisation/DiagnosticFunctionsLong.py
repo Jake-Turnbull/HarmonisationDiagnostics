@@ -218,6 +218,48 @@ def SubjectOrder_long(
 # Add Tuple import to avoid error here:
 from typing import Tuple, Dict, Any, List, Iterable
 
+import numpy as np
+import pandas as pd
+from itertools import combinations
+from typing import Sequence, Optional
+
+def _pairwise_rpd(arr: np.ndarray) -> float:
+    """
+    Mean pairwise relative percent difference (RPD) across all pairs.
+
+    RPD(i, j) = abs(xi - xj) / ((xi + xj) / 2) * 100
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        1D array of numeric values.
+
+    Returns
+    -------
+    float
+        Mean pairwise RPD in percent, or NaN if fewer than 2 valid values
+        or if no valid denominator is available.
+    """
+    arr = np.asarray(arr, dtype=float)
+    arr = arr[~np.isnan(arr)]
+    n = arr.size
+
+    if n < 2:
+        return np.nan
+
+    rpds = []
+    for i, j in combinations(range(n), 2):
+        denom = (arr[i] + arr[j]) / 2.0
+        if denom == 0 or np.isnan(denom):
+            continue
+        rpds.append(abs(arr[i] - arr[j]) / denom * 100.0)
+
+    if len(rpds) == 0:
+        return np.nan
+
+    return float(np.mean(rpds))
+
+
 def WithinSubjVar_long(
     idp_matrix: np.ndarray,
     subjects: Sequence,
@@ -227,36 +269,37 @@ def WithinSubjVar_long(
     """
     Compute within-subject variability (percent) for each IDP across timepoints.
 
-    For each subject, variability is calculated per IDP using available (non-NaN)
-    observations:
+    This version uses one consistent metric for all subjects:
+    mean pairwise RPD across all available non-missing measurements.
 
-    - If exactly 2 timepoints: absolute percent difference relative to the mean,
-      ``|x1 - x2| / mean * 100``.
-    - If >2 timepoints: coefficient of variation (sample SD, ddof=1) relative
-      to the mean, ``SD / mean * 100``.
-    - If mean is 0 or no valid data: returns NaN.
+    Output columns:
+    - subject
+    - n_obs
+    - metric_type
+    - one column per IDP
 
-    Args:
-        idp_matrix: Numeric matrix of IDP values with shape
-            `(n_samples, n_idps)`.
-        subjects: Subject identifiers used to group repeated measurements.
-        timepoints: Timepoint labels required for input alignment.
-        idp_names: Optional names of IDPs. Defaults to `["idp_1", ...]`.
+    Parameters
+    ----------
+    idp_matrix : np.ndarray
+        Numeric matrix of shape (n_samples, n_idps).
+    subjects : Sequence
+        Subject identifiers aligned to rows of idp_matrix.
+    timepoints : Sequence
+        Timepoint labels aligned to rows of idp_matrix. Kept for validation.
+    idp_names : Optional[Sequence[str]]
+        Optional list of IDP names. Defaults to idp_1, idp_2, ...
 
-    Returns:
-        pd.DataFrame: One row per subject with columns `["subject", <IDP1>,
-        <IDP2>, ...]`, where each IDP value represents within-subject percent
-        variability.
-
-    Raises:
-        ValueError: If `idp_matrix` is not 2-D, if input sequence lengths do not match the number of rows, or if `idp_names` length does not match the number of columns.
+    Returns
+    -------
+    pd.DataFrame
+        One row per subject with within-subject variability values.
     """
-
-
     if not isinstance(idp_matrix, np.ndarray):
         idp_matrix = np.asarray(idp_matrix, dtype=float)
+
     if idp_matrix.ndim != 2:
         raise ValueError("idp_matrix must be 2D (n_samples, n_idps).")
+
     n_samples, n_idps = idp_matrix.shape
 
     if len(subjects) != n_samples:
@@ -277,23 +320,16 @@ def WithinSubjVar_long(
 
     out_rows = []
     for subj, g in df.groupby("subject", sort=False):
-        row = {"subject": subj}
+        row = {
+            "subject": subj,
+            "n_obs": int(len(g)),
+            "metric_type": "Pairwise RPD",
+        }
+
         for col in idp_names:
             arr = g[col].dropna().to_numpy(dtype=float)
-            n = arr.size
-            if n == 0:
-                row[col] = np.nan
-                continue
-            mean_val = arr.mean()
-            if mean_val == 0:
-                row[col] = np.nan
-                continue
-            if n == 2:
-                row[col] = float(abs(arr[0] - arr[1]) / mean_val * 100.0)
-            elif n > 2:
-                row[col] = float(arr.std(ddof=1) / mean_val * 100.0)
-            else:
-                row[col] = np.nan
+            row[col] = _pairwise_rpd(arr)
+
         out_rows.append(row)
 
     return pd.DataFrame(out_rows)

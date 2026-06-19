@@ -1952,9 +1952,8 @@ def LongitudinalReport(data, batch,
         PlotDiagnosticResults.plot_WithinSubjVar(
             wsv,
             subject_col='subject',
-            limit_subjects=35,
-            limit_idps_for_legend=10,
-            rep=report
+            rep=report,
+            debug=False
             )
         report.log_text("Within subject variability plots added to report")
 

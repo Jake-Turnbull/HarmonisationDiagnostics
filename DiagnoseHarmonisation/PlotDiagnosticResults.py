@@ -3187,6 +3187,12 @@ def plot_SubjectOrder(
 # ============================================================================
 # 2.  WITHIN-SUBJECT VARIABILITY
 # ============================================================================
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+import seaborn as sns
+
 
 def plot_WithinSubjVar(
     df,
@@ -3194,154 +3200,353 @@ def plot_WithinSubjVar(
     idp_cols:              list | None = None,
     subject_style:         dict | None = None,
     idp_style:             dict | None = None,
-    limit_subjects:        int        = 10,
-    limit_idps_for_legend: int        = 10,
+    limit_subjects:        int        = 30,
+    limit_idps_for_legend: int        = 30,
     figsize:               tuple      = (16, 13),
     savepath:              str | None = None,
     rep                               = None,
     show:                  bool       = False,
+    debug:                 bool       = False,
 ):
     """
-    Within-subject variability across IDPs.
+    Plot within-subject variability summary across IDPs.
 
-    Panel A — per-IDP distribution (violin + strip).
-    Panel B — per-IDP mean across subjects.
-    Panel C — highest-variability subjects (horizontal bar).
+    Panels:
+        A — distribution across subjects for each IDP
+            * few subjects: colored subject markers + subject legend
+            * many subjects: black dots only, no subject legend
+
+        B — mean variability per IDP
+            * few IDPs: colored IDP markers + IDP legend
+            * many IDPs: black dots only, no IDP legend
+
+        C — top 10 subjects with highest average variability
     """
     apply_plot_theme()
 
-    if idp_cols is None:
-        idp_cols = [c for c in df.columns if c != subject_col]
+    metadata_cols = {subject_col, "n_obs", "metric_type", "MetricType", "N"}
 
-    subjects_all = df[subject_col].unique().tolist()
-    idps_all     = list(idp_cols)
+    if idp_cols is None:
+        idp_cols = [
+            c for c in df.columns
+            if c not in metadata_cols and pd.api.types.is_numeric_dtype(df[c])
+        ]
+
+    if len(idp_cols) == 0:
+        raise ValueError("No IDP columns found.")
+
+    subjects_all = pd.unique(df[subject_col]).tolist()
+    idps_all = list(idp_cols)
 
     if subject_style is None or idp_style is None:
         subject_style, idp_style = build_style_registry(subjects_all, idps_all)
+
+    def _get_subject_style(subj):
+        sty = subject_style.get(subj, None)
+        if sty is None:
+            return STYLE.NEUTRAL, "o"
+        if isinstance(sty, (tuple, list)) and len(sty) >= 2:
+            return sty[0], sty[1]
+        if isinstance(sty, dict):
+            return sty.get("color", STYLE.NEUTRAL), sty.get("marker", "o")
+        return STYLE.NEUTRAL, "o"
+
+    def _get_idp_style(idp):
+        sty = idp_style.get(idp, None)
+        if sty is None:
+            return STYLE.NEUTRAL, "o"
+        if isinstance(sty, (tuple, list)) and len(sty) >= 2:
+            return sty[0], sty[1]
+        if isinstance(sty, dict):
+            return sty.get("color", STYLE.NEUTRAL), sty.get("marker", "o")
+        return STYLE.NEUTRAL, "o"
 
     long = df.melt(
         id_vars=subject_col,
         value_vars=idp_cols,
         var_name="IDP",
         value_name="value",
-    )
+    ).dropna(subset=["value"])
+
+    idp_to_x = {idp: i for i, idp in enumerate(idp_cols)}
+    rng = np.random.default_rng(12345)  # stable jitter
+
+    n_subjects = df[subject_col].nunique()
+    n_idps = len(idp_cols)
+
+    show_subject_style = n_subjects <= limit_subjects
+    show_idp_style = n_idps <= limit_idps_for_legend
+
+    if debug:
+        print("=== WithinSubjVar DEBUG ===")
+        print(f"rows in df: {len(df)}")
+        print(f"subject_col: {subject_col}")
+        print(f"n_subjects: {n_subjects}")
+        print(f"limit_subjects: {limit_subjects}")
+        print(f"show_subject_style: {show_subject_style} (type={type(show_subject_style)})")
+        print(f"n_idps: {n_idps}")
+        print(f"limit_idps_for_legend: {limit_idps_for_legend}")
+        print(f"show_idp_style: {show_idp_style} (type={type(show_idp_style)})")
+        print(f"subjects_all[:10]: {subjects_all[:10]}")
+        print(f"idps_all[:10]: {idps_all[:10]}")
+        print("==========================")
 
     fig = plt.figure(figsize=figsize)
     gs = fig.add_gridspec(
         3, 1,
-        height_ratios=[1.40, 0.75, 1.50],
-        hspace=0.65
+        height_ratios=[1.45, 0.85, 1.55],
+        hspace=0.70
     )
 
     axA = fig.add_subplot(gs[0, 0])
     axB = fig.add_subplot(gs[1, 0])
     axC = fig.add_subplot(gs[2, 0])
 
-    # ---- Panel A : per-IDP violin + strip --------------------------------
-    sns.violinplot(
+    fig.subplots_adjust(right=0.78)
+
+    # ---------------- Panel A: per-IDP distribution ----------------
+    sns.boxplot(
         x="IDP", y="value", data=long, ax=axA,
-        inner="quartile", cut=0, linewidth=1.0,
+        order=idp_cols,
         color=STYLE.PRIMARY, width=0.55,
+        showfliers=False,
+        boxprops=dict(alpha=0.35),
+        whiskerprops=dict(linewidth=1.0),
+        medianprops=dict(color="black", linewidth=1.2),
     )
-    sns.stripplot(
-        x="IDP", y="value", data=long, ax=axA,
-        color="black", size=4.5, alpha=0.28, jitter=0.15,
-    )
+
+    if debug:
+        print("\n--- Panel A ---")
+        print(f"show_subject_style = {show_subject_style}")
+
+    if show_subject_style:
+        if debug:
+            print("Panel A branch: SUBJECT-SPECIFIC COLORS/MARKERS + LEGEND")
+
+        handles = []
+        labels = []
+
+        for subj in subjects_all:
+            sub = long[long[subject_col] == subj]
+            color, marker = _get_subject_style(subj)
+
+            x = sub["IDP"].map(idp_to_x).to_numpy(dtype=float)
+            x = x + rng.normal(0, 0.08, size=len(x))  # jitter
+            y = sub["value"].to_numpy(dtype=float)
+
+            axA.scatter(
+                x, y,
+                s=38,
+                c=[color],
+                marker=marker,
+                alpha=0.90,
+                edgecolors="white",
+                linewidths=0.4,
+                zorder=3,
+            )
+
+            handles.append(
+                mlines.Line2D(
+                    [], [], linestyle="None",
+                    marker=marker, markersize=7,
+                    markerfacecolor=color,
+                    markeredgecolor="white",
+                    label=str(subj),
+                )
+            )
+            labels.append(str(subj))
+
+        axA.legend(
+            handles, labels,
+            title="Subject",
+            loc="upper left",
+            bbox_to_anchor=(1.01, 1.00),
+            frameon=True,
+            fancybox=True,
+            framealpha=0.95,
+            edgecolor="0.85",
+            fontsize=STYLE.TICK_SIZE,
+            title_fontsize=STYLE.TICK_SIZE,
+            ncol=1,
+            borderpad=0.6,
+            labelspacing=0.5,
+            handletextpad=0.4,
+        )
+    else:
+        if debug:
+            print("Panel A branch: BLACK DOTS ONLY, NO LEGEND")
+
+        x = long["IDP"].map(idp_to_x).to_numpy(dtype=float)
+        x = x + rng.normal(0, 0.08, size=len(x))
+        y = long["value"].to_numpy(dtype=float)
+
+        axA.scatter(
+            x, y,
+            s=28,
+            c="black",
+            marker="o",
+            alpha=0.28,
+            edgecolors="none",
+            zorder=3,
+        )
+
+        leg = axA.get_legend()
+        if debug:
+            print(f"Panel A legend exists before remove: {leg is not None}")
+        if leg is not None:
+            leg.remove()
+
+    axA.set_xticks(range(len(idp_cols)))
+    axA.set_xticklabels(idp_cols)
     axA.set_title(
         "Within-subject variability across IDPs",
         fontsize=STYLE.TITLE_SIZE,
         fontweight="bold",
         pad=10,
     )
-    axA.set_xlabel("", fontsize=STYLE.AXIS_SIZE)
-    axA.set_ylabel("WSV (%)", fontsize=STYLE.AXIS_SIZE)
+    axA.set_xlabel("")
+    axA.set_ylabel("Pairwise RPD (%)", fontsize=STYLE.AXIS_SIZE)
     rotA = _adaptive_rotation(idp_cols, threshold=8, steep=40, mild=25)
     axA.tick_params(axis="x", labelrotation=rotA, labelsize=STYLE.TICK_SIZE)
     axA.tick_params(axis="y", labelsize=STYLE.TICK_SIZE)
     _strip_spines(axA)
     axA.margins(x=0.02, y=0.06)
 
-    if len(subjects_all) <= limit_subjects:
-        axA.legend(
-            title="Subject",
-            loc="upper right",
-            frameon=False,
-            fontsize=STYLE.TICK_SIZE,
-            title_fontsize=STYLE.TICK_SIZE,
-        )
+    # ---------------- Panel B: mean across subjects per IDP ----------------
+    idp_means = df[idp_cols].mean(axis=0, skipna=True)
 
-    # ---- Panel B : per-IDP mean across subjects --------------------------
-    idp_means = df[idp_cols].mean(axis=0)
-    sns.violinplot(
+    if debug:
+        print("\n--- Panel B ---")
+        print(f"show_idp_style = {show_idp_style}")
+
+    sns.boxplot(
         x=idp_means.values, ax=axB, orient="h",
-        color=STYLE.PRIMARY, inner="quartile", linewidth=1.0, width=0.45,
+        color=STYLE.PRIMARY, width=0.50,
+        showfliers=False,
+        boxprops=dict(alpha=0.35),
+        whiskerprops=dict(linewidth=1.0),
+        medianprops=dict(color="black", linewidth=1.2),
     )
+
     axB.set_yticks([])
     axB.set_title(
-        "Mean variability per-feature (across datapoints)",
+        "Mean pairwise RPD per feature",
         fontsize=STYLE.TITLE_SIZE,
         fontweight="bold",
         pad=8,
     )
-    axB.set_xlabel("WSV (%)", fontsize=STYLE.AXIS_SIZE)
-    axB.set_ylabel("", fontsize=STYLE.AXIS_SIZE)
+    axB.set_xlabel("Pairwise RPD (%)", fontsize=STYLE.AXIS_SIZE)
+    axB.set_ylabel("")
     axB.tick_params(axis="both", labelsize=STYLE.TICK_SIZE)
     _strip_spines(axB)
     axB.margins(x=0.03, y=0.10)
 
-    show_idp_legend = len(idps_all) <= limit_idps_for_legend
-    for idp, mean_val in idp_means.items():
-        if show_idp_legend:
-            color, marker = idp_style[idp]
+    if show_idp_style:
+        if debug:
+            print("Panel B branch: IDP-SPECIFIC COLORS/MARKERS + LEGEND")
+
+        handles = []
+        labels = []
+
+        for idp, mean_val in idp_means.items():
+            color, marker = _get_idp_style(idp)
+
             axB.scatter(
-                mean_val, 0, s=65, marker=marker,
-                color=color, edgecolor="k", linewidths=0.6,
-                label=idp, zorder=3
-            )
-        else:
-            axB.scatter(
-                mean_val, 0, s=52, marker="o",
-                color=STYLE.NEUTRAL, edgecolor="k", linewidths=0.6,
-                zorder=3
+                mean_val, 0,
+                s=70,
+                marker=marker,
+                color=color,
+                edgecolors="white",
+                linewidths=0.6,
+                zorder=3,
             )
 
-    if show_idp_legend:
+            handles.append(
+                mlines.Line2D(
+                    [], [], linestyle="None",
+                    marker=marker, markersize=7,
+                    markerfacecolor=color,
+                    markeredgecolor="white",
+                    label=idp,
+                )
+            )
+            labels.append(idp)
+
         axB.legend(
+            handles, labels,
             title="IDP",
             loc="center left",
-            bbox_to_anchor=(1.02, 0.5),
-            frameon=False,
+            bbox_to_anchor=(1.01, 0.50),
+            frameon=True,
+            fancybox=True,
+            framealpha=0.95,
+            edgecolor="0.85",
             fontsize=STYLE.TICK_SIZE,
             title_fontsize=STYLE.TICK_SIZE,
         )
-        fig.subplots_adjust(right=0.83)
+    else:
+        if debug:
+            print("Panel B branch: BLACK DOTS ONLY, NO LEGEND")
 
-    # ---- Panel C : highest-variability subjects --------------------------
-    subj_means = df.set_index(subject_col)[idp_cols].mean(axis=1)
+        xvals = idp_means.values
+        yvals = np.zeros(len(idp_means))
+
+        axB.scatter(
+            xvals, yvals,
+            s=58,
+            marker="o",
+            color="black",
+            edgecolors="white",
+            linewidths=0.6,
+            zorder=3,
+        )
+
+        leg = axB.get_legend()
+        if debug:
+            print(f"Panel B legend exists before remove: {leg is not None}")
+        if leg is not None:
+            leg.remove()
+
+    # ---------------- Panel C: top 10 subjects ----------------
+    subj_means = df.set_index(subject_col)[idp_cols].mean(axis=1, skipna=True)
     top_subjects = subj_means.sort_values(ascending=False).head(10)
 
+    if debug:
+        print("\n--- Panel C ---")
+        print("Top subjects:", list(top_subjects.index))
+
+    if "n_obs" in df.columns:
+        n_map = df.set_index(subject_col)["n_obs"].to_dict()
+        labels = [
+            f"{str(subj)} (n={int(n_map.get(subj, 0))})"
+            for subj in top_subjects.index
+        ]
+    else:
+        labels = [str(subj) for subj in top_subjects.index]
+
     bars = axC.barh(
-        top_subjects.index.astype(str),
+        labels,
         top_subjects.values,
         color=STYLE.PRIMARY,
         alpha=STYLE.BAR_ALPHA,
         height=0.82,
+        edgecolor="none",
     )
     axC.invert_yaxis()
     axC.set_title(
-        "Top 10 datapoints with the highest variability across all features",
+        "Top 10 subjects with the highest average pairwise RPD",
         fontsize=STYLE.TITLE_SIZE,
         fontweight="bold",
         pad=10,
     )
-    axC.set_xlabel("Mean WSV (%)", fontsize=STYLE.AXIS_SIZE)
-    axC.set_ylabel("", fontsize=STYLE.AXIS_SIZE)
+    axC.set_xlabel("Mean pairwise RPD (%)", fontsize=STYLE.AXIS_SIZE)
+    axC.set_ylabel("")
     axC.tick_params(axis="both", labelsize=STYLE.TICK_SIZE)
     _strip_spines(axC)
     axC.margins(y=0.08)
     _annotate_hbar(axC, bars, fmt="{:.1f}")
 
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    fig.tight_layout(rect=[0, 0, 0.78, 0.97])
 
     if savepath:
         plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")

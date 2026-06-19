@@ -63,6 +63,7 @@ docs = [
 [project.scripts]
 harmdiag = "DiagnoseHarmonisation.cli:main"
 harmdiag-longitudinal = "DiagnoseHarmonisation.longitudinal_cli:main"
+harmdiag-longitudinal-gui = "DiagnoseHarmonisation.gui_longitudinal:launch_longitudinal_gui"
 
 [tool.setuptools_scm]
 fallback_version = "0.1.1"
