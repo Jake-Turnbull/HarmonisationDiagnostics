@@ -1635,17 +1635,17 @@ def LongitudinalReport(data, batch,
         report.text_simple(line_break_in_text)
 
         # Ensure batch is numeric array where needed
-        logger.info("Checking data format")
-        if isinstance(batch, (list, np.ndarray)):
-            batch = np.array(batch)
-            if batch.dtype.kind in {"U", "S", "O"}:  # string/object categorical
-                logger.info(f"Original batch categories: {list(set(batch))}")
-                logger.info("Creating numeric codes for batch categories")
-                batch_numeric, unique = pd.factorize(batch)
-                logger.info(f"Numeric batch codes: {list(set(batch_numeric))}")
-                # keep string labels in `batch` if plotting expects them; numeric conversions can be used inside tests as needed
-        else:
-            raise ValueError("Batch must be a list or numpy array")
+        #logger.info("Checking data format")
+        #if isinstance(batch, (list, np.ndarray)):
+        #    batch = np.array(batch)
+        #    if batch.dtype.kind in {"U", "S", "O"}:  # string/object categorical
+        #        logger.info(f"Original batch categories: {list(set(batch))}")
+        #        logger.info("Creating numeric codes for batch categories")
+        #        batch_numeric, unique = pd.factorize(batch)
+        #        logger.info(f"Numeric batch codes: {list(set(batch_numeric))}")
+        #        # keep string labels in `batch` if plotting expects them; numeric conversions can be used inside tests as needed
+        #else:
+        #    raise ValueError("Batch must be a list or numpy array")
         
         
         # Check that covariates are an array if provided (.shape[1] throwing error with a list), convert to array if needed
@@ -1869,7 +1869,7 @@ def LongitudinalReport(data, batch,
             )
         PlotDiagnosticResults.plot_SubjectOrder(subjorder,                 
                               ncols=2,
-                              figsize_per_plot=(3.6,3.6),
+                              figsize_per_plot=(8,6),
                               limit_idps=None,
                               sample_method='random',
                               random_state=42,
