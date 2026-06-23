@@ -286,18 +286,20 @@ class LongitudinalGuiApp:
         )
 
         # Covariates
-        cov_frame = ttk.LabelFrame(container, textvariable=self.cov_source_label_var, padding=10)
-        cov_frame.grid(row=3, column=0, columnspan=3, sticky="nsew", pady=(0, 10))
-        cov_frame.columnconfigure(0, weight=1)
-        cov_frame.rowconfigure(1, weight=1)
+        self.cov_frame = ttk.LabelFrame(
+            container, text=self.cov_source_label_var.get(), padding=10
+        )
+        self.cov_frame.grid(row=3, column=0, columnspan=3, sticky="nsew", pady=(0, 10))
+        self.cov_frame.columnconfigure(0, weight=1)
+        self.cov_frame.rowconfigure(1, weight=1)
 
         ttk.Label(
-            cov_frame,
+            self.cov_frame,
             text="Select one or more covariate columns from the chosen source.",
         ).grid(row=0, column=0, sticky="w", pady=(0, 6))
 
         self.covariate_listbox = tk.Listbox(
-            cov_frame,
+            self.cov_frame,
             selectmode="multiple",
             exportselection=False,
             height=10,
@@ -305,14 +307,14 @@ class LongitudinalGuiApp:
         self.covariate_listbox.grid(row=1, column=0, sticky="nsew")
 
         cov_scroll = ttk.Scrollbar(
-            cov_frame,
+            self.cov_frame,
             orient="vertical",
             command=self.covariate_listbox.yview,
         )
         cov_scroll.grid(row=1, column=1, sticky="ns")
         self.covariate_listbox.configure(yscrollcommand=cov_scroll.set)
 
-        cov_buttons = ttk.Frame(cov_frame)
+        cov_buttons = ttk.Frame(self.cov_frame)
         cov_buttons.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
         ttk.Button(cov_buttons, text="Select All", command=self._select_all_covariates).pack(
             side="left"
@@ -453,16 +455,24 @@ class LongitudinalGuiApp:
                 "Loaded columns. Covariate list is sourced from the data file."
             )
 
+    def _set_cov_frame_title(self, title: str) -> None:
+        self.cov_source_label_var.set(title)
+        # ttk.LabelFrame does not support textvariable; update the text explicitly.
+        try:
+            self.cov_frame.configure(text=title)
+        except Exception:
+            pass
+
     def _update_covariate_source_state(self) -> None:
         cov_path = _normalize_path(self.covariates_path_var.get())
         if cov_path:
-            self.cov_source_label_var.set("Covariate columns source: separate covariates file")
+            self._set_cov_frame_title("Covariate columns source: separate covariates file")
             self.cov_subject_combo.configure(state="readonly")
             self.cov_timepoint_combo.configure(state="readonly")
             self.cov_subject_combo["values"] = self.current_covariate_columns
             self.cov_timepoint_combo["values"] = self.current_covariate_columns
         else:
-            self.cov_source_label_var.set("Covariate columns source: data file")
+            self._set_cov_frame_title("Covariate columns source: data file")
             self.cov_subject_combo.set("")
             self.cov_timepoint_combo.set("")
             self.cov_subject_combo.configure(state="disabled")
