@@ -78,12 +78,10 @@ def build_gui_run_config(
         raise ValueError("Please choose the batch column for the data file.")
     if not selected_features:
         raise ValueError("Please select at least one feature column.")
-    if not selected_covariates:
-        raise ValueError("Please select at least one covariate column.")
 
     covariates_path_value = covariates_path or None
 
-    if covariates_path_value is not None:
+    if covariates_path_value is not None and selected_covariates:
         if not covariates_subject_id_column:
             raise ValueError(
                 "Please choose the subject ID column for the separate covariates file."

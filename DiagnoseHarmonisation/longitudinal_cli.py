@@ -12,11 +12,16 @@ import argparse
 from pathlib import Path
 from typing import Optional, Sequence
 
+from DiagnoseHarmonisation.gui import launch_cross_sectional_gui
 from DiagnoseHarmonisation.longitudinal_workflow import (
     LongitudinalRunConfig,
     inspect_longitudinal_inputs,
     run_longitudinal_report,
 )
+
+def launch_gui() -> None:
+    from DiagnoseHarmonisation.gui_longitudinal import launch_longitudinal_gui
+    launch_longitudinal_gui()
 
 
 def run_pipeline_from_cli(
@@ -243,6 +248,11 @@ def main(argv: Optional[Sequence[str]] = None):
         help="Optional path to separate covariates CSV/XLS/XLSX.",
     )
 
+    subparsers.add_parser(
+        "gui",
+        help="Open the desktop GUI for generating a longitudinal report.",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "run":
@@ -271,9 +281,14 @@ def main(argv: Optional[Sequence[str]] = None):
             data_path=args.data,
             cov_path=args.covariates,
         )
+    
+    if args.command == "gui":
+                launch_gui()
+    return 0
 
     parser.print_help()
     return 0
+
 
 
 def _parse_columns_or_file(
