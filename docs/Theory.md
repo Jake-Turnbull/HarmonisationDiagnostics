@@ -88,4 +88,4 @@ Here, we plot the results as log-transformed P-values for each feature. These ar
 
 ## Evaluation metrics for longitudinal data
 
-Refer to the paper (Harmonising Structural Brain MRI from Multiple Sites with Limited Sample Sizes)[https://doi.org/10.64898/2026.04.21.26351106]
+Refer to the paper for detailed metrics and their application on real-world clinical dataset [Bhalerao et al. 2026, Harmonising Structural Brain MRI from Multiple Sites with Limited Sample Sizes](https://doi.org/10.64898/2026.04.21.26351106)

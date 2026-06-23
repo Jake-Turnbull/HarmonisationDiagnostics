@@ -1576,6 +1576,21 @@ def LongitudinalReport(data, batch,
         print(f"Report will be saved to: {rp}")
         return report_obj
 
+    def _plot_figsize(kind: str, n_items: int | None = None) -> tuple[float, float]:
+        """Consistent figure sizing for the report runner."""
+        n = int(n_items or 0)
+        if kind == "raw":
+            return (7.4, 5.2)
+        if kind == "summary_hbar":
+            return (7.2, max(5.2, 0.24 * n + 2.7))
+        if kind == "summary_box":
+            return (7.2, max(5.8, 0.18 * n + 2.8))
+        if kind == "effects":
+            return (7.8, 6.6)
+        if kind == "biological":
+            return (7.8, 6.6)
+        return (6.5, 6.5)
+
     # If user passed a report object, use it (do not close it here).
     # Otherwise create one and use it as a context manager so it's closed on exit.
     created_local_report = False
@@ -1584,6 +1599,11 @@ def LongitudinalReport(data, batch,
         report_ctx = StatsReporter(save_artifacts=SaveArtifacts, save_dir=None)
     else:
         report_ctx = rep
+
+    if covariates is not None:
+        covariate_names = list(covariates.keys())
+    else:
+        covariate_names = []
 
     # If we're using our own, enter the context manager
     if created_local_report:
@@ -1615,17 +1635,17 @@ def LongitudinalReport(data, batch,
         report.text_simple(line_break_in_text)
 
         # Ensure batch is numeric array where needed
-        logger.info("Checking data format")
-        if isinstance(batch, (list, np.ndarray)):
-            batch = np.array(batch)
-            if batch.dtype.kind in {"U", "S", "O"}:  # string/object categorical
-                logger.info(f"Original batch categories: {list(set(batch))}")
-                logger.info("Creating numeric codes for batch categories")
-                batch_numeric, unique = pd.factorize(batch)
-                logger.info(f"Numeric batch codes: {list(set(batch_numeric))}")
-                # keep string labels in `batch` if plotting expects them; numeric conversions can be used inside tests as needed
-        else:
-            raise ValueError("Batch must be a list or numpy array")
+        #logger.info("Checking data format")
+        #if isinstance(batch, (list, np.ndarray)):
+        #    batch = np.array(batch)
+        #    if batch.dtype.kind in {"U", "S", "O"}:  # string/object categorical
+        #        logger.info(f"Original batch categories: {list(set(batch))}")
+        #        logger.info("Creating numeric codes for batch categories")
+        #        batch_numeric, unique = pd.factorize(batch)
+        #        logger.info(f"Numeric batch codes: {list(set(batch_numeric))}")
+        #        # keep string labels in `batch` if plotting expects them; numeric conversions can be used inside tests as needed
+        #else:
+        #    raise ValueError("Batch must be a list or numpy array")
         
         
         # Check that covariates are an array if provided (.shape[1] throwing error with a list), convert to array if needed
@@ -1671,72 +1691,171 @@ def LongitudinalReport(data, batch,
 
         report.log_section("Introduction", "Longitudinal Data Diagnostic Report Introduction")
         report.text_simple(
-    "This report provides diagnostic analyses for longitudinal data collected "
-    "across multiple batches.\n\n"
-    "Longitudinal data consist of repeated measurements from the same subjects "
-    "over time. Such designs require evaluation of measurement stability, "
-    "batch-related variability, and preservation of biologically meaningful signal.\n\n"
-    "The following diagnostics are performed:\n\n"
-    "1. Subject-level variability\n"
-    "   • Subject order consistency (rank preservation across timepoints)\n"
-    "   • Within-subject variability (Coefficient of Variation / Relative Percent Difference)\n\n"
-    "2. Batch-level variability\n"
-    "   • Additive batch effects (mean shifts; mixed-effects models)\n"
-    "   • Pairwise batch mean differences (post-hoc comparisons)\n"
-    "   • Multiplicative batch effects (variance differences; Fligner–Killeen test)\n"
-    "   • Multivariate batch differences relative to a reference (Mahalanobis distance)\n\n"
-    "3. Between-subject variability\n"
-    "   • Intra-Class Correlation (ICC; variance decomposition via mixed models)\n\n"
-    "4. Biological variability\n"
-    "   • Statistical significance of biological covariates\n"
-    "   • Effect sizes (beta coefficients)\n"
-    "   • 95% confidence intervals\n\n"
-    "Together, these diagnostics assess whether harmonisation reduces unwanted "
-    "batch effects while preserving meaningful biological and between-subject variation."
-)
+        """
+        Longitudinal data contain repeated measurements collected from the same individuals over time. 
+        
+        Such datasets require evaluation of measurement stability, batch-related variability, preservation of biological signal, and retention of between-subject differences.
+
+        This report provides a set of complementary diagnostics designed to evaluate these properties before and after harmonisation.
+
+        ────────────────────────────────────────────────────────
+
+        SUBJECT-LEVEL VARIABILITY
+
+        • Subject order consistency
+        Preservation of subject ranking across visits
+
+        • Within-subject variability
+        Longitudinal stability within individual subjects
+
+        ────────────────────────────────────────────────────────
+
+        BATCH VARIABILITY
+
+        • Additive batch effects
+        Batch-related mean shifts
+
+        • Pairwise batch differences
+        Post-hoc comparisons between batches
+
+        • Multiplicative batch effects
+        Batch-related variance differences
+
+        • Multivariate batch differences
+        Mahalanobis distance from a reference distribution
+
+        ────────────────────────────────────────────────────────
+
+        BETWEEN-SUBJECT VARIABILITY
+
+        • Intra-Class Correlation (ICC)
+        Preservation of between-subject differences
+
+        ────────────────────────────────────────────────────────
+
+        BIOLOGICAL VARIABILITY
+
+        • Covariate significance
+        • Effect sizes (β coefficients)
+        • 95% confidence intervals
+
+        ────────────────────────────────────────────────────────
+
+        Together, these diagnostics help determine whether harmonisation reduces unwanted batch effects while preserving meaningful biological and subject-specific variation.
+        """
+        )
+
+        # --------------------------------------------------------------
+        # Raw IDP distributions across sites (first plot in report)
+        # --------------------------------------------------------------
+        report.log_section(
+            "Raw_IDP_across_sites",
+            "Raw imaging-derived phenotypes across sites"
+        )
+
+        site_counts = pd.Series(batch).astype(str).value_counts()
+        site_subject_counts = (
+            pd.DataFrame({
+                "batch": pd.Series(batch).astype(str),
+                "subject": pd.Series(subject_ids).astype(str),
+            })
+            .drop_duplicates()
+            .groupby("batch")["subject"]
+            .nunique()
+        )
+
+        report.text_simple(
+            f"""
+            📋 OVERVIEW
+            ────────────────────────────────────────────────────────
+
+            This section shows the raw distributions of each IDP across
+            acquisition sites before harmonisation.
+
+            Site sample sizes:
+            • sites: {site_counts.size}
+            • datapoints per site: min={site_counts.min()}, median={int(site_counts.median())}, max={site_counts.max()}
+            • unique subjects per site: min={site_subject_counts.min()}, median={int(site_subject_counts.median())}, max={site_subject_counts.max()}
+
+            The plot adapts automatically to the dataset:
+            • vertical boxplots when the number of sites is small
+            • horizontal boxplots when there are many sites
+            • only the top 10 most site-sensitive IDPs when there are
+              many features
+            • a PCA summary panel when the full feature set is too large
+              to display directly
+
+            📈 INTERPRETATION
+            ────────────────────────────────────────────────────────
+
+            Differences in medians, spread, or outliers across sites
+            suggest site-related effects in the raw data.
+            """
+        )
+
+        raw_df = pd.DataFrame(data, columns=features)
+        raw_df["batch"] = batch
+        raw_df["subject"] = subject_ids
+
+        PlotDiagnosticResults.plot_RawIDPBoxplotsAcrossSites(
+            raw_df,
+            batch_col="batch",
+            subject_col="subject",
+            idp_cols=list(features),
+            figsize_per_panel=_plot_figsize("raw"),
+            rep=report,
+            show=False,
+        )
+
+        report.log_text("Raw IDP boxplots across sites added to report")
+        report.text_simple("────────────────────────────────────────────")
 
         report.log_section(
             "subject_order_consistency",
             "Subject-level variability: Subject order consistency analysis"
         )
 
-        report.log_text(
-            "This metric evaluates whether subjects preserve their relative ranking "
-            "between two timepoints."
+        report.text_simple(
+        """
+        📋 OVERVIEW
+        ────────────────────────────────────────────────────────
+
+        This analysis evaluates whether subjects preserve their
+        relative ranking across longitudinal visits.
+
+        ⚙️ METHOD
+        ────────────────────────────────────────────────────────
+
+        For each pair of visits, Spearman rank correlation (ρ)
+        is computed using subjects measured at both timepoints.
+
+        Statistical significance is assessed using permutation
+        testing, where subject labels are randomly shuffled to
+        generate a null distribution of correlation values.
+
+        📈 INTERPRETATION
+        ────────────────────────────────────────────────────────
+
+        Higher correlation values indicate stronger preservation
+        of subject ordering across visits and greater longitudinal
+        consistency.
+
+        A significant permutation test (p < 0.05) suggests that
+        the observed consistency is unlikely to arise by chance.
+
+        ⚠️ LIMITATIONS
+        ────────────────────────────────────────────────────────
+
+        This metric is most informative in test–retest and
+        travelling-subject designs.
+
+        In longitudinal disease studies, true biological
+        progression may also influence subject ordering over
+        time and should therefore be considered when
+        interpreting results.
+        """
         )
-
-        report.log_text(
-            "METHOD: We compute Spearman’s rank correlation (ρ) between subject-level "
-            "values at the two timepoints."
-        )
-
-        report.log_text(
-            "To assess statistical significance, we perform a permutation test by "
-            "randomly shuffling subject labels at one timepoint and recomputing ρ "
-            "across many iterations to generate a null distribution."
-        )
-
-        report.log_text(
-            "The permutation p-value represents the proportion of shuffled correlations "
-            "that are equal to or greater than the observed ρ."
-        )
-
-        report.log_text(
-            "INTERPRETATION: Higher ρ values indicate stronger preservation of subject "
-            "ranking across timepoints, reflecting greater within-subject consistency."
-        )
-
-        report.log_text(
-            "A permutation p-value < 0.05 (*) suggests that the observed consistency "
-            "is unlikely to arise by chance under random subject labeling."
-        )
-
-        report.log_text(
-            "NOTE: This metric is most applicable in test–retest or traveling-subjects "
-            "designs where the same individuals are measured repeatedly."
-        )
-
-
+        
         # Subject-level: Subject order consistency
         subjorder = DiagnosticFunctionsLong.SubjectOrder_long(idp_matrix=data,
                                                           subjects=subject_ids,
@@ -1745,9 +1864,12 @@ def LongitudinalReport(data, batch,
                                                           nPerm=100)
         print("\nSUBJECT ORDER CONSISTENCY: RANK CORRELATIONS WITH PERMUTATION TESTS")
         print(subjorder)
+        report.text_simple(
+            "────────────────────────────────────────────"
+            )
         PlotDiagnosticResults.plot_SubjectOrder(subjorder,                 
                               ncols=2,
-                              figsize_per_plot=(3.6,3.6),
+                              figsize_per_plot=(8,6),
                               limit_idps=None,
                               sample_method='random',
                               random_state=42,
@@ -1756,52 +1878,62 @@ def LongitudinalReport(data, batch,
 
         # Subject-level: Within Subject Consistency 
         report.log_section(
-             "Within_subject_variability",
-             "Subject-level variability: Within-subject variability analysis"
+            "Within_subject_variability",
+            "Subject-level variability: Within-subject variability analysis"
         )
 
-        report.log_text(
-            "This metric quantifies the magnitude of variation in each subject’s "
-            "feature values across timepoints."
-        )
+        report.text_simple(
+        """
+        📋 OVERVIEW
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "METHOD: For datasets with more than two timepoints, we compute the "
-            "Coefficient of Variation (CV = standard deviation / mean) within each subject."
-        )
+        This analysis quantifies how much individual subjects
+        vary across repeated measurements.
 
-        report.log_text(
-            "For datasets with exactly two timepoints, we compute the Relative Percent "
-            "Difference (RPD), defined as the absolute difference between timepoints "
-            "divided by their mean."
-        )
+        ⚙️ METHOD
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "All variability metrics are computed at the subject level and "
-            "summarized across subjects and features. "
-        )
+        For datasets containing more than two visits,
+        within-subject variability is summarised using the
+        Coefficient of Variation (CV).
 
-        report.log_text(
-            "INTERPRETATION: Lower CV or RPD values indicate lower within-subject "
-            "variability across timepoints."
-        )
+            CV = standard deviation / mean
 
-        report.log_text(
-            "Lower variability reflects greater measurement stability and reduced "
-            "non-biological variation in the features."
-        )
+        For datasets containing exactly two visits,
+        variability is summarised using the Relative Percent
+        Difference (RPD).
 
-        report.log_text(
-            "NOTE: Variability estimates should be interpreted alongside between-subject "
-            "variability to ensure that reductions are not due to over-smoothing or "
-            "loss of biologically meaningful signal."
-        )
+        All variability measures are computed at the subject
+        level and subsequently summarised across subjects and
+        features.
 
-        report.log_text(
-        "NOTE: This metric applies to any repeated-measures dataset. "
-        "In short-term test–retest settings, variability primarily reflects "
-        "measurement noise. In longitudinal studies, variability may reflect "
-        "both biological change and technical variation and should be interpreted accordingly."
+        📈 INTERPRETATION
+        ────────────────────────────────────────────────────────
+
+        Lower variability values indicate greater longitudinal
+        stability within subjects.
+
+        Higher variability values indicate greater change across
+        repeated measurements.
+
+        In general, reduced variability following harmonisation
+        suggests improved measurement consistency.
+
+        ⚠️ LIMITATIONS
+        ────────────────────────────────────────────────────────
+
+        This metric should be interpreted alongside measures of
+        between-subject variability to ensure that reductions are
+        not caused by over-smoothing or loss of meaningful
+        biological signal.
+
+        In short-term test–retest studies, variability primarily
+        reflects measurement noise.
+
+        In longitudinal studies, variability may reflect both
+        true biological change and technical variation and should
+        therefore be interpreted with appropriate caution.
+        """
         )
 
         wsv = DiagnosticFunctionsLong.WithinSubjVar_long(
@@ -1812,61 +1944,70 @@ def LongitudinalReport(data, batch,
                           )
         print("\nWITHIN SUBJECT VARIABILITY: BETWEEN TIMEPOINTS")
         print(wsv)
+
+        report.text_simple(
+            "────────────────────────────────────────────"
+            )
+        
         PlotDiagnosticResults.plot_WithinSubjVar(
             wsv,
             subject_col='subject',
-            limit_subjects=35,
-            limit_idps_for_legend=10,
-            rep=report
+            rep=report,
+            debug=False
             )
         report.log_text("Within subject variability plots added to report")
 
-         # Batch-level: Additive batch effects
+        # Batch-level: Additive batch effects
         report.log_section(
-             "Additive_batch_effects_mixed_models",
+            "Additive_batch_effects_mixed_models",
             "Batch variability (Univariate): Additive batch effect analysis (mean shift)"
         )
 
-        report.log_text(
-            "This analysis evaluates whether batch membership explains additional "
-            "variance in feature values beyond subject-level variability."
-        )
+        report.text_simple(
+        """
+        📋 OVERVIEW
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "METHOD: For each feature, we fit a linear mixed-effects model including "
-            "batch as a fixed effect and subject as a random effect."
-        )
+        This analysis evaluates whether feature means differ
+        systematically across batches after accounting for
+        repeated measurements within subjects.
 
-        report.log_text(
-            "We compare this full model to a nested model without the batch term "
-            "using a Kenward–Roger F-test to assess whether including batch "
-            "significantly improves model fit."
-        )
+        ⚙️ METHOD
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "The resulting p-values are reported in the corresponding plots."
-        )
+        For each feature, a linear mixed-effects model is fitted
+        with batch included as a fixed effect and subject
+        included as a random effect.
 
-        report.log_text(
-            "INTERPRETATION: Non-significant p-values suggest no evidence of "
-            "additive batch effects (i.e., no systematic mean shift across batches)."
-        )
+        A Kenward–Roger F-test is then used to compare the full
+        model against a nested model without the batch term.
 
-        report.log_text(
-            "Significant p-values indicate that batch membership explains additional "
-            "variance in feature means, consistent with residual batch-related "
-            "mean differences."
-        )
+        The resulting p-value quantifies the contribution of
+        batch membership to variation in feature values.
 
-        report.log_text(
-            "When comparing harmonisation strategies, a reduction in the number "
-            "or magnitude of significant batch effects indicates improved removal "
-            "of additive (mean shift) batch variability."
-        )
+        📈 INTERPRETATION
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "NOTE: This analysis assesses mean differences only and does not "
-            "evaluate variance differences or multivariate batch structure."
+        Non-significant p-values suggest no evidence of residual
+        additive batch effects (mean shifts between batches).
+
+        Significant p-values indicate that batch membership
+        explains additional variation in feature means and that
+        batch-related differences remain present.
+
+        When comparing harmonisation strategies, a reduction in
+        the number of significant features suggests improved
+        removal of additive batch effects.
+
+        ⚠️ LIMITATIONS
+        ────────────────────────────────────────────────────────
+
+        This analysis evaluates differences in feature means
+        only.
+
+        Variance differences and multivariate batch structure
+        are assessed separately in subsequent analyses.
+        """
         )
 
         addeff,model_defs_add = DiagnosticFunctionsLong.AdditiveEffect_long(
@@ -1884,6 +2025,10 @@ def LongitudinalReport(data, batch,
         print("\nRESULTS: ADDITIVE EFFECTS")
         print(addeff)
         #report.log_text(pformat(model_defs_add, width=60, sort_dicts=False))
+        report.text_simple(
+            "────────────────────────────────────────────"
+            )
+        
         PlotDiagnosticResults.plot_AddMultEffects(addeff,
                                      feature_col='Feature',
                                      p_col='p-value',
@@ -1891,31 +2036,34 @@ def LongitudinalReport(data, batch,
                                      p_thr=0.05,
                                      annot_fmt="{:.3f}",
                                      value_scale='p',
-                                     figsize=(6,8),
+                                     figsize=_plot_figsize("summary_hbar", len(addeff)),
                                      rep=report)
         report.log_text("Additive batch effect plot added to report")
         
         # Batch-level: Pairwise batch comparison
-        report.log_text(
-           "We test the fixed effect of batch within the mixed-effects framework "
-           "and perform post-hoc pairwise comparisons between batches to evaluate "
-           "differences in feature means."
-        )
+        report.text_simple(
+        """
+        PAIRWISE BATCH COMPARISONS
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-                "For each feature, we compute the number of batch pairs showing "
-                "statistically significant mean differences following multiple "
-                "comparison correction.",
-        )
+        Following the mixed-effects analysis, post-hoc pairwise
+        comparisons are performed between batches to identify
+        which batch pairs differ significantly in feature means.
 
-        report.log_text(
-            "INTERPRETATION: A higher number of significant batch pairs indicates "
-            "stronger residual batch-related mean differences."
-        )
+        For each feature, the number of significant batch pairs
+        is reported following multiple-comparison correction.
 
-        report.log_text(
-            "A reduction in the number of significant batch pairs after harmonisation "
-            "suggests improved mitigation of additive batch effects."
+        📈 INTERPRETATION
+        ────────────────────────────────────────────────────────
+
+        A larger number of significant batch pairs indicates
+        stronger residual batch-related mean differences.
+
+        When comparing harmonisation strategies, a reduction in
+        the number of significant batch pairs suggests improved
+        removal of additive batch effects and greater agreement
+        between batches.
+        """
         )
 
 
@@ -1946,68 +2094,82 @@ def LongitudinalReport(data, batch,
         report.log_text(f"Total number of pairs {total_pairs} for {len(np.unique(batch))} batches")
 
         if len(features) < 30:
+            report.text_simple(
+            "────────────────────────────────────────────"
+            )
             PlotDiagnosticResults.plot_MixedEffectsPart1(mf,
                         idp_col='IDP',
                         metrics=['n_is_batchSig'],
                         plot_type='bar',
                         seed=123,
-                        figsize=(16,4), rep=report)
+                        figsize=_plot_figsize("summary_hbar", len(features)), rep=report)
         else:
+            report.text_simple(
+            "────────────────────────────────────────────"
+            )
             PlotDiagnosticResults.plot_MixedEffectsPart1(mf,
                       idp_col='IDP',
                       metrics=['n_is_batchSig'],
                       plot_type='box',
                       limit_idps=2,
                       seed=123,
-                      figsize=(16,4), rep=report)
+                      figsize=_plot_figsize("summary_box", len(features)), rep=report)
         report.log_text("Pairwise batch variability plots added to report")
 
         # Multiplicative batch effects
         report.log_section(
-             "Multiplicative_batch_effects_Fligner_Killeen",
-             "Batch variability (Univariate): Multiplicative batch effect analysis (variance scaling)"
+            "Multiplicative_batch_effects_Fligner_Killeen",
+            "Batch variability (Univariate): Multiplicative batch effect analysis (variance scaling)"
         )
 
-        report.log_text(
-            "This analysis evaluates whether feature variability differs across batches, "
-            "indicating potential multiplicative (scaling) batch effects."
-        )
+        report.text_simple(
+        """
+        📋 OVERVIEW
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "METHOD: After adjusting for covariate effects, we apply the "
-            "Fligner–Killeen test to compare feature variances across batches."
-        )
+        This analysis evaluates whether feature variability
+        differs systematically across batches.
 
-        report.log_text(
-                "The Fligner–Killeen test is a non-parametric, robust test for "
-                "homogeneity of variances that is less sensitive to deviations "
-                "from normality.",
-        )
+        Differences in variance are consistent with
+        multiplicative (scaling) batch effects.
 
-        report.log_text(
-            "For each feature, the resulting p-value assesses whether variance "
-            "differs significantly between batches."
-        )
+        ⚙️ METHOD
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "INTERPRETATION: Non-significant p-values suggest no evidence of "
-            "multiplicative (scaling) batch effects."
-        )
+        After accounting for covariate effects, feature
+        variances are compared across batches using the
+        Fligner–Killeen test.
 
-        report.log_text(
-            "Significant p-values indicate residual variance differences across "
-            "batches, consistent with multiplicative batch-related effects."
-        )
+        The Fligner–Killeen test is a robust non-parametric
+        test for homogeneity of variances and is less sensitive
+        to departures from normality than many classical
+        variance tests.
 
-        report.log_text(
-            "When comparing harmonisation strategies, a reduction in the number "
-            "of features with significant variance differences indicates improved "
-            "mitigation of scaling-related batch variability."
-        )
+        For each feature, a p-value is computed to assess
+        whether variance differs significantly between batches.
 
-        report.log_text(
-            "NOTE: This test evaluates variance differences only and does not "
-            "assess mean shifts or multivariate batch structure."
+        📈 INTERPRETATION
+        ────────────────────────────────────────────────────────
+
+        Non-significant p-values suggest no evidence of
+        multiplicative batch effects.
+
+        Significant p-values indicate residual variance
+        differences across batches and suggest that scaling-
+        related batch effects remain present.
+
+        When comparing harmonisation strategies, a reduction
+        in the number of significant features suggests improved
+        removal of multiplicative batch effects.
+
+        ⚠️ LIMITATIONS
+        ────────────────────────────────────────────────────────
+
+        This analysis evaluates variance differences only.
+
+        Mean shifts and multivariate batch structure are
+        assessed separately in other sections of the report.
+        """
         )
 
         muleff,model_defs_mul = DiagnosticFunctionsLong.MultiplicativeEffect_long(
@@ -2024,6 +2186,9 @@ def LongitudinalReport(data, batch,
         print("\nRESULTS: MULTIPLICATIVE EFFECTS")
         print(muleff)
         #report.log_text(pformat(model_defs_mul, width=60, sort_dicts=False))
+        report.text_simple(
+            "────────────────────────────────────────────"
+            )
         PlotDiagnosticResults.plot_AddMultEffects(muleff,
                                      feature_col='Feature',
                                      p_col='p-value',
@@ -2031,56 +2196,68 @@ def LongitudinalReport(data, batch,
                                      p_thr=0.05,
                                      annot_fmt="{:.3f}",
                                      value_scale='p',
-                                     figsize=(6,8),
+                                     figsize=_plot_figsize("summary_hbar", len(muleff)),
                                      rep=report)
         report.log_text("Multiplicative batch effect plots added to report")
        
        # Multivariate site differences using Mahalanobis distances
         report.log_section(
-           "Multivariate_batch_difference_reference",
-           "Batch variability (Multivariate): Difference from reference distribution"
+            "Multivariate_batch_difference_reference",
+            "Batch variability (Multivariate): Difference from reference distribution"
         )
 
-        report.log_text(
-            "This analysis evaluates multivariate batch differences relative to a "
-            "reference distribution."
-        )
+        report.text_simple(
+        """
+        📋 OVERVIEW
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "METHOD: For each batch, we compute Mahalanobis distances between "
-            "feature vectors and the reference distribution, accounting for the "
-            "covariance structure of the data."
-        )
+        This analysis evaluates how different each batch is from
+        a reference distribution when all features are considered
+        simultaneously.
 
-        report.log_text(
-            pformat(
-                "Mahalanobis distance measures how far a batch distribution lies "
-                "from the reference in multivariate space while adjusting for "
-                "correlations between features.",
-                width=90,
-                sort_dicts=False
-            )
-        )
+        Unlike univariate analyses, this approach captures
+        relationships between features and assesses the overall
+        multivariate structure of the data.
 
-        report.log_text(
-            "We report both batch-wise average distances and the overall average "
-            "distance across batches."
-        )
+        ⚙️ METHOD
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "INTERPRETATION: Lower Mahalanobis distances indicate that batch "
-            "distributions more closely resemble the reference distribution."
-        )
+        For each batch, Mahalanobis distance is computed relative
+        to a reference distribution.
 
-        report.log_text(
-            "Reductions in distance after harmonisation suggest improved alignment "
-            "of batch distributions in multivariate feature space."
-        )
+        Mahalanobis distance quantifies how far a batch lies from
+        the reference while accounting for correlations between
+        features.
 
-        report.log_text(
-            "NOTE: Distance values depend on the dimensionality and covariance "
-            "structure of the data; comparisons should therefore be made within "
-            "the same dataset and analysis framework."
+        Distances are calculated using the full covariance
+        structure of the dataset.
+
+        Both batch-specific distances and the overall average
+        distance are reported.
+
+        📈 INTERPRETATION
+        ────────────────────────────────────────────────────────
+
+        Lower Mahalanobis distances indicate that a batch more
+        closely resembles the reference distribution.
+
+        Higher distances indicate greater multivariate
+        differences and suggest stronger residual batch effects.
+
+        When comparing harmonisation strategies, reductions in
+        distance indicate improved alignment of batch
+        distributions in multivariate feature space.
+
+        ⚠️ LIMITATIONS
+        ────────────────────────────────────────────────────────
+
+        Distance values depend on the dimensionality and
+        covariance structure of the dataset.
+
+        Distances should therefore be compared within the same
+        dataset and analytical framework rather than across
+        different studies.
+        """
         )
         md = DiagnosticFunctionsLong.MultiVariateBatchDifference_long(
            idp_matrix=data,
@@ -2088,68 +2265,92 @@ def LongitudinalReport(data, batch,
            idp_names=features)
         print("\nMULTIVARIATE PAIRWISE SITE DIFFERENCES:")
         print(md)
-        PlotDiagnosticResults.plot_MultivariateBatchDifference(md, rep=report) 
+        report.text_simple(
+            "────────────────────────────────────────────"
+            )
+        PlotDiagnosticResults.plot_MultivariateBatchDifference(md, figsize=_plot_figsize("summary_hbar", len(md)), rep=report) 
         report.log_text("Multivariate batch variability plots added to report")
 
 
-        # Across subjects-level: Intraclass correlation and within/between subject variability
         report.log_section(
             "Between_subject_variability_mixed_models",
             "Between-subject variability (Univariate): Cross-subject variability analysis"
         )
 
-        report.log_text(
-            "This analysis quantifies the proportion of total variance attributable "
-            "to differences between subjects."
-        )
+        report.text_simple(
+        """
+        📋 OVERVIEW
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "METHOD: We fit a linear mixed-effects model with subject included as "
-            "a random effect to decompose variance into between-subject and "
-            "within-subject components."
-        )
+        This analysis evaluates how much of the total variation
+        in each feature can be attributed to differences between
+        subjects.
 
-        report.log_text(
-                "From the variance components, we compute the Intra-Class Correlation "
-        )
+        Preservation of between-subject variability is important
+        because biologically meaningful differences should remain
+        detectable after harmonisation.
 
-        report.log_text(
-            "The ICC represents the proportion of total variance explained by "
-            "between-subject differences."
-        )
+        ⚙️ METHOD
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "INTERPRETATION: Higher ICC values (closer to 1) indicate stronger "
-            "between-subject differentiation relative to residual variability."
-        )
+        For each feature, a linear mixed-effects model is fitted
+        with subject included as a random effect.
 
-        report.log_text(
-            "When evaluating harmonisation strategies, preservation or improvement "
-            "of ICC suggests that biologically meaningful between-subject signal "
-            "is retained while reducing unwanted variability."
-        )
+        The model decomposes total variance into:
 
-        report.log_text(
-            "NOTE: ICC interpretation depends on study design and model specification; "
-            "comparisons should be made within the same analytical framework."
+        • Between-subject variance
+        • Within-subject variance
+
+        From these variance components, the Intra-Class
+        Correlation (ICC) is computed.
+
+        📈 INTERPRETATION
+        ────────────────────────────────────────────────────────
+
+        ICC represents the proportion of total variance explained
+        by differences between subjects.
+
+        Higher ICC values indicate stronger subject-specific
+        signal relative to residual variability.
+
+        When evaluating harmonisation strategies, preservation
+        or improvement of ICC suggests that meaningful
+        between-subject variation has been retained while
+        unwanted variability has been reduced.
+
+        ⚠️ LIMITATIONS
+        ────────────────────────────────────────────────────────
+
+        ICC values depend on study design, feature properties,
+        and model specification.
+
+        Comparisons should therefore be made within the same
+        dataset and analytical framework.
+        """
         )
 
         #report.log_text(pformat(model_defs, width=60, sort_dicts=False))
         if len(features) < 30:
+            report.text_simple(
+            "────────────────────────────────────────────"
+            )
             PlotDiagnosticResults.plot_MixedEffectsPart1(mf,
                         idp_col='IDP',
                         metrics=['ICC'],
                         plot_type='bar',
                         seed=123,
-                        figsize=(16,4), rep=report)
+                        figsize=_plot_figsize("summary_hbar", len(features)), rep=report)
         else:
+            report.text_simple(
+            "────────────────────────────────────────────"
+            )
             PlotDiagnosticResults.plot_MixedEffectsPart1(mf,
                       idp_col='IDP',
                       metrics=['ICC'],
                       plot_type='box',
                       limit_idps=2,
                       seed=123,
-                      figsize=(16,4))
+                      figsize=_plot_figsize("summary_box", len(features)))
         report.log_text("ICC plot added to report")  
         
         # Biological variability
@@ -2158,59 +2359,69 @@ def LongitudinalReport(data, batch,
             "Biological variability analysis"
         )
 
-        report.log_text(
-            "This analysis evaluates whether biologically meaningful variables "
-            "explain variation in feature values after accounting for subject-level "
-            "and batch-related effects."
-        )
+        report.text_simple(
+        """
+        📋 OVERVIEW
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "METHOD: We fit linear mixed-effects models including biological "
-            "covariates of interest as fixed effects, with subject and/or batch "
-            "modeled appropriately depending on study design."
-        )
+        This analysis evaluates whether biologically meaningful
+        covariates remain associated with imaging-derived
+        phenotypes after accounting for repeated measurements
+        and batch-related effects.
 
-        report.log_text(
-            "Outputs include:"
-        )
+        Preservation of biological associations is a key
+        requirement of successful harmonisation.
 
-        report.log_text(
-            "1) Statistical significance of biological covariates"
-        )
+        ⚙️ METHOD
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "2) Estimated effect sizes (beta coefficients)"
-        )
+        Linear mixed-effects models are fitted for each feature
+        with biological covariates included as fixed effects.
 
-        report.log_text(
-            "3) 95% confidence intervals for effect estimates"
-        )
+        For each covariate–feature combination, the following
+        statistics are reported:
 
-        report.log_text(
-            "INTERPRETATION: Significant biological effects with stable or increased "
-            "effect sizes after harmonisation suggest preservation of meaningful signal."
-        )
+        • Statistical significance (p-value)
+        • Effect size (β coefficient)
+        • 95% confidence interval
 
-        report.log_text(
-            "Attenuation or loss of biological associations may indicate "
-            "over-correction or removal of true biological variability."
-        )
+        📈 INTERPRETATION
+        ────────────────────────────────────────────────────────
 
-        report.log_text(
-            "Conversely, strong residual batch effects can obscure or bias "
-            "biological associations, reducing interpretability."
-        )
+        Significant associations indicate that variation in the
+        feature is related to the biological covariate.
 
-        report.log_text(
-            "NOTE: Interpretation should consider effect size magnitude, direction, "
-            "and confidence intervals rather than p-values alone."
+        Preservation of significant effects and stable effect
+        sizes following harmonisation suggests that meaningful
+        biological signal has been retained.
+
+        Substantial attenuation or loss of biological
+        associations may indicate over-correction or removal of
+        true biological variability.
+
+        Strong residual batch effects may also obscure biological
+        relationships and reduce interpretability.
+
+        ⚠️ LIMITATIONS
+        ────────────────────────────────────────────────────────
+
+        Biological effects should not be evaluated using
+        p-values alone.
+
+        Effect size magnitude, effect direction, and confidence
+        intervals should all be considered when assessing the
+        impact of harmonisation.
+        """
         )
         inferred_fix = list(covariates.keys())
+        report.text_simple(
+            "────────────────────────────────────────────"
+            )
         PlotDiagnosticResults.plot_MixedEffectsPart2(mf,
                       idp_col='IDP',
                       fix_eff=inferred_fix,
                       p_thr=0.05,
-                      figsize=(8,4),
+                      figsize=_plot_figsize("biological", len(features)),
                       rep=report)
         report.log_text("Biological variability plots added to report")
 
@@ -2222,10 +2433,58 @@ def LongitudinalReport(data, batch,
             "REFERENCES",
             "REFERENCES"
         )
-        report.log_text("Subject order consistency metric: https://doi.org/10.1162/imag_a_00042\n")
-        report.log_text("Multivariate batch differences: https://10.1016/j.neuroimage.2022.119768\n")
-        report.log_text("Application to real dataset: https://doi.org/10.1002/alz70856_097537\n")
 
+        report.text_simple(
+        """
+        The following references provide methodological
+        background for selected diagnostics included in this
+        report.
+
+        ────────────────────────────────────────────────────────
+
+        Subject Order Consistency
+
+        Warrington et al. 
+        Imaging Neuroscience (2023)
+
+        https://doi.org/10.1162/imag_a_00042
+
+        ────────────────────────────────────────────────────────
+
+        Multivariate Batch Differences
+
+        Beer et al.
+        NeuroImage (2022)
+
+        https://doi.org/10.1016/j.neuroimage.2022.119768
+
+        ────────────────────────────────────────────────────────
+
+        Mahalanobis Distance metric 
+
+        Parekh et al. 2022
+        NeuroImage (2022)
+
+        https://doi.org/10.1016/j.neuroimage.2022.119768 
+
+        ────────────────────────────────────────────────────────
+
+
+        Application of these metrics to Real Longitudinal Data and 
+        comparison of statistical and image-based harmonisation 
+        methods.
+
+        Bhalerao et al. 2026
+
+        https://doi.org/10.64898/2026.04.21.26351106 
+
+        ────────────────────────────────────────────────────────
+
+        These references are provided to support interpretation
+        of the diagnostic metrics and their application to
+        harmonisation studies.
+        """
+        )
 
     finally:
         # If we created the local report context, close it properly

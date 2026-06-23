@@ -31,6 +31,8 @@ from scipy.stats import (
     rankdata,
     norm
 )
+from statsmodels.stats.multitest import multipletests
+import json
 from pandas.api.types import CategoricalDtype
 
 def _force_numeric_vector(series_like) -> np.ndarray:
@@ -216,6 +218,48 @@ def SubjectOrder_long(
 # Add Tuple import to avoid error here:
 from typing import Tuple, Dict, Any, List, Iterable
 
+import numpy as np
+import pandas as pd
+from itertools import combinations
+from typing import Sequence, Optional
+
+def _pairwise_rpd(arr: np.ndarray) -> float:
+    """
+    Mean pairwise relative percent difference (RPD) across all pairs.
+
+    RPD(i, j) = abs(xi - xj) / ((xi + xj) / 2) * 100
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        1D array of numeric values.
+
+    Returns
+    -------
+    float
+        Mean pairwise RPD in percent, or NaN if fewer than 2 valid values
+        or if no valid denominator is available.
+    """
+    arr = np.asarray(arr, dtype=float)
+    arr = arr[~np.isnan(arr)]
+    n = arr.size
+
+    if n < 2:
+        return np.nan
+
+    rpds = []
+    for i, j in combinations(range(n), 2):
+        denom = (arr[i] + arr[j]) / 2.0
+        if denom == 0 or np.isnan(denom):
+            continue
+        rpds.append(abs(arr[i] - arr[j]) / denom * 100.0)
+
+    if len(rpds) == 0:
+        return np.nan
+
+    return float(np.mean(rpds))
+
+
 def WithinSubjVar_long(
     idp_matrix: np.ndarray,
     subjects: Sequence,
@@ -225,36 +269,37 @@ def WithinSubjVar_long(
     """
     Compute within-subject variability (percent) for each IDP across timepoints.
 
-    For each subject, variability is calculated per IDP using available (non-NaN)
-    observations:
+    This version uses one consistent metric for all subjects:
+    mean pairwise RPD across all available non-missing measurements.
 
-    - If exactly 2 timepoints: absolute percent difference relative to the mean,
-      ``|x1 - x2| / mean * 100``.
-    - If >2 timepoints: coefficient of variation (sample SD, ddof=1) relative
-      to the mean, ``SD / mean * 100``.
-    - If mean is 0 or no valid data: returns NaN.
+    Output columns:
+    - subject
+    - n_obs
+    - metric_type
+    - one column per IDP
 
-    Args:
-        idp_matrix: Numeric matrix of IDP values with shape
-            `(n_samples, n_idps)`.
-        subjects: Subject identifiers used to group repeated measurements.
-        timepoints: Timepoint labels required for input alignment.
-        idp_names: Optional names of IDPs. Defaults to `["idp_1", ...]`.
+    Parameters
+    ----------
+    idp_matrix : np.ndarray
+        Numeric matrix of shape (n_samples, n_idps).
+    subjects : Sequence
+        Subject identifiers aligned to rows of idp_matrix.
+    timepoints : Sequence
+        Timepoint labels aligned to rows of idp_matrix. Kept for validation.
+    idp_names : Optional[Sequence[str]]
+        Optional list of IDP names. Defaults to idp_1, idp_2, ...
 
-    Returns:
-        pd.DataFrame: One row per subject with columns `["subject", <IDP1>,
-        <IDP2>, ...]`, where each IDP value represents within-subject percent
-        variability.
-
-    Raises:
-        ValueError: If `idp_matrix` is not 2-D, if input sequence lengths do not match the number of rows, or if `idp_names` length does not match the number of columns.
+    Returns
+    -------
+    pd.DataFrame
+        One row per subject with within-subject variability values.
     """
-
-
     if not isinstance(idp_matrix, np.ndarray):
         idp_matrix = np.asarray(idp_matrix, dtype=float)
+
     if idp_matrix.ndim != 2:
         raise ValueError("idp_matrix must be 2D (n_samples, n_idps).")
+
     n_samples, n_idps = idp_matrix.shape
 
     if len(subjects) != n_samples:
@@ -275,23 +320,16 @@ def WithinSubjVar_long(
 
     out_rows = []
     for subj, g in df.groupby("subject", sort=False):
-        row = {"subject": subj}
+        row = {
+            "subject": subj,
+            "n_obs": int(len(g)),
+            "metric_type": "Pairwise RPD",
+        }
+
         for col in idp_names:
             arr = g[col].dropna().to_numpy(dtype=float)
-            n = arr.size
-            if n == 0:
-                row[col] = np.nan
-                continue
-            mean_val = arr.mean()
-            if mean_val == 0:
-                row[col] = np.nan
-                continue
-            if n == 2:
-                row[col] = float(abs(arr[0] - arr[1]) / mean_val * 100.0)
-            elif n > 2:
-                row[col] = float(arr.std(ddof=1) / mean_val * 100.0)
-            else:
-                row[col] = np.nan
+            row[col] = _pairwise_rpd(arr)
+
         out_rows.append(row)
 
     return pd.DataFrame(out_rows)
@@ -758,75 +796,6 @@ def MixedEffects_long(
     p_corr: int = 1,
     reml: bool = True,
 ) -> Tuple[pd.DataFrame, list]:
-    """
-    Run a mixed-effects modeling pipeline per-IDP for longitudinal, multi-site data.
-
-    For each IDP (column) this function:
-
-    1. Builds three formulas (full, subject-only / null, no-batch) via
-       ``build_mixed_formula``, honoring forced categorical/numeric conversions
-       and optional z-scoring of variables.
-    2. Fits a full mixed model (fixed effects including batch + specified random
-       effects) using ``statsmodels`` MixedLM.
-    3. Runs pairwise Wald contrasts between batch levels to count significant
-       site differences.
-    4. Fits a subject-only random-intercept model to extract subject (between)
-       variance and residual (within) variance, then computes ICC and WCV.
-    5. Fits a fixed-effects-only model (no batch terms) to extract coefficient
-       estimates, p-values and confidence intervals for requested fixed effects.
-    6. Collects diagnostics and returns one summary row per IDP. Model failures
-       yield NaNs for that IDP but do not stop the pipeline.
-
-    Args:
-        idp_matrix: Numeric matrix of IDP values with shape
-            `(n_samples, n_idps)`.
-        subjects: Subject identifiers.
-        timepoints: Timepoint labels.
-        batches: Batch or site labels, converted internally to categorical.
-        idp_names: Names for IDP columns.
-        covariates: Optional mapping of `name -> sequence` for additional
-            covariates.
-        fix_eff: Fixed-effect variable names to include.
-        ran_eff: Random-effect grouping variables.
-        force_categorical: Columns to coerce to categorical dtype.
-        force_numeric: Columns to coerce to numeric dtype.
-        zscore_var: Variables to z-score before model fitting.
-        do_zscore: Whether to use `zscore_...` columns when available.
-        p_thr: Nominal alpha for pairwise Wald tests.
-        p_corr: Multiple-comparison correction mode for pairwise tests.
-        reml: Whether to fit `MixedLM` using REML.
-
-    Returns:
-        tuple[pd.DataFrame, list]: A tuple `(results_df, model_defs)` where
-        `results_df` contains one row per IDP with mixed-model diagnostics and
-        fixed-effect summaries, and `model_defs` stores the formulas used for
-        each feature.
-
-    Raises:
-        ValueError: If `idp_matrix` is not 2-D or if input sequence lengths do not match the number of rows.
-        KeyError: If requested variables in `fix_eff`, `ran_eff`, or `force_*` are not present in the assembled DataFrame.
-
-    Notes:
-        Column names exposed to users (for ``fix_eff`` / ``ran_eff`` /
-      ``force_*``) are exactly: ``'subjects'``, ``'timepoints'``,
-      ``'batches'`` — these names are inserted into the working DataFrame so
-      callers should use them when referring to these variables.
-        The function reorders batch categories so the largest group becomes the
-      reference level before fitting (helps stable parameterization of
-      contrasts).
-        The primary grouping column for mixed models is the first valid entry of
-      ``ran_eff`` (or ``'subjects'`` when ``ran_eff`` was not specified).
-    - If model fitting fails for an IDP, the pipeline records NaNs for that
-      IDP and continues (failures do not stop the whole run).
-    - Pairwise contrasts are computed with ``pairwise_site_tests`` using the
-      fit object's parameters and covariance; p-values are two-sided Wald
-      z-tests.
-    - Confidence intervals and p-values are extracted from the fitted
-      ``statsmodels`` result objects when available; missing names or
-      extraction failures result in NaNs for those fields.
-    """
-
-    # --- basic validation and coerce idp_matrix ---
     if not isinstance(idp_matrix, np.ndarray):
         idp_matrix = np.asarray(idp_matrix, dtype=float)
     if idp_matrix.ndim != 2:
@@ -844,48 +813,34 @@ def MixedEffects_long(
     if len(idp_names) != n_features:
         raise ValueError("idp_names length must match number of idp columns.")
 
-    # canonical column names exposed to caller
     subjects_col = "subjects"
     timepoints_col = "timepoints"
     batches_col = "batches"
 
-    # prepare covariates dict
     covariates = dict(covariates or {})
     for k, seq in covariates.items():
         if len(seq) != n_samples:
             raise ValueError(f"Covariate '{k}' length ({len(seq)}) does not match n_samples ({n_samples}).")
 
-    # build master df using canonical names (so users can refer to those names later)
     df = pd.DataFrame(idp_matrix, columns=idp_names)
     df[subjects_col] = pd.Series(subjects).astype(str)
     df[timepoints_col] = pd.Series(timepoints).astype(str)
     df[batches_col] = pd.Series(batches).astype(str).astype("category")
-
-    # insert covariates verbatim (keys used as column names)
     for k, seq in covariates.items():
         df[k] = pd.Series(seq)
 
-    # normalize caller lists
     fix_eff = list(fix_eff or [])
     ran_eff = list(ran_eff or [])
     force_categorical = list(force_categorical or [])
     force_numeric = list(force_numeric or [])
     zscore_var = list(zscore_var or [])
 
-    # Defaults:
-    # - ran_eff defaults to ['subjects'] if user didn't provide any
     if len(ran_eff) == 0:
-        if subjects_col in df.columns:
-            ran_eff = [subjects_col]
-        else:
-            raise KeyError("ran_eff not provided and no 'subjects' column found in data.")
+        ran_eff = [subjects_col]
 
-    # - fix_eff defaults to covariate keys + timepoints + batches (use exact names)
     if len(fix_eff) == 0:
-        inferred_fix = list(covariates.keys())
-        fix_eff = inferred_fix
+        fix_eff = list(covariates.keys())
 
-    # - infer force_numeric / force_categorical from covariates if none provided
     if len(force_numeric) == 0 and len(force_categorical) == 0:
         for k in covariates.keys():
             ser = pd.Series(covariates[k])
@@ -893,13 +848,11 @@ def MixedEffects_long(
                 force_numeric.append(k)
             else:
                 force_categorical.append(k)
-        # treat timepoints and batches as categorical by default
-        if timepoints_col in df.columns and timepoints_col not in force_categorical:
+        if timepoints_col not in force_categorical:
             force_categorical.append(timepoints_col)
-        if batches_col in df.columns and batches_col not in force_categorical:
+        if batches_col not in force_categorical:
             force_categorical.append(batches_col)
 
-    # final validation: any referenced names must exist in df
     to_check = {
         "fix_eff": fix_eff,
         "ran_eff": ran_eff,
@@ -914,21 +867,16 @@ def MixedEffects_long(
 
     outs: List[Dict[str, Any]] = []
 
-    # iterate over IDPs and fit 3-model pipeline per IDP
     for tmpidp in idp_names:
-        # pick needed columns: random effects, batch, fixed effects, idp
         cols_needed: List[str] = []
         cols_needed += [c for c in ran_eff if c in df.columns]
         cols_needed += [batches_col]
         cols_needed += [c for c in fix_eff if c in df.columns]
         cols_needed += [tmpidp]
-        # dedupe while preserving order
         seen = set()
         cols_needed = [x for x in cols_needed if not (x in seen or seen.add(x))]
 
         all_data = df[cols_needed].copy()
-
-        # include current idp in zscore list for local preprocessing
         zscore_vars_local = list(zscore_var) + [tmpidp]
         all_data, formulas = build_mixed_formula(
             all_data,
@@ -941,13 +889,6 @@ def MixedEffects_long(
             zscore_vars=zscore_vars_local,
             zscore_response=do_zscore,
         )
-        print(f"\nMixedEffects_long — IDP: {tmpidp}")
-        print("  Model 1 (full):")
-        print(f"    {formulas[0]}")
-        print("  Model 2 (subject-only / null):")
-        print(f"    {formulas[1]}")
-        print("  Model 3 (no batch):")
-        print(f"    {formulas[2]}")
 
         model_def = {
             "Feature": tmpidp,
@@ -955,12 +896,10 @@ def MixedEffects_long(
                 "full": formulas[0],
                 "subject_only": formulas[1],
                 "no_batch": formulas[2],
-                }
-                }
-
+            }
+        }
         model_defs.append(model_def)
 
-        # reorder batch levels so largest group is reference
         all_data[batches_col] = all_data[batches_col].astype("category")
         counts = all_data[batches_col].value_counts()
         if len(counts) > 0:
@@ -974,64 +913,73 @@ def MixedEffects_long(
             except Exception:
                 all_data[batches_col] = all_data[batches_col].astype("category")
 
-        # prepare output dict for this IDP
         rowd: Dict[str, Any] = {}
         rowd["IDP"] = tmpidp.replace("_", "-")
         rowd["batch"] = batches_col
 
-        # Model 1: full (fixed with batch + random terms)
         fixed_formula_full = formulas[0]
         ml_formula_full = re.sub(r"\s*\+\s*\(1\|[^)]+\)", "", fixed_formula_full)
 
-        res1 = None
         try:
-            # groups: prefer first ran_eff if present, else use subjects_col
             if len(ran_eff) > 0 and ran_eff[0] in all_data.columns:
                 groups_col = all_data[ran_eff[0]]
-            elif subjects_col in all_data.columns:
-                groups_col = all_data[subjects_col]
             else:
-                groups_col = None
-
-            if groups_col is None:
-                raise RuntimeError("No valid grouping column for mixed model; skipping model fits.")
+                groups_col = all_data[subjects_col]
 
             mdl1 = smf.mixedlm(ml_formula_full, all_data, groups=groups_col)
             res1 = mdl1.fit(reml=reml, method="lbfgs")
         except Exception:
-            # fill placeholders and continue to next IDP
             rowd.update({
                 "n_is_batchSig": np.nan,
+                "n_is_batchSig_raw": np.nan,
+                "n_is_batchSig_bonf": np.nan,
                 "anova_batches": np.nan,
                 "Subj_Var": np.nan,
                 "Resid_Var": np.nan,
                 "ICC": np.nan,
-                "WCV": np.nan
+                "WCV": np.nan,
+                "pairwise_site_tests": [],
             })
             for v in fix_eff:
-                rowd[f"{v}_est"] = np.nan; rowd[f"{v}_pval"] = np.nan; rowd[f"{v}_ciL"] = np.nan; rowd[f"{v}_ciU"] = np.nan
+                rowd[f"{v}_est"] = np.nan
+                rowd[f"{v}_pval"] = np.nan
+                rowd[f"{v}_ciL"] = np.nan
+                rowd[f"{v}_ciU"] = np.nan
             outs.append(rowd)
             continue
 
         # Pairwise batch/site tests
         try:
-            n_sig, full_tab = pairwise_site_tests(res1, batches_col, all_data, alpha=p_thr, debug=False)
+            n_sig_raw, full_tab = pairwise_site_tests(res1, batches_col, all_data, alpha=p_thr, debug=False)
         except Exception:
-            n_sig = 0; full_tab = pd.DataFrame(columns=["siteA", "siteB", "p", "sig"])
+            n_sig_raw = 0
+            full_tab = pd.DataFrame(columns=["siteA", "siteB", "p", "sig"])
 
-        # multiple-comparison handling
+        full_tab = full_tab.copy()
+        if len(full_tab) > 0:
+            full_tab["pair_label"] = full_tab["siteA"].astype(str) + " vs " + full_tab["siteB"].astype(str)
+            pvals = pd.to_numeric(full_tab["p"], errors="coerce").to_numpy(dtype=float)
+            valid = np.isfinite(pvals)
+
+            full_tab["p_adj_bonf"] = np.nan
+            full_tab["sig_bonf"] = False
+
+            if valid.any():
+                _, p_adj, _, _ = multipletests(pvals[valid], alpha=p_thr, method="bonferroni")
+                full_tab.loc[valid, "p_adj_bonf"] = p_adj
+                full_tab.loc[valid, "sig_bonf"] = p_adj < p_thr
+
+        n_sig_bonf = int(np.nansum(full_tab["sig_bonf"].astype(int))) if len(full_tab) else 0
+
+        # keep backward compatibility: n_is_batchSig follows p_corr
         if p_corr == 0:
-            rowd["n_is_batchSig"] = int(n_sig)
+            rowd["n_is_batchSig"] = int(n_sig_raw)
         else:
-            tmpsig = full_tab["p"].to_numpy(dtype=float)
-            tmpsig_nonan = tmpsig[~np.isnan(tmpsig)]
-            if len(tmpsig_nonan) > 0:
-                p_corr_thr = 0.05 / len(tmpsig_nonan)
-                rowd["n_is_batchSig"] = int(np.sum(tmpsig_nonan < p_corr_thr))
-            else:
-                rowd["n_is_batchSig"] = 0
+            rowd["n_is_batchSig"] = int(n_sig_bonf)
 
-        # ANOVA-like count of batch fixed-effect p < 0.05
+        rowd["n_is_batchSig_raw"] = int(n_sig_raw)
+        rowd["n_is_batchSig_bonf"] = int(n_sig_bonf)
+
         try:
             fe_pvals = res1.pvalues
             batch_mask = [bool(re.search(rf"{re.escape(str(batches_col))}", str(name))) for name in fe_pvals.index]
@@ -1040,13 +988,11 @@ def MixedEffects_long(
             anova_batches = np.nan
         rowd["anova_batches"] = anova_batches
 
-        # Model 2: subject-only random -> variance components (ICC/WCV)
+        # Subject-only model for ICC/WCV
         try:
             formula2_raw = formulas[1]
             formula2_fixed = re.sub(r"\s*\+\s*\(1\|[^)]+\)", "", formula2_raw)
-            groups_col2 = all_data[ran_eff[0]] if (len(ran_eff) > 0 and ran_eff[0] in all_data.columns) else all_data[subjects_col] if subjects_col in all_data.columns else None
-            if groups_col2 is None:
-                raise RuntimeError("No grouping column available for subject-only random model.")
+            groups_col2 = all_data[ran_eff[0]] if (len(ran_eff) > 0 and ran_eff[0] in all_data.columns) else all_data[subjects_col]
             mdl2 = smf.mixedlm(formula=formula2_fixed, data=all_data, groups=groups_col2)
             res2 = mdl2.fit(reml=reml, method="lbfgs")
 
@@ -1067,49 +1013,27 @@ def MixedEffects_long(
 
             subj_var = _extract_subj_var(res2)
             resid_var = float(getattr(res2, "scale", np.nan))
-
-            # robust re-fit attempts if subj_var degenerate
-            if subj_var == 0 or (isinstance(subj_var, float) and np.isfinite(subj_var) and subj_var < 1e-12):
-                tried_ok = False
-                for method_try in ("lbfgs", "powell", "nm"):
-                    try:
-                        res2_try = mdl2.fit(reml=False, method=method_try, maxiter=5000)
-                        subj_var_try = _extract_subj_var(res2_try)
-                        resid_var_try = float(getattr(res2_try, "scale", np.nan))
-                        if np.isfinite(subj_var_try) and subj_var_try > 0 and not np.isnan(resid_var_try):
-                            res2 = res2_try
-                            subj_var = subj_var_try
-                            resid_var = resid_var_try
-                            tried_ok = True
-                            break
-                    except Exception:
-                        continue
-                if not tried_ok and subj_var == 0:
-                    subj_var = np.nan
-
             rowd["Subj_Var"] = subj_var
             rowd["Resid_Var"] = resid_var
-            try:
-                if np.isfinite(subj_var) and np.isfinite(resid_var) and subj_var > 0:
-                    rowd["ICC"] = subj_var / (subj_var + resid_var)
-                    rowd["WCV"] = resid_var / subj_var
-                else:
-                    rowd["ICC"] = np.nan; rowd["WCV"] = np.nan
-            except Exception:
-                rowd["ICC"] = np.nan; rowd["WCV"] = np.nan
+            if np.isfinite(subj_var) and np.isfinite(resid_var) and subj_var > 0:
+                rowd["ICC"] = subj_var / (subj_var + resid_var)
+                rowd["WCV"] = resid_var / subj_var
+            else:
+                rowd["ICC"] = np.nan
+                rowd["WCV"] = np.nan
         except Exception:
-            rowd["Subj_Var"] = np.nan; rowd["Resid_Var"] = np.nan; rowd["ICC"] = np.nan; rowd["WCV"] = np.nan
+            rowd["Subj_Var"] = np.nan
+            rowd["Resid_Var"] = np.nan
+            rowd["ICC"] = np.nan
+            rowd["WCV"] = np.nan
 
-        # Model 3: fixed-effects only -> extract coefficients for fix_eff
+        # Fixed effects
         try:
             formula3_raw = formulas[2]
             formula3_fixed = re.sub(r"\s*\+\s*\(1\|[^)]+\)", "", formula3_raw)
-            groups_col3 = all_data[ran_eff[0]] if (len(ran_eff) > 0 and ran_eff[0] in all_data.columns) else all_data[subjects_col] if subjects_col in all_data.columns else None
-            if groups_col3 is None:
-                raise RuntimeError("No grouping column for model 3.")
+            groups_col3 = all_data[ran_eff[0]] if (len(ran_eff) > 0 and ran_eff[0] in all_data.columns) else all_data[subjects_col]
             mdl3 = smf.mixedlm(formula=formula3_fixed, data=all_data, groups=groups_col3)
             res3 = mdl3.fit(reml=reml, method="lbfgs")
-
             for v in fix_eff:
                 pname = f"zscore_{v}" if f"zscore_{v}" in res3.params.index else v
                 coeff_dict = _extract_numeric_coeff_scalar(res3, pname)
@@ -1117,16 +1041,26 @@ def MixedEffects_long(
                 rowd.update(cleaned)
         except Exception:
             for v in fix_eff:
-                rowd[f"{v}_est"] = np.nan; rowd[f"{v}_pval"] = np.nan; rowd[f"{v}_ciL"] = np.nan; rowd[f"{v}_ciU"] = np.nan
+                rowd[f"{v}_est"] = np.nan
+                rowd[f"{v}_pval"] = np.nan
+                rowd[f"{v}_ciL"] = np.nan
+                rowd[f"{v}_ciU"] = np.nan
 
+        rowd["pairwise_site_tests"] = full_tab.to_dict(orient="records")
         outs.append(rowd)
 
-    # assemble results DataFrame with stable column order
     if len(outs) == 0:
-        return pd.DataFrame()
+        return pd.DataFrame(), model_defs
+
     first = outs[0]
     mdlnames = [k for k in first.keys() if k.endswith("_est") or k.endswith("_pval") or k.endswith("_ciL") or k.endswith("_ciU")]
-    col_order = ["IDP", "batch", "n_is_batchSig", "anova_batches", "Subj_Var", "Resid_Var", "ICC", "WCV"] + mdlnames
+    col_order = [
+        "IDP", "batch",
+        "n_is_batchSig", "n_is_batchSig_raw", "n_is_batchSig_bonf",
+        "anova_batches", "Subj_Var", "Resid_Var", "ICC", "WCV",
+        "pairwise_site_tests",
+    ] + mdlnames
+
     rows_df = pd.DataFrame(outs)
     for c in col_order:
         if c not in rows_df.columns:
