@@ -1,17 +1,23 @@
-# Welcome to MkDocs
+# API Reference
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+This directory contains API-level documentation for the package modules and helper scripts.
 
-## Commands
+## Modules
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
+- DiagnosticFunctions
+- DiagnosticFunctionsLong
+- DiagnosticReport
+- HarmonisationFunctions
+- LoggingTool
+- PlotDiagnosticResults
+- CLI
+- Longitudinal CLI
+- GUI
+- GUI (Longitudinal)
+- Simulator
+- SaveDiagnosticResults
+- Cross-sectional Workflow
+- Longitudinal Workflow
+- Power Analysis
 
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+Use the links in the sidebar to open individual module pages.

@@ -6,7 +6,19 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/DiagnoseHarmonisation.svg)](https://pypi.org/project/DiagnoseHarmonisation/)
 [![License](https://img.shields.io/pypi/l/DiagnoseHarmonisation.svg)](https://pypi.org/project/DiagnoseHarmonisation/)
 
-DiagnoseHarmonise is an **in-development** library for the streamlined application and assessment of harmonisation algorithms at the summary-measure level. It also serves as a centralised location for popular, well-validated harmonisation methods from the literature. The tool is available on [Github](https://github.com/Jake-Turnbull/HarmonisationDiagnostics?tab=readme-ov-file), please consider starring the page to increase the tools visibility.
+DiagnoseHarmonise is an library for the streamlined application and assessment of harmonisation algorithms at the summary-measure level. It also serves as a centralised location for popular, well-validated harmonisation methods from the literature. The tool is available on [Github](https://github.com/Jake-Turnbull/HarmonisationDiagnostics?tab=readme-ov-file), please consider starring the page to increase the tools visibility.
+
+The tool can be downloaded from PyPi using:
+
+```bash
+pip install DiagnoseHarmonisation
+```
+
+or for the development version:
+
+```bash
+pip install git+https://github.com/Jake-Turnbull/HarmonisationDiagnostics.git
+```
 
 In an upcoming paper, we plan to demonstrate that systematic evaluation and reporting of different components of batch effects is not only beneficial for choosing an appropriate harmonisation strategy, but essential for evaluating how well harmonisation has worked.
 

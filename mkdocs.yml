@@ -7,6 +7,7 @@ nav:
   - Home: index.md
   - Getting Started: getting_started.md
   - Theory: Theory.md
+  - Harmonisation Methods: HarmonisationMethods.md
   - Simulator: simulator.md
   - Terminal: terminal.md
   - API Reference:
@@ -16,6 +17,16 @@ nav:
       - PlotDiagnosticResults: api/PlotDiagnosticResults.md
       - LoggingTool: api/LoggingTool.md
       - DiagnosticFunctionsLong: api/DiagnosticFunctionsLong.md
+      - CLI: api/CLI.md
+      - Longitudinal CLI: api/LongitudinalCLI.md
+      - GUI: api/GUI.md
+      - GUI (Longitudinal): api/GUILongitudinal.md
+      - Simulator: api/Simulator.md
+      - SaveDiagnosticResults: api/SaveDiagnosticResults.md
+      - Cross-sectional Workflow: api/CrossSectionalWorkflow.md
+      - Longitudinal Workflow: api/LongitudinalWorkflow.md
+      - Power Analysis: api/PowerAnalysis.md
+      - "Demo: Run local priors": api/RunDemoLocalPriors.md
 
 plugins:
   - search
