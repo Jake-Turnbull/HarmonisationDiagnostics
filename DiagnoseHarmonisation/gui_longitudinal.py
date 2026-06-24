@@ -147,7 +147,7 @@ class LongitudinalGuiApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("DiagnoseHarmonisation Longitudinal GUI")
-        self.root.minsize(1000, 760)
+        self.root.minsize(1000, 950)
 
         self.status_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.last_output_dir: Path | None = None
@@ -179,7 +179,6 @@ class LongitudinalGuiApp:
 
         container.columnconfigure(1, weight=1)
         container.rowconfigure(6, weight=1)
-        container.rowconfigure(7, weight=1)
 
         # Inputs
         inputs_frame = ttk.LabelFrame(container, text="Files", padding=10)
@@ -264,7 +263,7 @@ class LongitudinalGuiApp:
             feature_frame,
             selectmode="multiple",
             exportselection=False,
-            height=10,
+            height=7,
         )
         self.feature_listbox.grid(row=1, column=0, sticky="nsew")
 
@@ -302,7 +301,7 @@ class LongitudinalGuiApp:
             self.cov_frame,
             selectmode="multiple",
             exportselection=False,
-            height=10,
+            height=7,
         )
         self.covariate_listbox.grid(row=1, column=0, sticky="nsew")
 
@@ -352,7 +351,7 @@ class LongitudinalGuiApp:
 
         # Actions
         actions_frame = ttk.Frame(container)
-        actions_frame.grid(row=5, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        actions_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(0, 10))
 
         self.run_button = ttk.Button(
             actions_frame,
