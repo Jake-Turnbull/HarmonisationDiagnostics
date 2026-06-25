@@ -8,11 +8,14 @@ from DiagnoseHarmonisation.gui_longitudinal import build_gui_run_config
 from DiagnoseHarmonisation.longitudinal_workflow import LongitudinalRunConfig, prepare_longitudinal_inputs
 
 
+TEST_RESULTS_DIR = Path(__file__).resolve().parents[1] / "TestResults"
+
+
 def test_build_gui_run_config_allows_empty_covariates():
     config = build_gui_run_config(
-        data_path="/tmp/data.csv",
+        data_path=str(TEST_RESULTS_DIR / "data.csv"),
         covariates_path="",
-        output_dir="/tmp",
+        output_dir=str(TEST_RESULTS_DIR),
         subject_id_column="subject",
         timepoint_column="timepoint",
         batch_column="batch",
@@ -52,7 +55,7 @@ def test_prepare_longitudinal_inputs_without_covariates(tmp_path: Path):
         covariates_timepoint_column=None,
         selected_covariates=None,
         covariate_names=None,
-        output_dir=str(tmp_path),
+        output_dir=str(TEST_RESULTS_DIR / "longitudinal_output"),
         report_name="test_report",
         save_data=False,
         save_data_name=None,

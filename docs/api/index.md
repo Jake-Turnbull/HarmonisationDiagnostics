@@ -7,6 +7,8 @@ This directory contains API-level documentation for the package modules and help
 - DiagnosticFunctions
 - DiagnosticFunctionsLong
 - DiagnosticReport
+- Cross-sectional Comparison Report
+- PlotComparisonResults
 - HarmonisationFunctions
 - LoggingTool
 - PlotDiagnosticResults

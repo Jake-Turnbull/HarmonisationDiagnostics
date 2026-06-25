@@ -12,9 +12,11 @@ nav:
   - Terminal: terminal.md
   - API Reference:
       - DiagnosticReport: api/DiagnosticReport.md
+      - Cross-sectional Comparison Report: api/CrossSectionalComparisonReport.md
       - HarmonisationFunctions: api/HarmonisationFunctions.md
       - DiagnosticFunctions: api/DiagnosticFunctions.md
       - PlotDiagnosticResults: api/PlotDiagnosticResults.md
+      - PlotComparisonResults: api/PlotComparisonResults.md
       - LoggingTool: api/LoggingTool.md
       - DiagnosticFunctionsLong: api/DiagnosticFunctionsLong.md
       - CLI: api/CLI.md

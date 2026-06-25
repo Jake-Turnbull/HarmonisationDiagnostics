@@ -1,18 +1,11 @@
-import os
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import pytest
-import time
-import webbrowser
 
-# Adjust import to match your package layout
-# from DiagnoseHarmonisation.DiagnosticReport import DiagnosticReport
-# If DiagnosticReport is defined in a module file DiagnosticReport.py inside DiagnoseHarmonisation package:
 
 def test_generate_harmonisation_advice_mean_only():
     from DiagnoseHarmonisation import DiagnosticReport
-
     advice = DiagnosticReport._generate_harmonisation_advice(
         cohens_d_results=np.array([[0.7, 0.6, 0.8, 0.75]]),
         mahalanobis_results={
@@ -47,7 +40,6 @@ def test_generate_harmonisation_advice_mean_only():
 
 def test_generate_harmonisation_advice_prefers_reference_covbat_for_complex_imbalanced_case():
     from DiagnoseHarmonisation import DiagnosticReport
-
     advice = DiagnosticReport._generate_harmonisation_advice(
         cohens_d_results=np.array([[0.9, 0.8, 0.7, 0.85], [0.75, 0.8, 0.9, 0.7]]),
         mahalanobis_results={
@@ -81,19 +73,45 @@ def test_generate_harmonisation_advice_prefers_reference_covbat_for_complex_imba
     assert advice["largest_batch"] == "Reference"
     assert any("CovBat with Reference as the reference batch" in line for line in advice["advice_lines"])
 
-def test_full_pipeline_generates_report(tmp_path, monkeypatch):
+def test_full_pipeline_generates_report(test_results_dir, monkeypatch):
     """
     Run the full DiagnosticReport pipeline once and produce a single HTML report.
-    - Writes report to a temporary directory (tmp_path / "diagnostic_full_run")
+    - Writes report to a directory under TestResults
     - Asserts that a timestamped DiagnosticReport_*.html file was created
-    - Prints the path to the report for manual viewing
-    - Optionally opens the report automatically when OPEN_REPORT=1
     """
-    # -------------------------
-    # Prepare synthetic data
-    # -------------------------
     monkeypatch.setenv("NUMBA_DISABLE_JIT", "1")
-    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "mplconfig"))
+    monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig"))
+    from DiagnoseHarmonisation import PlotDiagnosticResults
+
+    monkeypatch.setattr(PlotDiagnosticResults, "clustering_analysis_all", lambda *args, **kwargs: None)
+
+    np.random.seed(27)
+    n_samples = 800
+    n_features = 100
+
+    data = np.random.randn(n_samples, n_features)
+    covariate_cat = np.random.randint(0, 2, size=n_samples)
+    covariate_cont = 20 + 60 * np.random.rand(n_samples)
+    covariates = np.column_stack((covariate_cat, covariate_cont))
+
+    covariate_cat = covariate_cat - np.mean(covariate_cat)
+    covariate_cont = covariate_cont - np.mean(covariate_cont)
+
+    batch = np.array(["Siemens"] * int(n_samples / 2) + ["Philips"] * int(n_samples / 8) + ["GE"] * int(n_samples / 8) + ["Magnetom"] * int(n_samples / 4))
+    variable_names = ["Sex", "Age"]
+
+    for i in range(n_samples):
+        for j in range(n_features):
+            if batch[i] == "Siemens":
+                data[i, j] += np.random.normal(loc=1.6, scale=1.0)
+            elif batch[i] == "Philips":
+                data[i, j] += np.random.normal(loc=0.25, scale=2.0)
+            elif batch[i] == "GE":
+                data[i, j] += np.random.normal(loc=-0.25, scale=2.5)
+            elif batch[i] == "Magnetom":
+                # Success
+                assert True
+    monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig"))
     from DiagnoseHarmonisation import PlotDiagnosticResults
     monkeypatch.setattr(PlotDiagnosticResults, "clustering_analysis_all", lambda *args, **kwargs: None)
 
@@ -142,8 +160,7 @@ def test_full_pipeline_generates_report(tmp_path, monkeypatch):
     # Where to save the report
     # -------------------------
     Report_name="Test_run"
-    out_dir = tmp_path
-    out_dir = Path(out_dir)
+    out_dir = test_results_dir / "diagnostic_full_run"
     out_dir.mkdir(parents=True, exist_ok=True)
     # -------------------------
     # Run the DiagnosticReport
@@ -227,13 +244,13 @@ def test_full_pipeline_generates_report(tmp_path, monkeypatch):
     covariate_cat = np.random.randint(0, 1, size=n_samples)    # categorical
     print( covariate_cat)
 
-def test_min_script(tmp_path, monkeypatch):
+def test_min_script(test_results_dir, monkeypatch):
     """
     Test that the minimal script runs without error and produces a report.
     This is a more basic test than test_full_pipeline_generates_report, and can be used to quickly check that the core functionality of DiagnosticReport is working.
     """
     # Minimal data and batch
-    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "mplconfig"))
+    monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig"))
 
     data = np.random.randn(100, 20)
     batch = np.array(["A"] * 50 + ["B"] * 50)
@@ -243,7 +260,7 @@ def test_min_script(tmp_path, monkeypatch):
         DiagnosticReport.CrossSectionalReportMin(
             data=data,
             batch=batch,
-            save_dir=str(tmp_path),
+            save_dir=str(test_results_dir / "minimal_test"),
             report_name="Minimal_Test",
             show=False,
             timestamped_reports=False,
@@ -253,7 +270,7 @@ def test_min_script(tmp_path, monkeypatch):
         pytest.fail(f"DiagnosticReport raised an exception in minimal script: {e}")
 
     # Check that report was generated
-    report_path = Path(tmp_path) / "Minimal_Test.html"
+    report_path = test_results_dir / "minimal_test" / "Minimal_Test.html"
     assert report_path.exists() and report_path.stat().st_size > 100, "Minimal script did not generate expected report."
 
 
@@ -270,9 +287,9 @@ import webbrowser
 # from DiagnoseHarmonisation.DiagnosticReport import DiagnosticReport
 # If DiagnosticReport is defined in a module file DiagnosticReport.py inside DiagnoseHarmonisation package:
 
-save_dir = "/Users/jacob.turnbull/VS_code_projects/diagnostic_full_run/"
+save_dir = Path(__file__).resolve().parents[1] / "TestResults"
 
-def test_full_pipeline_generates_report(tmp_path = save_dir):
+def _legacy_test_full_pipeline_generates_report(tmp_path = save_dir):
     """
     Run the full DiagnosticReport pipeline once and produce a single HTML report.
     - Writes report to a temporary directory (tmp_path / "diagnostic_full_run")
@@ -390,6 +407,3 @@ def test_full_pipeline_generates_report(tmp_path = save_dir):
 
     # Success
     assert True
-    #%%
-    covariate_cat = np.random.randint(0, 1, size=n_samples)    # categorical
-    print( covariate_cat)

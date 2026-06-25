@@ -1,14 +1,14 @@
 # This is a test to see if the diagnostic report can handle missing data correctly 
 
-import pytest
-from DiagnoseHarmonisation import DiagnosticReport
 import numpy as np
 from pathlib import Path
 import pandas as pd
+import pytest
 
-save_dir = "/Users/jacob.turnbull/VS_code_projects/diagnostic_full_run/"
+from DiagnoseHarmonisation import DiagnosticReport
 
-def test_missing_data(tmp_path = save_dir):
+
+def test_missing_data(test_results_dir):
     """
     Run the full DiagnosticReport pipeline once and produce a single HTML report.
     - Writes report to a temporary directory (tmp_path / "diagnostic_full_run")
@@ -64,7 +64,7 @@ def test_missing_data(tmp_path = save_dir):
     # Where to save the report
     # -------------------------
     Report_name="Test_no_missing"
-    out_dir = tmp_path
+    out_dir = test_results_dir / "missing_data"
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     # -------------------------

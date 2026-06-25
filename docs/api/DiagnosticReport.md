@@ -1,6 +1,6 @@
 # DiagnosticReport
 
-**These are the main functions for the library. The functions here will produce an end-to-end report of each result in the analysis, with an explanation of how to interpret each one.**
+**These are the main report functions for the library. The module includes both the standard single-dataset cross-sectional report and a multi-method comparison report, plus the longitudinal report.**
 
 ::: DiagnoseHarmonisation.DiagnosticReport
     options:
