@@ -40,7 +40,9 @@ Note, while covariates aren't inherently required, in order to get an informativ
 
 ## 3. Generate a Cross-Sectional Diagnostic Report
 
-There are two main functions for the generation of a cross-sectional report, a full one with detailed analysis across multiple different metrics and advanced visualisations and a minimal version, which simply returns additive, multiplicative and a visual representation of overall distributional differences.
+There are two main cross-sectional workflows: a single-dataset report and a multi-method comparison report.
+
+The single-dataset report provides the standard diagnostic summary for one harmonised dataset.
 
 Using the full report:
 
@@ -51,6 +53,30 @@ Using the full report:
             covariates=covars)
 
 This will produce a detailed HTML file containing a full analysis of batch and covariate effects.
+
+To compare several harmonised outputs side by side, pass a dictionary of method names and datasets:
+
+```python
+from DiagnoseHarmonisation import DiagnosticReport
+
+report = DiagnosticReport.CrossSectionalComparisonReport(
+    datasets={
+        "Raw": X_raw,
+        "ComBat": X_combat,
+        "CovBat": X_covbat,
+    },
+    batch=batch,
+    covariates=covars,
+    covariate_names=["age", "sex"],
+)
+```
+
+This comparison report checks that every dataset shares the same shape and then generates:
+
+1. A dataset summary block with sample counts, batch counts, missingness, and covariate names.
+2. Per-method diagnostic summaries.
+3. A category-based scorecard covering additive, multiplicative, linear-modelling, distributional, and PCA diagnostics.
+4. Side-by-side comparison plots.
 
 You can also generate the same cross-sectional report without writing Python by either:
 
@@ -104,3 +130,5 @@ Assuming you detect significant batch effects, you would then select a harmonisa
 ## 5. Checking harmonisation efficacy
 
 Now that you have your harmonised data, you can simply rerun the tool on the new data to see which metrics show improvement and whether or not batch effects persist in any of them. It is worth saying here that you may not require them to be completely removed depending on your experimental goal. For example, depending on your analysis, a simple mean correction may suffice.
+
+The new comparison report is the best way to evaluate several candidate harmonisation methods against the same baseline because it keeps the diagnostics, the scorecard, and the visual summaries aligned.

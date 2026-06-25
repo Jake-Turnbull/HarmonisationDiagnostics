@@ -1446,13 +1446,6 @@ import pandas as pd
 import warnings
 from statsmodels.formula.api import mixedlm
 
-
-
-
-
-
-
-
 def lme_harmonisation(data, batch, mod, variable_names):
     """
     Fits a per feature linear mixed model to harmonize data across batches while adjusting for covariates. This function is an alternative to ComBat that uses mixed effects modeling to estimate and remove batch effects.

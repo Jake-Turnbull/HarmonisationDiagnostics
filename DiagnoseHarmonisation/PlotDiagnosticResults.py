@@ -1520,7 +1520,7 @@ def plot_eigen_spectra_and_cumulative(
 """----------------------------------------------------------------------------------------------------------------------------"""
 
 def plot_covariance_frobenius(
-    score: np.ndarray,
+    data: np.ndarray,
     batch: np.ndarray,
     rep,
     max_components: int = 50,
@@ -1544,11 +1544,11 @@ def plot_covariance_frobenius(
     """
     import pandas as pd  
 
-    if score.ndim != 2:
-        raise ValueError("score must be a 2D array (n_samples x n_pcs)")
+    if data.ndim != 2:
+        raise ValueError("data must be a 2D array (n_samples x n_features)")
 
-    n, n_pcs = score.shape
-    k = min(n_pcs, max_components)
+    n, n_features = data.shape
+    k = min(n_features, max_components)
     if k < 1:
         rep.log_text("Not enough PCs to compute covariance diagnostics.")
         return {}
@@ -1565,14 +1565,14 @@ def plot_covariance_frobenius(
             # store NaN matrix to preserve indexing
             cov_matrices[b] = np.full((k, k), np.nan)
             continue
-        scores_b = score[idx, :k]
-        cov_b = np.cov(scores_b, rowvar=False, ddof=1)  # k x k
+        data_b = data[idx, :k]
+        cov_b = np.cov(data_b, rowvar=False, ddof=1)  # k x k
         cov_matrices[b] = cov_b
         valid_batches.append(b)
 
     # pooled covariance (using all samples)
-    pooled_scores = score[:, :k]
-    pooled_cov = np.cov(pooled_scores, rowvar=False, ddof=1)
+    pooled_data = data[:, :k]
+    pooled_cov = np.cov(pooled_data, rowvar=False, ddof=1)
     pooled_frob = np.linalg.norm(pooled_cov, ord='fro')
 
     # pairwise frobenius norms

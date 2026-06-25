@@ -20,9 +20,13 @@ from DiagnoseHarmonisation.gui import (
 )
 
 
-def _write_example_inputs(tmp_path: Path) -> tuple[Path, Path]:
-    data_path = tmp_path / "data.csv"
-    covariates_path = tmp_path / "covariates.csv"
+TEST_RESULTS_DIR = Path(__file__).resolve().parents[1] / "TestResults"
+
+
+def _write_example_inputs(base_path: Path) -> tuple[Path, Path]:
+    base_path.mkdir(parents=True, exist_ok=True)
+    data_path = base_path / "data.csv"
+    covariates_path = base_path / "covariates.csv"
 
     pd.DataFrame(
         {
@@ -43,8 +47,8 @@ def _write_example_inputs(tmp_path: Path) -> tuple[Path, Path]:
     return data_path, covariates_path
 
 
-def test_inspect_cross_sectional_inputs_populates_defaults(tmp_path):
-    data_path, covariates_path = _write_example_inputs(tmp_path)
+def test_inspect_cross_sectional_inputs_populates_defaults(test_results_dir):
+    data_path, covariates_path = _write_example_inputs(test_results_dir / "cross_sectional_inputs")
 
     summary = inspect_cross_sectional_inputs(data_path, covariates_path)
 
@@ -54,9 +58,10 @@ def test_inspect_cross_sectional_inputs_populates_defaults(tmp_path):
     assert summary.default_covariate_columns == ["age", "sex"]
 
 
-def test_prepare_cross_sectional_inputs_removes_batch_duplicate_covariates(tmp_path):
-    data_path = tmp_path / "data.csv"
-    covariates_path = tmp_path / "covariates.csv"
+def test_prepare_cross_sectional_inputs_removes_batch_duplicate_covariates(test_results_dir):
+    data_path = test_results_dir / "cross_sectional_inputs" / "data.csv"
+    covariates_path = test_results_dir / "cross_sectional_inputs" / "covariates.csv"
+    data_path.parent.mkdir(parents=True, exist_ok=True)
 
     pd.DataFrame(
         {
@@ -89,9 +94,10 @@ def test_prepare_cross_sectional_inputs_removes_batch_duplicate_covariates(tmp_p
     assert any("site_copy" in warning for warning in prepared.warnings)
 
 
-def test_prepare_cross_sectional_inputs_raises_on_missing_overlap(tmp_path):
-    data_path = tmp_path / "data.csv"
-    covariates_path = tmp_path / "covariates.csv"
+def test_prepare_cross_sectional_inputs_raises_on_missing_overlap(test_results_dir):
+    data_path = test_results_dir / "cross_sectional_inputs_missing" / "data.csv"
+    covariates_path = test_results_dir / "cross_sectional_inputs_missing" / "covariates.csv"
+    data_path.parent.mkdir(parents=True, exist_ok=True)
 
     pd.DataFrame(
         {
@@ -117,7 +123,7 @@ def test_prepare_cross_sectional_inputs_raises_on_missing_overlap(tmp_path):
         prepare_cross_sectional_inputs(config)
 
 
-def test_read_tabular_file_dispatches_excel_reader(monkeypatch, tmp_path):
+def test_read_tabular_file_dispatches_excel_reader(monkeypatch, test_results_dir):
     called = {}
 
     def fake_read_excel(path, header=0):
@@ -127,24 +133,24 @@ def test_read_tabular_file_dispatches_excel_reader(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pd, "read_excel", fake_read_excel)
 
-    result = read_tabular_file(tmp_path / "covariates.xlsx")
+    result = read_tabular_file(test_results_dir / "cross_sectional_inputs" / "covariates.xlsx")
 
     assert list(result.columns) == ["subject_id", "batch", "age"]
     assert called["path"].name == "covariates.xlsx"
     assert called["header"] == 0
 
 
-def test_read_tabular_file_rejects_unsupported_extension(tmp_path):
+def test_read_tabular_file_rejects_unsupported_extension(test_results_dir):
     with pytest.raises(ValueError, match="Unsupported file format"):
-        read_tabular_file(tmp_path / "data.tsv")
+        read_tabular_file(test_results_dir / "cross_sectional_inputs" / "data.tsv")
 
 
-def test_run_cross_sectional_report_invokes_report_backend(monkeypatch, tmp_path):
-    data_path, covariates_path = _write_example_inputs(tmp_path)
+def test_run_cross_sectional_report_invokes_report_backend(monkeypatch, test_results_dir):
+    data_path, covariates_path = _write_example_inputs(test_results_dir / "cross_sectional_report_inputs")
     captured = {}
 
     class DummyReport:
-        report_path = tmp_path / "example_report.html"
+        report_path = test_results_dir / "example_report.html"
 
     def fake_cross_sectional_report(data, **kwargs):
         captured["shape"] = data.shape
@@ -158,7 +164,7 @@ def test_run_cross_sectional_report_invokes_report_backend(monkeypatch, tmp_path
     config = CrossSectionalRunConfig(
         data_path=data_path,
         covariates_path=covariates_path,
-        output_dir=tmp_path,
+        output_dir=test_results_dir,
         report_name="example_report",
         timestamped_reports=False,
     )
@@ -168,11 +174,11 @@ def test_run_cross_sectional_report_invokes_report_backend(monkeypatch, tmp_path
     assert captured["shape"] == (3, 2)
     assert captured["kwargs"]["covariate_names"] == ["age", "sex"]
     assert captured["kwargs"]["timestamped_reports"] is False
-    assert result.report_path == tmp_path / "example_report.html"
+    assert result.report_path == test_results_dir / "example_report.html"
 
 
-def test_run_pipeline_from_cli_uses_selected_batch_column(monkeypatch, tmp_path):
-    data_path, covariates_path = _write_example_inputs(tmp_path)
+def test_run_pipeline_from_cli_uses_selected_batch_column(monkeypatch, test_results_dir):
+    data_path, covariates_path = _write_example_inputs(test_results_dir / "cross_sectional_cli_inputs")
     captured = {}
 
     def fake_run_cross_sectional_report(config, *, verbose=False, status_callback=None):
@@ -211,9 +217,9 @@ def test_cli_gui_command_dispatches_launcher(monkeypatch):
 
 def test_build_gui_run_config_smoke():
     config = build_gui_run_config(
-        data_path="/tmp/data.csv",
-        covariates_path="/tmp/covariates.csv",
-        output_dir="/tmp",
+        data_path=str(TEST_RESULTS_DIR / "data.csv"),
+        covariates_path=str(TEST_RESULTS_DIR / "covariates.csv"),
+        output_dir=str(TEST_RESULTS_DIR),
         data_id_column="subject_id",
         covariates_id_column="subject_id",
         batch_selection=AUTO_DETECT_BATCH,
@@ -231,9 +237,9 @@ def test_build_gui_run_config_smoke():
 
 def test_build_gui_run_config_supports_explicit_no_batch():
     config = build_gui_run_config(
-        data_path="/tmp/data.csv",
-        covariates_path="/tmp/covariates.csv",
-        output_dir="/tmp",
+        data_path=str(TEST_RESULTS_DIR / "data.csv"),
+        covariates_path=str(TEST_RESULTS_DIR / "covariates.csv"),
+        output_dir=str(TEST_RESULTS_DIR),
         data_id_column="subject_id",
         covariates_id_column="subject_id",
         batch_selection=NO_BATCH_COLUMN,

@@ -50,4 +50,6 @@ Harmonisation is goal-specific, so its integration into experimental design shou
 
 For cross-sectional workflows, the package now supports both a scripted command-line interface and a desktop GUI launcher through `harmdiag`.
 
+The cross-sectional report layer now includes a multi-method comparison workflow that can evaluate multiple harmonised datasets side by side, with category-based scoring and dedicated comparison plots.
+
 For longitudinal workflows, the package now supports a scripted command-line interface through `harmdiag-longitudinal`
