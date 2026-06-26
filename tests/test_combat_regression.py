@@ -76,3 +76,36 @@ def test_gam_preserves_nonlinear_structure():
     # Check that GAM-corrected feature retains the nonlinear relationship
     corr_gam = np.corrcoef(arr_gam[0, :], true_signal)[0, 1]
     assert corr_gam > 0.9
+
+
+def test_modular_prunes_redundant_dummy_covariates():
+    """Modular path should tolerate redundant one-hot covariate columns."""
+    np.random.seed(7)
+    n_features = 8
+    n_samples = 20
+    data = pd.DataFrame(np.random.randn(n_features, n_samples))
+    # Deterministic non-confounded batch pattern.
+    batch = pd.Series(["A", "B"] * (n_samples // 2))
+
+    # Binary covariate with intentionally redundant encoding.
+    sex = np.array(([0, 0, 1, 1] * (n_samples // 4)))
+    mod = pd.DataFrame(
+        {
+            "sex_0": (sex == 0).astype(float),
+            "sex_1": (sex == 1).astype(float),
+            "sex_dup": (sex == 1).astype(float),  # exact duplicate of sex_1
+            "all_zero": np.zeros(n_samples),       # constant redundant column
+        }
+    )
+
+    out = hf.combat_modular(
+        data=data,
+        batch=batch,
+        mod=mod,
+        mean_model="ols",
+        prior_mode="local",
+        return_priors=False,
+    )
+
+    arr = np.asarray(out)
+    assert arr.shape == (n_features, n_samples)

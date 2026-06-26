@@ -669,6 +669,112 @@ def combat(data, batch, mod=[], parametric=True,
         return bayesdata
 
 
+def _prune_redundant_covariates(mod_arr, tol=1e-10):
+    """Drop constant and linearly dependent covariate columns.
+
+    This is used in the modular ComBat path to make one-hot/dummy encoded
+    covariates robust to redundant columns (for example duplicate dummies,
+    all-zero columns, or user-supplied collinear encodings).
+
+    Returns
+    -------
+    pruned : np.ndarray
+        Covariate matrix with only rank-contributing columns.
+    kept_idx : list[int]
+        Original column indices kept in the pruned matrix.
+    dropped_idx : list[int]
+        Original column indices dropped as redundant.
+    """
+    X = np.asarray(mod_arr, dtype=float)
+    if X.ndim == 1:
+        X = X.reshape(-1, 1)
+    if X.size == 0 or X.shape[1] == 0:
+        return X, [], []
+
+    # Replace non-finite values so rank computation is stable.
+    X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+
+    n_samples, n_cov = X.shape
+    non_constant_idx = []
+    dropped_idx = []
+
+    # First pass: drop near-constant columns (all-zero dummy columns, etc.).
+    for j in range(n_cov):
+        if np.nanstd(X[:, j]) <= tol:
+            dropped_idx.append(j)
+        else:
+            non_constant_idx.append(j)
+
+    if len(non_constant_idx) == 0:
+        return np.zeros((n_samples, 0)), [], sorted(dropped_idx)
+
+    X_nc = X[:, non_constant_idx]
+    kept_local = []
+    current = np.zeros((n_samples, 0))
+    current_rank = 0
+
+    # Greedy rank-increase selection: keep only columns that increase rank.
+    for local_j in range(X_nc.shape[1]):
+        candidate = np.column_stack((current, X_nc[:, local_j]))
+        new_rank = np.linalg.matrix_rank(candidate, tol=tol)
+        if new_rank > current_rank:
+            kept_local.append(local_j)
+            current = candidate
+            current_rank = new_rank
+        else:
+            dropped_idx.append(non_constant_idx[local_j])
+
+    kept_idx = [non_constant_idx[j] for j in kept_local]
+    if len(kept_idx) == 0:
+        pruned = np.zeros((n_samples, 0))
+    else:
+        pruned = X[:, kept_idx]
+
+    return pruned, kept_idx, sorted(dropped_idx)
+
+
+def _prune_covariates_against_batch(batchmod, mod_arr, tol=1e-10):
+    """Keep only covariates that add rank beyond batch columns.
+
+    This removes columns that are linearly implied by existing design columns,
+    such as redundant one-hot combinations where multiple categorical dummy sets
+    each span the intercept space.
+    """
+    Xb = np.asarray(batchmod, dtype=float)
+    Xm = np.asarray(mod_arr, dtype=float)
+
+    if Xm.ndim == 1:
+        Xm = Xm.reshape(-1, 1)
+    if Xm.size == 0 or Xm.shape[1] == 0:
+        return Xm, [], []
+
+    n_samples = Xb.shape[0]
+    if Xm.shape[0] != n_samples:
+        raise ValueError("Covariate matrix row count must match batch design row count.")
+
+    keep_idx = []
+    dropped_idx = []
+    current = Xb.copy()
+    current_rank = np.linalg.matrix_rank(current, tol=tol)
+
+    for j in range(Xm.shape[1]):
+        candidate = np.column_stack((current, Xm[:, j]))
+        new_rank = np.linalg.matrix_rank(candidate, tol=tol)
+        if new_rank > current_rank:
+            keep_idx.append(j)
+            current = candidate
+            current_rank = new_rank
+        else:
+            dropped_idx.append(j)
+
+    if len(keep_idx) == 0:
+        pruned = np.zeros((n_samples, 0))
+    else:
+        pruned = Xm[:, keep_idx]
+
+    return pruned, keep_idx, dropped_idx
+
+
 def combat_modular(
     data,
     batch,
@@ -829,6 +935,23 @@ def combat_modular(
         mod_arr = mod_df.values
         if mod_arr.ndim == 1:
             mod_arr = mod_arr.reshape(-1, 1)
+
+    # Remove redundant covariate columns before confounding check so one-hot
+    # encoded user covariates do not trigger spurious rank-deficiency errors.
+    if mod_arr.shape[1] > 0:
+        mod_arr, _, dropped_cov_idx = _prune_redundant_covariates(mod_arr)
+        if len(dropped_cov_idx) > 0:
+            warnings.warn(
+                f"Dropping {len(dropped_cov_idx)} redundant covariate column(s) in modular ComBat design.",
+                RuntimeWarning,
+            )
+
+        mod_arr, _, dropped_wrt_batch_idx = _prune_covariates_against_batch(batchmod, mod_arr)
+        if len(dropped_wrt_batch_idx) > 0:
+            warnings.warn(
+                f"Dropping {len(dropped_wrt_batch_idx)} covariate column(s) that were linearly dependent with existing design columns.",
+                RuntimeWarning,
+            )
 
     design = np.hstack([batchmod, mod_arr])
 
