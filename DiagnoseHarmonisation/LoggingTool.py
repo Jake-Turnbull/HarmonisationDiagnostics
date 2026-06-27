@@ -67,10 +67,11 @@ class StatsReporter:
         save_artifacts: bool = False,
         logger_name: str = "statsreporter",
         log_level: int = logging.INFO,
+        report_title: Optional[str] = None,
         toc: bool = True,  # new: whether to include a table of contents
     ):
         self.save_dir = Path(save_dir) if save_dir is not None else None
-        self.report_name = report_name
+        self.report_title = report_title or report_name
         self.plaintext_log_name = plaintext_log_name
         self.save_artifacts = save_artifacts
         self._include_toc = toc
@@ -199,7 +200,7 @@ class StatsReporter:
 
         # Use the structured renderer that has access to raw records and sections
         html = self._render_html_structured(
-            title="Statistical Tests Report",
+            title=self.report_title,
             records=self._mem_handler.get_records(),
             sections=self._sections,
             section_plots=self._section_plots,
@@ -271,8 +272,8 @@ class StatsReporter:
         toc_html = ""
         if toc and sections:
             toc_items = []
-            for sec_id, title, _ in sections:
-                toc_items.append(f'<li><a href="#sec_{sec_id}">{title}</a></li>')
+            for sec_id, sec_title, _ in sections:
+                toc_items.append(f'<li><a href="#sec_{sec_id}">{sec_title}</a></li>')
             toc_html = "<nav><h2>Contents</h2><ul>" + "\n".join(toc_items) + "</ul></nav>"
 
         # Build section boundaries: sort sections by their start index
@@ -281,7 +282,7 @@ class StatsReporter:
         # We'll iterate through record indices and allocate ranges to sections
         html_pieces = []
         current_idx = 0
-        for i, (sec_id, title, start_idx) in enumerate(sections_sorted):
+        for i, (sec_id, sec_title, start_idx) in enumerate(sections_sorted):
             # logs from current_idx up to start_idx belong to "pre-section" (or previous sections)
             if start_idx > current_idx:
                 chunk = records[current_idx:start_idx]
@@ -292,7 +293,7 @@ class StatsReporter:
             next_start = sections_sorted[i + 1][2] if i + 1 < len(sections_sorted) else len(records)
             section_chunk = records[start_idx:next_start]
             # Render section header + logs
-            section_html = f'<section id="sec_{sec_id}" class="section"><h2>{title}</h2>'
+            section_html = f'<section id="sec_{sec_id}" class="section"><h2>{sec_title}</h2>'
             section_html += _render_log_chunk(section_chunk)
             # add plots for this section (if any)
             plots = section_plots.get(sec_id, [])

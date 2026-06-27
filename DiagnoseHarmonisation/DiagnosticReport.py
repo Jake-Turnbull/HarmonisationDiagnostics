@@ -1497,6 +1497,7 @@ def CrossSectionalReport(
     def _configure_report(report_obj):
         report_obj.save_dir = save_dir
         report_obj.report_name = base_name
+        report_obj.report_title = "Cross Sectional Data Diagnostic Report"  # or similar
         # write an initial report (optional) and log the path
         rp = report_obj.write_report()  # writes to report_obj.report_path
         report_obj.log_text(f"Initialized HTML report at: {rp}")
@@ -2612,6 +2613,7 @@ def LongitudinalReport(data, batch,
     def _configure_report(report_obj):
         report_obj.save_dir = save_dir
         report_obj.report_name = base_name
+        report_obj.report_title = "Longitudinal Data Diagnostic Report"  # or similar
         # write an initial report (optional) and log the path
         rp = report_obj.write_report()  # writes to report_obj.report_path
         report_obj.log_text(f"Initialized HTML report at: {rp}")
