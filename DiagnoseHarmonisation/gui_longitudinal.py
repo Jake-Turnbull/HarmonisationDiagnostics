@@ -301,7 +301,7 @@ class ScrollableColumnList(ttk.Frame):
 class LongitudinalGuiApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("DiagnoseHarmonisation — Longitudinal Evaluation Report Generation ")
+        self.root.title("DiagnoseHarmonisation — Longitudinal Batch Effect Diagnostic Report Generation ")
 
         self.status_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.last_output_dir: Path | None = None
@@ -343,7 +343,7 @@ class LongitudinalGuiApp:
 
         header = ttk.Label(
             outer,
-            text="Longitudinal Evaluation Report Generation",
+            text="Longitudinal Batch Effect Diagnostic Report Generation",
             style="OnBg.TLabel",
             font=(FONT_FAMILY, 15, "bold"),
         )
