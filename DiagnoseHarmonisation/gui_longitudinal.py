@@ -7,6 +7,8 @@ Design goals:
 - Explicit subject ID, timepoint, batch, features
 - Optional covariates from the same data file or a separate covariates file
 - Tkinter-based UI similar in spirit to the cross-sectional GUI
+- Fully static layout: no internal scrollbars anywhere. The window
+  resizes itself to fit whatever is loaded (clamped to the screen size).
 """
 
 from __future__ import annotations
@@ -20,13 +22,115 @@ from pathlib import Path
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from tkinter.scrolledtext import ScrolledText
 
 from DiagnoseHarmonisation.longitudinal_workflow import (
     LongitudinalRunConfig,
     inspect_longitudinal_inputs,
     run_longitudinal_report,
 )
+
+
+# --------------------------------------------------------------------------
+# Visual theme
+# --------------------------------------------------------------------------
+
+COLORS = {
+    "bg": "#1f2430",
+    "panel": "#1f2430",
+    "border": "#2A2B2B",
+    "text": "#cbcdcf",
+    "muted": "#6b7280",
+    "accent": "#2f6fed",
+    "accent_active": "#2557c4",
+    "accent_text": "#ffffff",
+    "success": "#1e8e5a",
+    "danger": "#c0392b",
+}
+
+FONT_FAMILY = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
+FONTS = {
+    "base": (FONT_FAMILY, 11),
+    "bold": (FONT_FAMILY, 11, "bold"),
+    "heading": (FONT_FAMILY, 12, "bold"),
+    "mono": ("Consolas" if sys.platform.startswith("win") else "Menlo", 10),
+    "hint": (FONT_FAMILY, 10),
+}
+
+
+def _configure_style(root: tk.Tk) -> None:
+    root.configure(bg=COLORS["bg"])
+
+    style = ttk.Style(root)
+    try:
+        style.theme_use("clam")
+    except tk.TclError:
+        pass
+
+    style.configure(".", font=FONTS["base"], background=COLORS["bg"], foreground=COLORS["text"])
+
+    style.configure("TFrame", background=COLORS["bg"])
+    style.configure("Panel.TFrame", background=COLORS["panel"])
+
+    style.configure(
+        "TLabelframe",
+        background=COLORS["panel"],
+        bordercolor=COLORS["border"],
+        relief="solid",
+        borderwidth=1,
+    )
+    style.configure(
+        "TLabelframe.Label",
+        background=COLORS["panel"],
+        foreground=COLORS["text"],
+        font=FONTS["heading"],
+    )
+
+    style.configure("TLabel", background=COLORS["panel"], foreground=COLORS["text"])
+    style.configure("OnBg.TLabel", background=COLORS["bg"], foreground=COLORS["text"])
+    style.configure("Hint.TLabel", background=COLORS["panel"], foreground=COLORS["muted"], font=FONTS["hint"])
+    style.configure("HintOnBg.TLabel", background=COLORS["bg"], foreground=COLORS["muted"], font=FONTS["hint"])
+
+    style.configure("TCheckbutton", background=COLORS["panel"], foreground=COLORS["text"])
+    style.map("TCheckbutton", background=[("active", COLORS["panel"])])
+
+    style.configure(
+        "TEntry",
+        fieldbackground=COLORS["panel"],
+        foreground=COLORS["text"],
+        bordercolor=COLORS["border"],
+    )
+    style.configure(
+        "TCombobox",
+        fieldbackground=COLORS["panel"],
+        foreground=COLORS["text"],
+        bordercolor=COLORS["border"],
+    )
+
+    style.configure(
+        "TButton",
+        background=COLORS["panel"],
+        foreground=COLORS["text"],
+        bordercolor=COLORS["border"],
+        padding=(10, 6),
+    )
+    style.map(
+        "TButton",
+        background=[("active", "#eceff3")],
+    )
+
+    style.configure(
+        "Accent.TButton",
+        background=COLORS["accent"],
+        foreground=COLORS["accent_text"],
+        bordercolor=COLORS["accent"],
+        padding=(14, 8),
+        font=FONTS["bold"],
+    )
+    style.map(
+        "Accent.TButton",
+        background=[("active", COLORS["accent_active"]), ("disabled", "#a9b8d6")],
+        foreground=[("disabled", "#eef1f8")],
+    )
 
 
 def _normalize_path(value: str | None) -> str:
@@ -143,17 +247,69 @@ def build_gui_run_config(
     )
 
 
+# --------------------------------------------------------------------------
+# A fixed-height, internally-scrollable column picker.
+#
+# The list itself can scroll (so it works whether someone has 5 features or
+# 500), but its *footprint* in the window never changes size, so the outer
+# window never needs to scroll to reveal the rest of the GUI.
+# --------------------------------------------------------------------------
+
+class ScrollableColumnList(ttk.Frame):
+    def __init__(self, parent: tk.Widget, height_rows: int = 9):
+        super().__init__(parent, style="Panel.TFrame")
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+
+        self.listbox = tk.Listbox(
+            self,
+            selectmode="multiple",
+            exportselection=False,
+            height=height_rows,
+            background=COLORS["panel"],
+            foreground=COLORS["text"],
+            selectbackground=COLORS["accent"],
+            selectforeground=COLORS["accent_text"],
+            highlightthickness=1,
+            highlightbackground=COLORS["border"],
+            highlightcolor=COLORS["accent"],
+            relief="flat",
+            font=FONTS["base"],
+            activestyle="none",
+        )
+        self.listbox.grid(row=0, column=0, sticky="nsew")
+
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.listbox.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.listbox.configure(yscrollcommand=scrollbar.set)
+
+    def set_items(self, items: list[str]) -> None:
+        self.listbox.delete(0, tk.END)
+        for name in items:
+            self.listbox.insert(tk.END, name)
+
+    def select_all(self) -> None:
+        self.listbox.select_set(0, tk.END)
+
+    def clear(self) -> None:
+        self.listbox.selection_clear(0, tk.END)
+
+    def get_selected(self) -> list[str]:
+        return [self.listbox.get(i) for i in self.listbox.curselection()]
+
+
 class LongitudinalGuiApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("DiagnoseHarmonisation Longitudinal GUI")
-        self.root.minsize(1000, 680)
+        self.root.title("DiagnoseHarmonisation — Longitudinal Evaluation Report Generation ")
 
         self.status_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.last_output_dir: Path | None = None
         self.last_report_path: Path | None = None
         self.current_data_columns: list[str] = []
         self.current_covariate_columns: list[str] = []
+        self._status_lines: list[str] = []
+        self._max_status_lines = 10
 
         self.data_path_var = tk.StringVar()
         self.covariates_path_var = tk.StringVar()
@@ -164,243 +320,191 @@ class LongitudinalGuiApp:
         self.cov_subject_id_var = tk.StringVar()
         self.cov_timepoint_var = tk.StringVar()
         self.report_name_var = tk.StringVar()
-        self.cov_source_label_var = tk.StringVar(
-            value="Covariate columns source: data file"
-        )
+        self.cov_source_label_var = tk.StringVar(value="Covariate columns — source: data file")
 
+        _configure_style(self.root)
         self._build_layout()
         self.root.after(150, self._drain_status_queue)
+        self.root.after(0, self._set_static_window_size)
+
+    # ------------------------------------------------------------------
+    # Layout
+    # ------------------------------------------------------------------
 
     def _build_layout(self) -> None:
-        # Outer shell
         outer = ttk.Frame(self.root, padding=16)
         outer.grid(row=0, column=0, sticky="nsew")
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
         outer.columnconfigure(0, weight=1)
-        outer.rowconfigure(0, weight=1)  # scrollable form
-        outer.rowconfigure(1, weight=0)  # fixed actions
-        outer.rowconfigure(2, weight=0)  # fixed status
+        outer.columnconfigure(1, weight=1)
+        outer.rowconfigure(4, weight=1)  # selectors row absorbs extra space
 
-        # Scrollable form area
-        scroll_host = ttk.Frame(outer)
-        scroll_host.grid(row=0, column=0, sticky="nsew")
-        scroll_host.columnconfigure(0, weight=1)
-        scroll_host.rowconfigure(0, weight=1)
+        header = ttk.Label(
+            outer,
+            text="Longitudinal Evaluation Report Generation",
+            style="OnBg.TLabel",
+            font=(FONT_FAMILY, 15, "bold"),
+        )
+        header.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 2))
+        subheader = ttk.Label(
+            outer,
+            text="Configure inputs, choose columns, then generate a longitudinal harmonisation report.",
+            style="HintOnBg.TLabel",
+        )
+        subheader.grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 12))
 
-        canvas = tk.Canvas(scroll_host, highlightthickness=0)
-        vscroll = ttk.Scrollbar(scroll_host, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=vscroll.set)
-
-        canvas.grid(row=0, column=0, sticky="nsew")
-        vscroll.grid(row=0, column=1, sticky="ns")
-
-        form = ttk.Frame(canvas)
-        form_window = canvas.create_window((0, 0), window=form, anchor="nw")
-
-        def _update_scrollregion(_event=None) -> None:
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        def _fit_width(event) -> None:
-            canvas.itemconfigure(form_window, width=event.width)
-
-        form.bind("<Configure>", _update_scrollregion)
-        canvas.bind("<Configure>", _fit_width)
-
-        def _on_mousewheel(event) -> None:
-            # Windows / macOS / Linux support
-            if sys.platform == "darwin":
-                canvas.yview_scroll(-1 * int(event.delta), "units")
-            else:
-                canvas.yview_scroll(-1 * int(event.delta / 120), "units")
-
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-        canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
-        canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
-
-        # Inputs
-        inputs_frame = ttk.LabelFrame(form, text="Files", padding=10)
-        inputs_frame.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 10))
+        # Files
+        inputs_frame = ttk.LabelFrame(outer, text="Files", padding=12)
+        inputs_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         inputs_frame.columnconfigure(1, weight=1)
 
-        ttk.Label(inputs_frame, text="Data file").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Label(inputs_frame, text="Data file").grid(row=0, column=0, sticky="w", pady=5)
         ttk.Entry(inputs_frame, textvariable=self.data_path_var).grid(
-            row=0, column=1, sticky="ew", pady=4
+            row=0, column=1, sticky="ew", padx=(8, 8), pady=5
         )
-        ttk.Button(inputs_frame, text="Browse", command=self._browse_data_file).grid(
-            row=0, column=2, padx=(8, 0), pady=4
+        ttk.Button(inputs_frame, text="Browse…", command=self._browse_data_file).grid(
+            row=0, column=2, pady=5
         )
 
-        ttk.Label(inputs_frame, text="Covariates file").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Label(inputs_frame, text="Covariates file").grid(row=1, column=0, sticky="w", pady=5)
         ttk.Entry(inputs_frame, textvariable=self.covariates_path_var).grid(
-            row=1, column=1, sticky="ew", pady=4
+            row=1, column=1, sticky="ew", padx=(8, 8), pady=5
         )
-        ttk.Button(inputs_frame, text="Browse", command=self._browse_covariates_file).grid(
-            row=1, column=2, padx=(8, 0), pady=4
+        ttk.Button(inputs_frame, text="Browse…", command=self._browse_covariates_file).grid(
+            row=1, column=2, pady=5
         )
 
-        ttk.Label(inputs_frame, text="Output directory").grid(row=2, column=0, sticky="w", pady=4)
+        ttk.Label(inputs_frame, text="Output directory").grid(row=2, column=0, sticky="w", pady=5)
         ttk.Entry(inputs_frame, textvariable=self.output_dir_var).grid(
-            row=2, column=1, sticky="ew", pady=4
+            row=2, column=1, sticky="ew", padx=(8, 8), pady=5
         )
-        ttk.Button(inputs_frame, text="Browse", command=self._browse_output_dir).grid(
-            row=2, column=2, padx=(8, 0), pady=4
+        ttk.Button(inputs_frame, text="Browse…", command=self._browse_output_dir).grid(
+            row=2, column=2, pady=5
         )
 
-        controls_row = ttk.Frame(inputs_frame)
-        controls_row.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        controls_row = ttk.Frame(inputs_frame, style="Panel.TFrame")
+        controls_row.grid(row=3, column=0, columnspan=3, sticky="w", pady=(10, 0))
         ttk.Button(controls_row, text="Load Columns", command=self._load_columns).pack(side="left")
         ttk.Label(
             controls_row,
-            text="Load the file(s) before choosing columns.",
-        ).pack(side="left", padx=(12, 0))
+            text="Load the file(s) before choosing columns below.",
+            style="Hint.TLabel",
+        ).pack(side="left", padx=(10, 0))
 
         # Required columns
-        columns_frame = ttk.LabelFrame(form, text="Required columns", padding=10)
-        columns_frame.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 10))
+        columns_frame = ttk.LabelFrame(outer, text="Required columns", padding=12)
+        columns_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         columns_frame.columnconfigure(1, weight=1)
         columns_frame.columnconfigure(3, weight=1)
 
-        ttk.Label(columns_frame, text="Data subject ID").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Label(columns_frame, text="Data subject ID").grid(row=0, column=0, sticky="w", pady=5)
         self.subject_id_combo = ttk.Combobox(
             columns_frame, textvariable=self.subject_id_var, state="readonly"
         )
-        self.subject_id_combo.grid(row=0, column=1, sticky="ew", pady=4)
+        self.subject_id_combo.grid(row=0, column=1, sticky="ew", padx=(8, 16), pady=5)
 
-        ttk.Label(columns_frame, text="Timepoint").grid(
-            row=0, column=2, sticky="w", padx=(16, 0), pady=4
-        )
+        ttk.Label(columns_frame, text="Timepoint").grid(row=0, column=2, sticky="w", pady=5)
         self.timepoint_combo = ttk.Combobox(
             columns_frame, textvariable=self.timepoint_var, state="readonly"
         )
-        self.timepoint_combo.grid(row=0, column=3, sticky="ew", pady=4)
+        self.timepoint_combo.grid(row=0, column=3, sticky="ew", padx=(8, 0), pady=5)
 
-        ttk.Label(columns_frame, text="Batch").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Label(columns_frame, text="Batch").grid(row=1, column=0, sticky="w", pady=5)
         self.batch_combo = ttk.Combobox(
             columns_frame, textvariable=self.batch_var, state="readonly"
         )
-        self.batch_combo.grid(row=1, column=1, sticky="ew", pady=4)
+        self.batch_combo.grid(row=1, column=1, sticky="ew", padx=(8, 16), pady=5)
 
-        ttk.Label(columns_frame, text="Report name").grid(
-            row=1, column=2, sticky="w", padx=(16, 0), pady=4
-        )
+        ttk.Label(columns_frame, text="Report name").grid(row=1, column=2, sticky="w", pady=5)
         ttk.Entry(columns_frame, textvariable=self.report_name_var).grid(
-            row=1, column=3, sticky="ew", pady=4
+            row=1, column=3, sticky="ew", padx=(8, 0), pady=5
         )
 
-        # Features
-        feature_frame = ttk.LabelFrame(form, text="Feature columns", padding=10)
-        feature_frame.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=(0, 10))
+        # Feature / covariate selection — fixed-footprint panels with their
+        # own internal scrollbars, so long column lists never grow the
+        # outer window.
+        selectors_frame = ttk.Frame(outer)
+        selectors_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=(0, 10))
+        selectors_frame.columnconfigure(0, weight=1)
+        selectors_frame.columnconfigure(1, weight=1)
+        selectors_frame.rowconfigure(0, weight=1)
+
+        feature_frame = ttk.LabelFrame(selectors_frame, text="Feature columns", padding=12)
+        feature_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         feature_frame.columnconfigure(0, weight=1)
-        feature_frame.rowconfigure(1, weight=1)
 
         ttk.Label(
             feature_frame,
             text="Select one or more feature / IDP columns from the data file.",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 6))
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
 
-        self.feature_listbox = tk.Listbox(
-            feature_frame,
-            selectmode="multiple",
-            exportselection=False,
-            height=7,
-        )
-        self.feature_listbox.grid(row=1, column=0, sticky="nsew")
+        self.feature_grid = ScrollableColumnList(feature_frame, height_rows=9)
+        self.feature_grid.grid(row=1, column=0, sticky="nsew")
+        feature_frame.rowconfigure(1, weight=1)
 
-        feature_scroll = ttk.Scrollbar(
-            feature_frame,
-            orient="vertical",
-            command=self.feature_listbox.yview,
-        )
-        feature_scroll.grid(row=1, column=1, sticky="ns")
-        self.feature_listbox.configure(yscrollcommand=feature_scroll.set)
-
-        feature_buttons = ttk.Frame(feature_frame)
-        feature_buttons.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
-        ttk.Button(feature_buttons, text="Select All", command=self._select_all_features).pack(
-            side="left"
-        )
+        feature_buttons = ttk.Frame(feature_frame, style="Panel.TFrame")
+        feature_buttons.grid(row=2, column=0, sticky="w", pady=(10, 0))
+        ttk.Button(feature_buttons, text="Select All", command=self._select_all_features).pack(side="left")
         ttk.Button(feature_buttons, text="Clear", command=self._clear_features).pack(
             side="left", padx=(8, 0)
         )
 
-        # Covariates
-        self.cov_frame = ttk.LabelFrame(
-            form, text=self.cov_source_label_var.get(), padding=10
-        )
-        self.cov_frame.grid(row=3, column=0, columnspan=3, sticky="nsew", pady=(0, 10))
+        self.cov_frame = ttk.LabelFrame(selectors_frame, text=self.cov_source_label_var.get(), padding=12)
+        self.cov_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
         self.cov_frame.columnconfigure(0, weight=1)
-        self.cov_frame.rowconfigure(1, weight=1)
 
         ttk.Label(
             self.cov_frame,
             text="Select one or more covariate columns from the chosen source.",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 6))
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
 
-        self.covariate_listbox = tk.Listbox(
-            self.cov_frame,
-            selectmode="multiple",
-            exportselection=False,
-            height=7,
-        )
-        self.covariate_listbox.grid(row=1, column=0, sticky="nsew")
+        self.covariate_grid = ScrollableColumnList(self.cov_frame, height_rows=9)
+        self.covariate_grid.grid(row=1, column=0, sticky="nsew")
+        self.cov_frame.rowconfigure(1, weight=1)
 
-        cov_scroll = ttk.Scrollbar(
-            self.cov_frame,
-            orient="vertical",
-            command=self.covariate_listbox.yview,
-        )
-        cov_scroll.grid(row=1, column=1, sticky="ns")
-        self.covariate_listbox.configure(yscrollcommand=cov_scroll.set)
-
-        cov_buttons = ttk.Frame(self.cov_frame)
-        cov_buttons.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
-        ttk.Button(cov_buttons, text="Select All", command=self._select_all_covariates).pack(
-            side="left"
-        )
-        ttk.Button(cov_buttons, text="Clear", command=self._clear_covariates).pack(
-            side="left", padx=(8, 0)
-        )
+        cov_buttons = ttk.Frame(self.cov_frame, style="Panel.TFrame")
+        cov_buttons.grid(row=2, column=0, sticky="w", pady=(10, 0))
+        ttk.Button(cov_buttons, text="Select All", command=self._select_all_covariates).pack(side="left")
+        ttk.Button(cov_buttons, text="Clear", command=self._clear_covariates).pack(side="left", padx=(8, 0))
 
         # Covariate key columns if separate file is used
-        sep_cov_frame = ttk.LabelFrame(
-            form,
-            text="Separate covariates file alignment columns",
-            padding=10,
+        self.sep_cov_frame = ttk.LabelFrame(
+            outer, text="Separate covariates file — alignment columns", padding=12
         )
-        sep_cov_frame.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(0, 10))
-        sep_cov_frame.columnconfigure(1, weight=1)
-        sep_cov_frame.columnconfigure(3, weight=1)
+        self.sep_cov_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        self.sep_cov_frame.columnconfigure(1, weight=1)
+        self.sep_cov_frame.columnconfigure(3, weight=1)
 
-        ttk.Label(sep_cov_frame, text="Covariate subject ID").grid(
-            row=0, column=0, sticky="w", pady=4
-        )
+        ttk.Label(self.sep_cov_frame, text="Covariate subject ID").grid(row=0, column=0, sticky="w", pady=5)
         self.cov_subject_combo = ttk.Combobox(
-            sep_cov_frame, textvariable=self.cov_subject_id_var, state="disabled"
+            self.sep_cov_frame, textvariable=self.cov_subject_id_var, state="disabled"
         )
-        self.cov_subject_combo.grid(row=0, column=1, sticky="ew", pady=4)
+        self.cov_subject_combo.grid(row=0, column=1, sticky="ew", padx=(8, 16), pady=5)
 
-        ttk.Label(sep_cov_frame, text="Covariate timepoint").grid(
-            row=0, column=2, sticky="w", padx=(16, 0), pady=4
-        )
+        ttk.Label(self.sep_cov_frame, text="Covariate timepoint").grid(row=0, column=2, sticky="w", pady=5)
         self.cov_timepoint_combo = ttk.Combobox(
-            sep_cov_frame, textvariable=self.cov_timepoint_var, state="disabled"
+            self.sep_cov_frame, textvariable=self.cov_timepoint_var, state="disabled"
         )
-        self.cov_timepoint_combo.grid(row=0, column=3, sticky="ew", pady=4)
+        self.cov_timepoint_combo.grid(row=0, column=3, sticky="ew", padx=(8, 0), pady=5)
 
         ttk.Label(
-            sep_cov_frame,
+            self.sep_cov_frame,
             text="These are only required when a separate covariates file is used.",
-        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(4, 0))
+            style="Hint.TLabel",
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
-        # Fixed action bar
+        # Actions
         actions_frame = ttk.Frame(outer)
-        actions_frame.grid(row=1, column=0, sticky="ew", pady=(10, 6))
+        actions_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(2, 10))
 
         self.run_button = ttk.Button(
             actions_frame,
             text="Generate Longitudinal Report",
+            style="Accent.TButton",
             command=self._start_run,
         )
         self.run_button.pack(side="left")
@@ -411,21 +515,51 @@ class LongitudinalGuiApp:
             command=self._open_output_folder,
             state="disabled",
         )
-        self.open_folder_button.pack(side="left", padx=(8, 0))
+        self.open_folder_button.pack(side="left", padx=(10, 0))
 
         ttk.Label(
             actions_frame,
-            text="Save-data is disabled in the GUI to avoid the current covariate handling mismatch.",
+            text="Note: save-data is disabled in the GUI to avoid the current covariate handling mismatch.",
+            style="HintOnBg.TLabel",
         ).pack(side="left", padx=(16, 0))
 
-        # Fixed status area
-        status_frame = ttk.LabelFrame(outer, text="Status", padding=10)
-        status_frame.grid(row=2, column=0, sticky="nsew")
+        # Status
+        status_frame = ttk.LabelFrame(outer, text="Status", padding=12)
+        status_frame.grid(row=7, column=0, columnspan=2, sticky="ew")
         status_frame.columnconfigure(0, weight=1)
-        status_frame.rowconfigure(0, weight=1)
 
-        self.status_text = ScrolledText(status_frame, height=10, wrap="word", state="disabled")
-        self.status_text.grid(row=0, column=0, sticky="nsew")
+        self.status_label = ttk.Label(
+            status_frame,
+            text="Choose the data file and optional covariates file, then load columns.",
+            font=FONTS["mono"],
+            justify="left",
+            anchor="w",
+        )
+        self.status_label.grid(row=0, column=0, sticky="ew")
+
+    # ------------------------------------------------------------------
+    # Window sizing — set once, stays fixed regardless of how many
+    # columns are loaded (the column lists scroll internally instead).
+    # ------------------------------------------------------------------
+
+    def _set_static_window_size(self) -> None:
+        self.root.update_idletasks()
+        req_w = self.root.winfo_reqwidth()
+        req_h = self.root.winfo_reqheight()
+
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+
+        margin = 80
+        width = min(max(req_w, 1180), screen_w - margin)
+        height = min(max(req_h, 840), screen_h - margin)
+
+        self.root.geometry(f"{int(width)}x{int(height)}")
+        self.root.minsize(int(min(width, 1100)), int(min(height, 760)))
+
+    # ------------------------------------------------------------------
+    # File / column handling
+    # ------------------------------------------------------------------
 
     def _browse_data_file(self) -> None:
         path = filedialog.askopenfilename(
@@ -479,29 +613,19 @@ class LongitudinalGuiApp:
         self.batch_var.set("")
         self.report_name_var.set(self.report_name_var.get().strip())
 
-        self.feature_listbox.delete(0, tk.END)
-        for column in summary.data_columns:
-            self.feature_listbox.insert(tk.END, column)
+        self.feature_grid.set_items(summary.data_columns)
 
         self._update_covariate_source_state()
 
-        self.covariate_listbox.delete(0, tk.END)
         if cov_path is not None:
-            for column in summary.covariates_columns:
-                self.covariate_listbox.insert(tk.END, column)
-            self._append_status(
-                "Loaded columns. Covariate list is sourced from the separate covariates file."
-            )
+            self.covariate_grid.set_items(summary.covariates_columns)
+            self._append_status("Loaded columns. Covariate list is sourced from the separate covariates file.")
         else:
-            for column in summary.data_columns:
-                self.covariate_listbox.insert(tk.END, column)
-            self._append_status(
-                "Loaded columns. Covariate list is sourced from the data file."
-            )
+            self.covariate_grid.set_items(summary.data_columns)
+            self._append_status("Loaded columns. Covariate list is sourced from the data file.")
 
     def _set_cov_frame_title(self, title: str) -> None:
         self.cov_source_label_var.set(title)
-        # ttk.LabelFrame does not support textvariable; update the text explicitly.
         try:
             self.cov_frame.configure(text=title)
         except Exception:
@@ -510,34 +634,37 @@ class LongitudinalGuiApp:
     def _update_covariate_source_state(self) -> None:
         cov_path = _normalize_path(self.covariates_path_var.get())
         if cov_path:
-            self._set_cov_frame_title("Covariate columns source: separate covariates file")
+            self._set_cov_frame_title("Covariate columns — source: separate covariates file")
             self.cov_subject_combo.configure(state="readonly")
             self.cov_timepoint_combo.configure(state="readonly")
             self.cov_subject_combo["values"] = self.current_covariate_columns
             self.cov_timepoint_combo["values"] = self.current_covariate_columns
+            self.sep_cov_frame.grid()
         else:
-            self._set_cov_frame_title("Covariate columns source: data file")
+            self._set_cov_frame_title("Covariate columns — source: data file")
             self.cov_subject_combo.set("")
             self.cov_timepoint_combo.set("")
             self.cov_subject_combo.configure(state="disabled")
             self.cov_timepoint_combo.configure(state="disabled")
             self.cov_subject_combo["values"] = []
             self.cov_timepoint_combo["values"] = []
+            self.sep_cov_frame.grid_remove()
 
     def _select_all_features(self) -> None:
-        self.feature_listbox.select_set(0, tk.END)
+        self.feature_grid.select_all()
 
     def _clear_features(self) -> None:
-        self.feature_listbox.selection_clear(0, tk.END)
+        self.feature_grid.clear()
 
     def _select_all_covariates(self) -> None:
-        self.covariate_listbox.select_set(0, tk.END)
+        self.covariate_grid.select_all()
 
     def _clear_covariates(self) -> None:
-        self.covariate_listbox.selection_clear(0, tk.END)
+        self.covariate_grid.clear()
 
-    def _selected_items(self, listbox: tk.Listbox) -> list[str]:
-        return [listbox.get(index) for index in listbox.curselection()]
+    # ------------------------------------------------------------------
+    # Run handling
+    # ------------------------------------------------------------------
 
     def _start_run(self) -> None:
         try:
@@ -548,8 +675,8 @@ class LongitudinalGuiApp:
                 subject_id_column=self.subject_id_var.get(),
                 timepoint_column=self.timepoint_var.get(),
                 batch_column=self.batch_var.get(),
-                selected_features=self._selected_items(self.feature_listbox),
-                selected_covariates=self._selected_items(self.covariate_listbox),
+                selected_features=self.feature_grid.get_selected(),
+                selected_covariates=self.covariate_grid.get_selected(),
                 report_name=self.report_name_var.get(),
                 covariates_subject_id_column=self.cov_subject_id_var.get(),
                 covariates_timepoint_column=self.cov_timepoint_var.get(),
@@ -599,22 +726,37 @@ class LongitudinalGuiApp:
                     self.last_report_path = result.report_path
                     self.last_output_dir = result.save_dir
                     self.open_folder_button.configure(state="normal")
+
                     if result.report_path is not None:
-                        self._append_status(
-                            f"Completed successfully. Report: {result.report_path}"
+                        success_message = (
+                            f"Report generation completed successfully.\n"
+                            f"Report: {result.report_path}"
                         )
                     else:
-                        self._append_status("Completed successfully.")
+                        success_message = "Report generation completed successfully."
+
+                    self._append_status("-" * 60)
+                    self._append_status(success_message)
+
+                    # Force the window to redraw and come to the front so the
+                    # completed status is actually visible, then show a clear
+                    # confirmation popup.
+                    self.root.update_idletasks()
+                    self.root.deiconify()
+                    self.root.lift()
+                    self.root.focus_force()
+                    messagebox.showinfo("Report Generation Complete", success_message)
         except queue.Empty:
             pass
 
         self.root.after(150, self._drain_status_queue)
 
     def _append_status(self, message: str) -> None:
-        self.status_text.configure(state="normal")
-        self.status_text.insert(tk.END, message.rstrip() + "\n")
-        self.status_text.see(tk.END)
-        self.status_text.configure(state="disabled")
+        # No scrollbar: keep only the last N lines visible, newest at the bottom.
+        for line in message.rstrip().splitlines() or [""]:
+            self._status_lines.append(line)
+        self._status_lines = self._status_lines[-self._max_status_lines :]
+        self.status_label.configure(text="\n".join(self._status_lines))
 
     def _open_output_folder(self) -> None:
         if self.last_output_dir is None:
@@ -631,7 +773,6 @@ def launch_longitudinal_gui() -> None:
         ) from exc
 
     app = LongitudinalGuiApp(root)
-    app._append_status("Choose the data file and optional covariates file, then load columns.")
     root.mainloop()
 
 
