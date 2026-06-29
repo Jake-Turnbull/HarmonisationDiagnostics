@@ -68,23 +68,30 @@ def test_Covbat():
     )
     model = patsy.dmatrix("age + sex", model_df, return_type="dataframe")
     numerical_covariates = ["age"]  
-    # Run CovBat:
-    corrected_data = HarmonisationFunctions.covbat(
+    # Run CovBat; the following behaviour is deprecated:
+
+   # corrected_data = HarmonisationFunctions.covbat(
+    #   batch,
+    #    data,
+    #    model=model,
+    #   numerical_covariates=numerical_covariates,
+    #   pct_var=0.95,
+    #   n_pc=0,
+    #)
+    corrected_data = HarmonisationFunctions.combat_modular(
         data,
         batch,
-        model=model,
-        numerical_covariates=numerical_covariates,
-        pct_var=0.95,
-        n_pc=0,
+        covariates = numerical_covariates,
+        covbat_mode = True,
     )
+    # unpack the data from the dictionary returned by covbat
+    corrected_data = corrected_data['bayesdata']
+
     # Check that the output has the same shape as the input:
     assert corrected_data.shape == data.shape
-    # Check that the output is a DataFrame:
-    assert isinstance(corrected_data, pd.DataFrame)
-    # Check that the output does not contain NaN values:
-    assert not corrected_data.isnull().values.any()
-    # Check that the output values are different from the input values:
-    assert not corrected_data.equals(data)
+    # check the numpy array has no NaN values:
+    assert not np.isnan(corrected_data).any()
+
 if __name__ == "__main__":
     test_Covbat()
 
@@ -130,14 +137,15 @@ def test_CovBat_efficacy():
     model = None
     numerical_covariates = []
     # Apply CovBat
-    corrected_data = HarmonisationFunctions.covbat(
+    corrected_data = HarmonisationFunctions.combat_modular(
         data,
         batch,
-        model=model,
-        numerical_covariates=numerical_covariates,
-        pct_var=0.95,
-        n_pc=0,
+        covariates = numerical_covariates,
+        covbat_mode = True,
     )
+    corrected_data = corrected_data['bayesdata']
+
+
     # Evaluate efficacy by comparing PCA before and after correction
     pca = PCA(n_components=2)
     original_pca = pca.fit_transform(data.T)

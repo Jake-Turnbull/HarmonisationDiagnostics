@@ -1009,7 +1009,8 @@ def CrossSectionalReportMin(data,
         report_obj.report_name = base_name
         # write an initial report (optional) and log the path
         rp = report_obj.write_report()  # writes to report_obj.report_path
-        report_obj.log_text(f"Initialized HTML report at: {rp}")
+        report_obj.log_text(f"Initialised HTML report at: \n"
+                            f"{rp}")
         print(f"Report will be saved to: {rp}")
         return report_obj
 
@@ -1109,7 +1110,10 @@ def CrossSectionalReportMin(data,
 
         # Begin tests
         logger.info("Beginning diagnostic tests")
-        report.text_simple(" The order of tests is as follows: Multivariate distribution comparisson, Additive tests, Multiplicative tests, Model fit")
+        report.text_simple(
+            " The order of tests is as follows: Multivariate distribution comparisson, "
+            "Additive tests, Multiplicative tests, Model fit"
+        )
         report.text_simple(line_break_in_text)
 
         report.log_section("Z-score visualization", "Z-score normalization visualization")
@@ -1373,7 +1377,11 @@ def CrossSectionalReportMin(data,
         # add summary text
 
         report.log_section("report_conclusion", "Minimal Cross-Sectional Report")
-        report.text_simple("This concludes the minimal cross-sectional diagnostic report. For a more comprehensive analysis with additional tests and visualizations, please use the full CrossSectionalReport function.")
+        report.text_simple(
+            "This concludes the minimal cross-sectional diagnostic report. "
+            "For a more comprehensive analysis with additional tests and visualizations, "
+            "please use the full CrossSectionalReport function."
+        )
 
         report.text_simple("Summary:")
                 # Summaries per pair
@@ -1499,7 +1507,8 @@ def CrossSectionalReport(
         report_obj.report_name = base_name
         # write an initial report (optional) and log the path
         rp = report_obj.write_report()  # writes to report_obj.report_path
-        report_obj.log_text(f"Initialized HTML report at: {rp}")
+        report_obj.log_text(f"initialised HTML report at: \n"
+                            rf"{rp}")
         print(f"Report will be saved to: {rp}")
         return report_obj
 
@@ -1526,9 +1535,16 @@ def CrossSectionalReport(
         _configure_report(report)
 
         line_break_in_text = "-" * 150
-        report.text_simple("This is the full diagnostic cross-sectional report that includes a comprehensive set of tests and visualizations to assess batch effects in the dataset. \n\n")
 
-        report.text_simple("For full documentation and interpretation of each test, please refer to the online documentation at https://jake-turnbull.github.io/HarmonisationDiagnostics/")
+        report.make_title("Cross-sectional harmonisation diagnostic report")
+        report.set_report_title("Cross-sectional harmonisation diagnostic report")
+
+        report.log_section("Preamble", "Report preamble and overview")
+
+        report.text_simple("This is the full diagnostic cross-sectional report that includes a comprehensive"\
+                           "set of tests and visualizations to assess batch effects in the dataset. \n\n")
+        report.text_simple("For full documentation and interpretation of each test, please refer to the online documentation at:"\
+                            " https://jake-turnbull.github.io/HarmonisationDiagnostics/")
 
         # Basic dataset summary
         report.text_simple("Summary of dataset:")
@@ -1558,7 +1574,11 @@ def CrossSectionalReport(
                 logger.info("Creating numeric codes for batch categories")
                 batch_numeric, unique = pd.factorize(batch)
                 logger.info(f"Numeric batch codes: {list(set(batch_numeric))}")
-                report.text_simple(f"Batch categories detected: {list(set(batch))}. Numeric codes will be used for tests, but string labels will be kept for plots and summaries where possible.")
+                report.text_simple(
+                    f"Batch categories detected: {list(set(batch))}. "
+                    "Numeric codes will be used for tests, but string labels will be kept "
+                    "for plots and summaries where possible."
+                )
                 # keep string labels in `batch` if plotting expects them; numeric conversions can be used inside tests as needed
         else:
             raise ValueError("Batch must be a list or numpy array")
@@ -1631,7 +1651,10 @@ def CrossSectionalReport(
                         feature_name = f"index {j}"
                     logger.warning(f"Feature {feature_name} has all missing data across all batches. NaNs in this feature have been replaced with 1. This feature will not be reliable for diagnostics.")
 
-        report.text_simple("Missing data (NaNs) have been replaced with batch-specific structured noise (random normal with batch mean and std) for the purposes of diagnostics. \n")
+        report.text_simple(
+            "Missing data (NaNs) have been replaced with batch-specific structured "
+            "noise (random normal with batch mean and std) for the purposes of diagnostics. \n"
+        )
 
         report.text_simple(line_break_in_text)
         report.text_simple("\n\n")
@@ -1728,7 +1751,10 @@ def CrossSectionalReport(
 
         if Random_state is not None:
             np.random.seed(Random_state)
-            logger.info(f"Random state set to {Random_state} for reproducibility of UMAP embeddings and other random processes.")   
+            logger.info(
+                f"Random state set to {Random_state} for reproducibility of UMAP embeddings "
+                "and other random processes."
+            )
 
         report.log_section("Z-score visualization", "Z-score normalization visualization")
 
@@ -1825,7 +1851,10 @@ def CrossSectionalReport(
         # ---------------------
         logger.info("Beginning LMM diagnostics")
         report.log_section("lmm_diagnostics", "Linear mixed effects diagnostics (batch + covariates)")
-        report.text_simple("Fitting per-feature LMMs (random intercept for batch). Where LMM fails or batch variance is zero we fallback to OLS fixed-effects.")
+        report.text_simple(
+            "Fitting per-feature LMMs (random intercept for batch). "
+            "Where LMM fails or batch variance is zero we fallback to OLS fixed-effects."
+        )
 
         from DiagnoseHarmonisation import temp
         # run LMM diagnostics
@@ -2024,7 +2053,10 @@ def CrossSectionalReport(
             except Exception:
                 logger.exception("Failed to compute residualised Levene results; continuing with raw results only")
 
-        report.text_simple("Levene's test for variance differences between batches completed (raw and residualised if covariates supplied)")
+        report.text_simple(
+            "Levene's test for variance differences between batches completed "
+            "(raw and residualised if covariates supplied)"
+        )
         # Use the combined plotting function to show raw vs residual side-by-side
         PlotDiagnosticResults.Levenes_Test_with_residuals(levene_results_raw, levene_results_resid, feature_names=feature_names, rep=report)
         report.log_text("Levene's test plots (raw + residual) added to report")
@@ -2116,14 +2148,23 @@ def CrossSectionalReport(
             )
 
         report.log_section("Eigenvalue_Scree", "PCA Eigenvalues and Covariance Structure")  
-        report.text_simple("Using the computed PCA from earlier, visualise the eigenvalues associated with each principal component (PC) \n")
-        report.text_simple("Display as an Eigenvalue Spectrum comparisson across batches and display Fronenius norm of the covariance matrices across batches \n")
+        report.text_simple(
+            "Using the computed PCA from earlier, visualise the eigenvalues associated "
+            "with each principal component (PC) \n"
+        )
+        report.text_simple(
+            "Display as an Eigenvalue Spectrum comparisson across batches and display "
+            "Fronenius norm of the covariance matrices across batches \n"
+        )
         report.text_simple(line_break_in_text)
 
         logger.info("Generating PCA Eigenvalue Scree Plot:")
         report.text_simple("The scree plot displays the eigenvalues associated with each principal component (PC). \n")
         report.text_simple("Using this test, we can see if the variance by batch is the same across all PCs \n")
-        report.text_simple("In short, the steepness and shape of the batchwise plots can help to differ batchwise differences in the variance structure across features \n")
+        report.text_simple(
+            "In short, the steepness and shape of the batchwise plots can help to differ "
+            "batchwise differences in the variance structure across features \n"
+        )
         spectra_res = PlotDiagnosticResults.plot_eigen_spectra_and_cumulative(score, batch, rep=report)
         logger.info("PCA Eigenvalue Scree Plot added to report")
         report.text_simple(line_break_in_text)
@@ -2131,10 +2172,19 @@ def CrossSectionalReport(
 
         # Change Frobenius norm plot to be based on the covariance matrices of the data for each batch, rather than the PCA scores, as this is more interpretable in terms of the original features and their covariance structure (which is what we want to compare across batches)
         logger.info("Generating Frobenius Norm Plot")
-        report.text_simple("The Frobenius norm plot displays the pairwise Frobenius norms of the covariance matrices between batches. \n")
+        report.text_simple(
+            "The Frobenius norm plot displays the pairwise Frobenius norms of the "
+            "covariance matrices between batches. \n"
+        )
         report.text_simple("Using this test, we can see if the covariance structure by batch is the same across all batches \n")
-        report.text_simple("In short, larger Frobenius norms between batches indicate greater differences in covariance structure across features \n")
-        report.text_simple("We calculate the overall covariance matrix for each batch and then compute the pairwise Frobenius norms between these covariance matrices. \n")
+        report.text_simple(
+            "In short, larger Frobenius norms between batches indicate greater "
+            "differences in covariance structure across features \n"
+        )
+        report.text_simple(
+            "We calculate the overall covariance matrix for each batch and then compute "
+            "the pairwise Frobenius norms between these covariance matrices. \n"
+        )
         covres = PlotDiagnosticResults.plot_covariance_frobenius(data, batch, rep=report)
 
         logger.info("Frobenius norm plot between covariance matrices added to report")
@@ -2344,7 +2394,8 @@ def CrossSectionalComparisonReport(
         report_obj.save_dir = save_dir
         report_obj.report_name = base_name
         rp = report_obj.write_report()
-        report_obj.log_text(f"Initialized HTML report at: {rp}")
+        report_obj.log_text(f"initialised HTML report at: \n"\
+                            f"{rp}")
         print(f"Report will be saved to: {rp}")
         return report_obj
 
@@ -2366,6 +2417,21 @@ def CrossSectionalComparisonReport(
 
         logger = report.logger
         _configure_report(report)
+        # add title and description
+        report.make_title("Cross-sectional comparison of harmonisation methods")
+        report.set_report_title("Cross-sectional comparison of harmonisation methods")
+
+        report.log_section("Preamble", "Report preamble and overview")
+        report.text_simple(
+            "This report compares multiple harmonisation methods using the same"\
+            " cross-sectional diagnostics and summarises best-performing methods"\
+            " by diagnostic and overall score. " )
+        report.text_simple(
+            "The report is intended for side-by-side evaluation of raw and harmonised outputs but should be interpreted with caution.\n" \
+            "As the best performing method by the metrics here may not be the best method for your downstream analysis. \n" \
+            ""\
+            "For more information on usage, please see the documentation at https://jake-turnbull.github.io/HarmonisationDiagnostics/"
+        )
 
         line_break_in_text = "-" * 150
         report.log_section("comparison_overview", "Multi-method comparison overview")
@@ -2374,6 +2440,12 @@ def CrossSectionalComparisonReport(
             " cross-sectional diagnostics and summarises best-performing methods"
             " by diagnostic and overall score."
         )
+        covariates_numeric = None
+        if covariates is not None:
+            cov_arr = np.asarray(covariates)
+            if cov_arr.ndim == 1:
+                cov_arr = cov_arr.reshape(-1, 1)
+            covariates_numeric = covariate_to_numeric(cov_arr.copy())       
 
         shape = next(iter(normalized_datasets.values())).shape
         n_samples, n_features = shape
@@ -2394,13 +2466,6 @@ def CrossSectionalComparisonReport(
         report.text_simple("Comparison dataset characteristics:")
         report.text_simple("\n".join(dataset_overview_lines))
         report.text_simple(line_break_in_text)
-
-        covariates_numeric = None
-        if covariates is not None:
-            cov_arr = np.asarray(covariates)
-            if cov_arr.ndim == 1:
-                cov_arr = cov_arr.reshape(-1, 1)
-            covariates_numeric = covariate_to_numeric(cov_arr.copy())
 
         method_results: dict[str, CrossSectionalDiagnosticResult] = {}
         saved_paths: dict[str, dict[str, str]] = {}
@@ -2614,7 +2679,8 @@ def LongitudinalReport(data, batch,
         report_obj.report_name = base_name
         # write an initial report (optional) and log the path
         rp = report_obj.write_report()  # writes to report_obj.report_path
-        report_obj.log_text(f"Initialized HTML report at: {rp}")
+        report_obj.log_text(f"initialised HTML report at: \n"
+                            f"{rp}")
         print(f"Report will be saved to: {rp}")
         return report_obj
 
@@ -2659,6 +2725,16 @@ def LongitudinalReport(data, batch,
 
         # configure save dir/name and write initial stub report
         _configure_report(report)
+
+        report.make_title("Longitudinal Data Diagnostic Report")
+        report.set_report_title("Longitudinal Data Diagnostic Report")
+        report.log_section("Preamble", "Report preamble and overview")
+        report.text_simple(
+            "This report evaluates longitudinal data for batch effects and covariate preservation. \n" \
+            "The report is intended for repeated measures data where we do not expect to see a longitudinal trend over time. \n" \
+            "If you expect to see a longitudinal trend, please use the appropriate longitudinal analysis function. \n" \
+            "For more information on usage, please see the documentation at https://jake-turnbull.github.io/HarmonisationDiagnostics/"
+        )
 
         line_break_in_text = "-" * 150
         unique_subjects = set(subject_ids)

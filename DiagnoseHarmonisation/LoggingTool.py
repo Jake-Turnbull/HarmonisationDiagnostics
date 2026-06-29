@@ -107,6 +107,7 @@ class StatsReporter:
         self._section_plots: Dict[str, List[Tuple[str, str]]] = {}
         # plots that were logged before any section was created or explicitly placed
         self._unplaced_plots: List[Tuple[str, str]] = []
+        self._report_title: str = "Statistical Tests Report"
 
     # ---------------- Logging helpers ------------------------------------
 
@@ -199,7 +200,7 @@ class StatsReporter:
 
         # Use the structured renderer that has access to raw records and sections
         html = self._render_html_structured(
-            title="Statistical Tests Report",
+            title=self._report_title,
             records=self._mem_handler.get_records(),
             sections=self._sections,
             section_plots=self._section_plots,
@@ -247,6 +248,17 @@ class StatsReporter:
             for p in self._artifacts_paths:
                 print(f"  - {p}")
 
+    # Create a title that acts as a heading
+    def make_title(self, title: str):
+        """Log a title line (for plaintext log) and return an HTML <h2> string."""
+        self.logger.info(f"[TITLE] {title}")
+        return f"<h2>{title}</h2>"
+
+    def set_report_title(self, title: str):
+        """Set the report page title. Falls back to the default title if blank."""
+        cleaned = (title or "").strip()
+        self._report_title = cleaned if cleaned else "Statistical Tests Report"
+
     # ---- helpers -----------------------------------------------------------
 
     def _unique_png_name(self, caption: str) -> str:
@@ -271,8 +283,8 @@ class StatsReporter:
         toc_html = ""
         if toc and sections:
             toc_items = []
-            for sec_id, title, _ in sections:
-                toc_items.append(f'<li><a href="#sec_{sec_id}">{title}</a></li>')
+            for sec_id, sec_title, _ in sections:
+                toc_items.append(f'<li><a href="#sec_{sec_id}">{sec_title}</a></li>')
             toc_html = "<nav><h2>Contents</h2><ul>" + "\n".join(toc_items) + "</ul></nav>"
 
         # Build section boundaries: sort sections by their start index
@@ -281,7 +293,7 @@ class StatsReporter:
         # We'll iterate through record indices and allocate ranges to sections
         html_pieces = []
         current_idx = 0
-        for i, (sec_id, title, start_idx) in enumerate(sections_sorted):
+        for i, (sec_id, sec_title, start_idx) in enumerate(sections_sorted):
             # logs from current_idx up to start_idx belong to "pre-section" (or previous sections)
             if start_idx > current_idx:
                 chunk = records[current_idx:start_idx]
@@ -292,7 +304,7 @@ class StatsReporter:
             next_start = sections_sorted[i + 1][2] if i + 1 < len(sections_sorted) else len(records)
             section_chunk = records[start_idx:next_start]
             # Render section header + logs
-            section_html = f'<section id="sec_{sec_id}" class="section"><h2>{title}</h2>'
+            section_html = f'<section id="sec_{sec_id}" class="section"><h2>{sec_title}</h2>'
             section_html += _render_log_chunk(section_chunk)
             # add plots for this section (if any)
             plots = section_plots.get(sec_id, [])

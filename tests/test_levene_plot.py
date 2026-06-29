@@ -3,7 +3,7 @@ import matplotlib
 matplotlib.use("Agg")
 import pytest
 
-from DiagnoseHarmonisation.DiagnosticFunctions import Levene_Test
+from DiagnoseHarmonisation.DiagnosticFunctions import Levenes_Test
 from DiagnoseHarmonisation import PlotDiagnosticResults as PDR
 
 
@@ -22,7 +22,7 @@ def test_levene_plot_smoke():
     data[40:60, 5:10] *= 0.5
 
     # run Levene test implementation
-    levene_results = Levene_Test(data, batch, centre="median")
+    levene_results = Levenes_Test(data, batch, centre="median")
     assert isinstance(levene_results, dict)
     assert len(levene_results) > 0
 
