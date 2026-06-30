@@ -71,7 +71,7 @@ def _feature_labels(n_features: int, max_labels: int = 40):
 
 
 def _add_top_colorbar(fig, ax, mappable, label: str | None = None):
-    cbar = fig.colorbar(mappable, ax=ax, location="top", fraction=0.04, pad=0.01, shrink=0.78)
+    cbar = fig.colorbar(mappable, ax=ax, location="right", fraction=0.04, pad=0.01, shrink=0.5)
     if label:
         cbar.set_label(label, fontsize=4)
     cbar.ax.tick_params(labelsize=3)
