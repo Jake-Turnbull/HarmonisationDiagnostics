@@ -1,0 +1,1782 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../Theory/">
+      
+      
+        <link rel="next" href="../simulator/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Harmonisation Methods - DiagnoseHarmonise</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#harmonisation-methods" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="DiagnoseHarmonise" class="md-header__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            DiagnoseHarmonise
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Harmonisation Methods
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="DiagnoseHarmonise" class="md-nav__button md-logo" aria-label="DiagnoseHarmonise" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    DiagnoseHarmonise
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harmonisation Methods
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harmonisation Methods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-linear-modelling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Linear Modelling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-combat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. ComBat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-combat-with-gam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. ComBat with GAM
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-covbat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CovBat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-reference-based-combat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Reference-Based ComBat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-iqm-based-harmonisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. IQM-Based Harmonisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-sv-combat-in-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. SV-ComBat (In Development)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison Table
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-each-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use Each Method
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to Use Each Method">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quickexploratory-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick/exploratory analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#standard-multi-site-neuroimaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standard multi-site neuroimaging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#non-linear-covariate-effects-expected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-linear covariate effects expected
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integrated-covariate-handling-preferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integrated covariate handling preferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-high-quality-reference-site-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One high-quality reference site available
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#physical-quality-metrics-are-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Physical quality metrics are key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#many-structurally-similar-batches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Many structurally similar batches
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-in-diagnoseharmonisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation in DiagnoseHarmonisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#citation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Citation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../terminal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/DiagnosticReport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticReport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/CrossSectionalComparisonReport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-sectional Comparison Report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/HarmonisationFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HarmonisationFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/DiagnosticFunctions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/PlotDiagnosticResults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlotDiagnosticResults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/PlotComparisonResults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlotComparisonResults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/LoggingTool/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LoggingTool
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/DiagnosticFunctionsLong/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DiagnosticFunctionsLong
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/CLI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/LongitudinalCLI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Longitudinal CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/GUI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GUI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/GUILongitudinal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GUI (Longitudinal)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/Simulator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/SaveDiagnosticResults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SaveDiagnosticResults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/CrossSectionalWorkflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-sectional Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/LongitudinalWorkflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Longitudinal Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/PowerAnalysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Power Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/RunDemoLocalPriors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo: Run local priors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-linear-modelling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Linear Modelling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-combat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. ComBat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-combat-with-gam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. ComBat with GAM
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-covbat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CovBat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-reference-based-combat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Reference-Based ComBat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-iqm-based-harmonisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. IQM-Based Harmonisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-sv-combat-in-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. SV-ComBat (In Development)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison Table
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-each-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use Each Method
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to Use Each Method">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quickexploratory-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick/exploratory analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#standard-multi-site-neuroimaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standard multi-site neuroimaging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#non-linear-covariate-effects-expected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-linear covariate effects expected
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integrated-covariate-handling-preferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integrated covariate handling preferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-high-quality-reference-site-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One high-quality reference site available
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#physical-quality-metrics-are-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Physical quality metrics are key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#many-structurally-similar-batches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Many structurally similar batches
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-in-diagnoseharmonisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation in DiagnoseHarmonisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#citation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Citation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="harmonisation-methods">Harmonisation Methods</h1>
+<p>This document provides an overview of the harmonisation methods implemented and available in the DiagnoseHarmonisation package.</p>
+<h2 id="overview">Overview</h2>
+<p>Batch effects are systematic biases introduced by differences in data collection equipment, scanners, protocols, or sites. Harmonisation (or harmonization) aims to remove or reduce these batch effects while preserving biological or phenotypic signals of interest.</p>
+<p>The methods below range from simple parametric approaches to advanced machine learning techniques.</p>
+<h2 id="1-linear-modelling">1. Linear Modelling</h2>
+<p>The simplest harmonisation approach models batch effects as fixed or random effects in a linear regression framework.</p>
+<p><strong>Method</strong>: Fits a linear model of the form:
+$<span class="arithmatex">\(Y = X\beta + Z_b u_b + \epsilon\)</span>$</p>
+<p>where <span class="arithmatex">\(Y\)</span> is the data, <span class="arithmatex">\(X\)</span> contains covariates of interest, <span class="arithmatex">\(Z_b\)</span> encodes batch membership, <span class="arithmatex">\(u_b\)</span> are batch random effects, and <span class="arithmatex">\(\epsilon\)</span> is residual error.</p>
+<p><strong>Advantages</strong>:
+- Highly interpretable and transparent
+- Computationally efficient
+- No tuning hyperparameters
+- Direct inference on covariate effects</p>
+<p><strong>Limitations</strong>:
+- Assumes linear relationships
+- May not capture complex batch interactions
+- Assumes homogeneous variance across batches</p>
+<p><strong>Use case</strong>: Quick reference harmonisation or when interpretability is paramount.</p>
+<hr />
+<h2 id="2-combat">2. ComBat</h2>
+<p><strong>Combat</strong> (Correcting Batch Effects using Empirical Bayes) is a widely-used batch harmonisation method from bioinformatics (Johnson et al., 2007).</p>
+<p><strong>Method</strong>: ComBat uses empirical Bayes to estimate and correct batch-specific location (mean) and scale (variance) shifts:
+1. Fits a parametric model with batch-specific parameters.
+2. Uses empirical Bayes shrinkage to estimate these parameters.
+3. Adjusts data by subtracting batch means and rescaling by batch variance.</p>
+<p><strong>Key features</strong>:
+- Handles variable batch sizes
+- Empirical Bayes shrinkage prevents overfitting
+- Can incorporate biological covariates (mod variable) to avoid removing true signal
+- Fast and widely benchmarked</p>
+<p><strong>Advantages</strong>:
+- Well-established and validated in neuroimaging studies
+- Preserves biological covariates
+- Computationally efficient</p>
+<p><strong>Limitations</strong>:
+- Assumes location-scale model (mean and variance only)
+- Homogeneity assumption across features
+- May over-correct in small-sample scenarios</p>
+<p><strong>Use case</strong>: Standard choice for multi-site neuroimaging studies.</p>
+<hr />
+<h2 id="3-combat-with-gam">3. ComBat with GAM</h2>
+<p><strong>ComBat-GAM</strong> extends ComBat by replacing the parametric mean model with a Generalized Additive Model (GAM).</p>
+<p><strong>Method</strong>: 
+1. Uses GAM to model covariate effects (more flexible than linear)
+2. Combines flexible covariate adjustment with ComBat's batch correction
+3. Estimates batch effects on the GAM residuals</p>
+<p><strong>Key features</strong>:
+- Captures non-linear covariate relationships
+- Spline basis functions for smooth covariate effects
+- Falls back to linear model if spline fitting fails</p>
+<p><strong>Advantages</strong>:
+- More flexible than ComBat for non-linear covariate patterns
+- Maintains empirical Bayes batch correction
+- Graceful degradation (falls back to linear)</p>
+<p><strong>Limitations</strong>:
+- More complex and less interpretable than linear/ComBat
+- Requires more data to accurately estimate splines
+- Slightly slower than parametric ComBat</p>
+<p><strong>Use case</strong>: When covariate effects are expected to be non-linear (e.g., age, scanner field strength).</p>
+<hr />
+<h2 id="4-covbat">4. CovBat</h2>
+<p><strong>CovBat</strong> (Covariate-adjusted ComBat) refines ComBat by jointly modelling covariate and batch effects without requiring a separate mod variable.</p>
+<p><strong>Method</strong>:
+1. Jointly estimates covariate and batch effects in a unified model
+2. Uses empirical Bayes for improved robustness
+3. Solves for optimal ridge regression weights</p>
+<p><strong>Key features</strong>:
+- Internally handles covariate adjustment
+- No separate mod matrix required
+- Provides confidence intervals for batch effect estimates
+- Computationally stable ridge regression approach</p>
+<p><strong>Advantages</strong>:
+- Simpler interface than ComBat (no mod matrix)
+- Better calibrated confidence intervals
+- Unified treatment of covariates and batch</p>
+<p><strong>Limitations</strong>:
+- Slightly slower than standard ComBat
+- Less widely used (newer method)</p>
+<p><strong>Use case</strong>: When you want integrated covariate and batch handling without manual mod matrix construction.</p>
+<hr />
+<h2 id="5-reference-based-combat">5. Reference-Based ComBat</h2>
+<p><strong>Reference-Based ComBat</strong> extends ComBat to a multi-site setting by designating one or more sites as a "reference" against which other sites are harmonised.</p>
+<p><strong>Method</strong>:
+1. Treats reference site(s) as gold standard
+2. Estimates batch effects of non-reference sites relative to reference
+3. Applies ComBat correction targeting reference distribution</p>
+<p><strong>Key features</strong>:
+- Preserves reference site characteristics
+- Useful when one acquisition protocol is known to be high-quality
+- Can use multiple reference sites</p>
+<p><strong>Advantages</strong>:
+- Meaningful reference frame (e.g., gold-standard scanner)
+- Avoids blending all sites into an average
+- Interpretable target distribution</p>
+<p><strong>Limitations</strong>:
+- Requires prior designation of reference site(s)
+- May not work well if reference is atypical
+- Assumes reference effects are minimal</p>
+<p><strong>Use case</strong>: Multi-site studies where one site is known to have optimal data quality.</p>
+<hr />
+<h2 id="6-iqm-based-harmonisation">6. IQM-Based Harmonisation</h2>
+<p><strong>IQM-Based Harmonisation</strong> (Intrinsic Quality Metric harmonisation) leverages data quality metrics to guide harmonisation.</p>
+<p><strong>Method</strong>:
+1. Computes Intrinsic Quality Metrics (IQM) for each scan (e.g., contrast-to-noise, signal stability)
+2. Identifies scanner/site effects using IQM
+3. Adjusts data based on IQM-derived quality scores</p>
+<p><strong>Key features</strong>:
+- Incorporates domain knowledge about quality metrics
+- Can be combined with other methods
+- Adaptive to acquisition variations
+- Physically interpretable</p>
+<p><strong>Advantages</strong>:
+- Links harmonisation to measurable quality indicators
+- Handles non-linear quality-related batch effects
+- Transparent and auditable</p>
+<p><strong>Limitations</strong>:
+- Requires valid IQM computation
+- Sensitive to IQM accuracy
+- May not capture all batch factors</p>
+<p><strong>Use case</strong>: MRI, diffusion imaging, or other modalities with standard quality metrics.</p>
+<hr />
+<h2 id="7-sv-combat-in-development">7. SV-ComBat (In Development)</h2>
+<p><strong>SV-ComBat</strong> (Similarity-guided ComBat) is an in-development method that uses similarity matrices to inform batch prior pooling in ComBat.</p>
+<p><strong>Method</strong>:
+1. Computes pairwise similarity between batch effects (e.g., based on covariate distributions, effect correlation)
+2. Uses similarity to inform Bayesian prior pooling
+3. Dynamically pools batch parameters based on similarity structure
+4. Applies adjusted ComBat correction</p>
+<p><strong>Key features</strong>:
+- Adaptive prior pooling based on batch relationships
+- Preserves structure in batch effects
+- Can incorporate multiple similarity metrics
+- Research-stage implementation</p>
+<p><strong>Advantages</strong>:
+- Exploits relationships between batch effects
+- Improved prior estimates when batches are similar
+- Flexible similarity metric design
+- Principled Bayesian approach</p>
+<p><strong>Limitations</strong>:
+- Still in active development
+- Not yet validated in large-scale studies
+- Requires tuning similarity metric
+- Increased computational cost</p>
+<p><strong>Use case</strong>: Studies with many similar batches (e.g., same scanner model at different sites, replicated protocols).</p>
+<p><strong>Status</strong>: ⚠️ <strong>Experimental/In Development</strong> — Use with caution and report findings carefully.</p>
+<hr />
+<h2 id="comparison-table">Comparison Table</h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Complexity</th>
+<th>Speed</th>
+<th>Covariate Flexibility</th>
+<th>Batch Effect Model</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Linear Modelling</td>
+<td>Low</td>
+<td>Very fast</td>
+<td>Linear</td>
+<td>Random effect</td>
+<td>Stable</td>
+</tr>
+<tr>
+<td>ComBat</td>
+<td>Medium</td>
+<td>Fast</td>
+<td>Linear (mod matrix)</td>
+<td>Location-scale</td>
+<td>Stable</td>
+</tr>
+<tr>
+<td>ComBat-GAM</td>
+<td>Medium-High</td>
+<td>Fast</td>
+<td>Non-linear (GAM)</td>
+<td>Location-scale + GAM</td>
+<td>Stable</td>
+</tr>
+<tr>
+<td>CovBat</td>
+<td>Medium</td>
+<td>Moderate</td>
+<td>Linear (integrated)</td>
+<td>Location-scale (unified)</td>
+<td>Stable</td>
+</tr>
+<tr>
+<td>Reference-Based ComBat</td>
+<td>Medium</td>
+<td>Fast</td>
+<td>Linear (mod matrix)</td>
+<td>Location-scale (relative to reference)</td>
+<td>Stable</td>
+</tr>
+<tr>
+<td>IQM-Based</td>
+<td>Medium-High</td>
+<td>Moderate</td>
+<td>Metric-driven</td>
+<td>Quality-metric-informed</td>
+<td>Stable</td>
+</tr>
+<tr>
+<td>SV-ComBat</td>
+<td>High</td>
+<td>Moderate-Slow</td>
+<td>Linear (mod matrix)</td>
+<td>Similarity-pooled priors</td>
+<td><strong>Experimental</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="when-to-use-each-method">When to Use Each Method</h2>
+<h3 id="quickexploratory-analysis">Quick/exploratory analysis</h3>
+<p>→ <strong>Linear Modelling</strong></p>
+<h3 id="standard-multi-site-neuroimaging">Standard multi-site neuroimaging</h3>
+<p>→ <strong>ComBat</strong></p>
+<h3 id="non-linear-covariate-effects-expected">Non-linear covariate effects expected</h3>
+<p>→ <strong>ComBat-GAM</strong></p>
+<h3 id="integrated-covariate-handling-preferred">Integrated covariate handling preferred</h3>
+<p>→ <strong>CovBat</strong></p>
+<h3 id="one-high-quality-reference-site-available">One high-quality reference site available</h3>
+<p>→ <strong>Reference-Based ComBat</strong></p>
+<h3 id="physical-quality-metrics-are-key">Physical quality metrics are key</h3>
+<p>→ <strong>IQM-Based Harmonisation</strong></p>
+<h3 id="many-structurally-similar-batches">Many structurally similar batches</h3>
+<p>→ <strong>SV-ComBat</strong> (with caution — experimental)</p>
+<hr />
+<h2 id="implementation-in-diagnoseharmonisation">Implementation in DiagnoseHarmonisation</h2>
+<p>Most methods are implemented in the <a href="../api/HarmonisationFunctions/"><code>HarmonisationFunctions</code></a> module, particularly via the modular <code>combat_modular()</code> function which supports:
+- Different mean models (<code>'ols'</code>, <code>'gam'</code>, etc.)
+- Prior mode selection (<code>'global'</code>, <code>'local'</code>, etc.)
+- Custom prior weighting strategies</p>
+<p>For programmatic usage, see the <a href="../api/">API documentation</a>.</p>
+<hr />
+<h2 id="references">References</h2>
+<ul>
+<li>
+<p><strong>ComBat</strong>: Johnson, W. E., Li, C., &amp; Rabinovic, A. (2007). Adjusting batch effects in microarray expression data using empirical Bayes methods. <em>Biostatistics</em>.</p>
+<p>Fortin et al., (2018). Harmonization of cortical thickness measurements across scanners and sites. NeuroImage, 167, 104–120. https://doi.org/10.1016/j.neuroimage.2017.11.024</p>
+<p>Fortin et al., Harmonization of multi-site diffusion tensor imaging data. NeuroImage, 161, 149–170. https://doi.org/10.1016/j.neuroimage.2017.08.047</p>
+</li>
+<li>
+<p><strong>ComBat-GAM</strong>: Pomponio et al., (2020). Harmonization of large MRI datasets for the analysis of brain imaging patterns throughout the lifespan. NeuroImage, 208, 116450. https://doi.org/10.1016/j.neuroimage.2019.116450</p>
+</li>
+<li>
+<p><strong>Reference batch ComBat</strong> Jacob Turnbull et al., (2026). bioRxiv 2026.05.22.726536; doi: https://doi.org/10.64898/2026.05.22.726536</p>
+</li>
+<li>
+<p><strong>CovBat</strong>:
+Chen, A. A., Beer, J. C., Tustison, N. J., Cook, P. A., Shinohara, R. T., Shou, H., &amp; Initiative, T. A. D. N. (2022). Mitigating site effects in covariance for machine learning in neuroimaging data. Human Brain Mapping, 43(4), 1179–1195. https://doi.org/10.1002/hbm.25688</p>
+</li>
+<li>
+<p><strong>IQM-based</strong>: Emma Prevot, Dieter A. Häring, Laura Gaetano, Russell T. Shinohara, Chris C. Holmes, Thomas E. Nichols, Habib Ganjgahi (2025). BARTharm: MRI Harmonization Using Image Quality Metrics and Bayesian Non-parametric bioRxiv 2025.06.04.657792; doi: https://doi.org/10.1101/2025.06.04.657792</p>
+<p>Gaurav Bhalerao et al., (2026). Harmonising Structural Brain MRI from Multiple Sites with Limited Sample Sizes. medRxiv 2026.04.21.26351106; doi: https://doi.org/10.64898/2026.04.21.26351106</p>
+</li>
+</ul>
+<hr />
+<h2 id="citation">Citation</h2>
+<p>When using any harmonisation method from DiagnoseHarmonisation in your research, please cite the original method papers as well as this package.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
