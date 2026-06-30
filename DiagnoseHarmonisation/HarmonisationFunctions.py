@@ -44,7 +44,6 @@ def design_mat(mod, numerical_covariates, batch_levels):
     sys.stderr.write("found %i categorical variables:" % len(other_cols))
     sys.stderr.write("\t" + ", ".join(other_cols) + '\n')
     return design
-
 # --------------------- Helper functions ---------------------
 # Translated from MATLAB, need to have concistency checked with NeuroComBat
 def aprior(delta_hat):
@@ -52,23 +51,23 @@ def aprior(delta_hat):
     m = np.mean(delta_hat)
     s2 = np.var(delta_hat,ddof=1)
     return (2 * s2 +m**2) / float(s2)
-
+#--------------------------------------------------------------------------------------
 def bprior(delta_hat):
     """Calculate the bprior parameter for the inverse gamma distribution based on the method of moments."""
     m = delta_hat.mean()
     s2 = np.var(delta_hat,ddof=1)
     return (m*s2+m**3)/s2
-
+#--------------------------------------------------------------------------------------
 def postmean(g_hat, g_bar, n, d_star, t2):
     """Calculate the posterior mean for the batch effect parameters."""
     return (t2*n*g_hat+d_star * g_bar) / (t2*n+d_star)
-
+#--------------------------------------------------------------------------------------
 def postvar(sum2, n, a, b):
     """Calculate the posterior variance for the batch effect parameters."""
     return (0.5 * sum2 + b) / (n / 2.0 + a - 1.0)
-
+#--------------------------------------------------------------------------------------
 def itSol(sdat_batch, gamma_hat, delta_hat, gamma_bar, t2, a, b,
-          conv=0.001, return_hist=False):
+          conv=0.001, return_hist=True):
     """
     Iteratively solve for posterior mean and variance of batch-effect parameters.
 
@@ -132,15 +131,12 @@ def itSol(sdat_batch, gamma_hat, delta_hat, gamma_bar, t2, a, b,
         return adjust, count, hist
 
     return adjust
-
+#--------------------------------------------------------------------------------------
 def adjust_nums(numerical_covariates, drop_idxs):
     # if we dropped some values, have to adjust those with a larger index.
     if numerical_covariates is None: return drop_idxs
     return [nc - sum(nc < di for di in drop_idxs) for nc in numerical_covariates]
-
-# ----------------------------- Main functions -----------------------------
-# Define ComBat harmonisation function
-# Translated from MATLAB, need to have concistency checked with NeuroComBat
+#--------------------------------------------------------------------------------------
 def combat(data, batch, mod=[], parametric=True,
            DeltaCorrection=True, UseEB=True, ReferenceBatch=None,
            RegressCovariates=False, GammaCorrection=True, covbat_mode=False, return_priors=False):
@@ -665,8 +661,7 @@ def combat(data, batch, mod=[], parametric=True,
         return output
     else:
         return bayesdata
-
-
+#--------------------------------------------------------------------------------------
 def _prune_redundant_covariates(mod_arr, tol=1e-10):
     """Drop constant and linearly dependent covariate columns.
 
@@ -729,8 +724,7 @@ def _prune_redundant_covariates(mod_arr, tol=1e-10):
         pruned = X[:, kept_idx]
 
     return pruned, kept_idx, sorted(dropped_idx)
-
-
+#--------------------------------------------------------------------------------------
 def _prune_covariates_against_batch(batchmod, mod_arr, tol=1e-10):
     """Keep only covariates that add rank beyond batch columns.
 
@@ -771,8 +765,7 @@ def _prune_covariates_against_batch(batchmod, mod_arr, tol=1e-10):
         pruned = Xm[:, keep_idx]
 
     return pruned, keep_idx, dropped_idx
-
-
+#--------------------------------------------------------------------------------------
 def _normalize_mod_to_dataframe(mod, n_samples):
     """Normalize user covariates to a samples x covariates DataFrame."""
     if mod is None:
@@ -797,8 +790,7 @@ def _normalize_mod_to_dataframe(mod, n_samples):
         raise ValueError('Design matrix "mod" rows must match number of samples in "data".')
 
     return pd.DataFrame(mod_arr, columns=[f"cov{i}" for i in range(mod_arr.shape[1])])
-
-
+#--------------------------------------------------------------------------------------
 def _is_continuous_for_spline(series, n_samples, min_unique=10):
     """Heuristic: only spline-expand truly continuous covariates.
 
@@ -822,8 +814,7 @@ def _is_continuous_for_spline(series, n_samples, min_unique=10):
         return False
 
     return True
-
-
+#--------------------------------------------------------------------------------------
 def _encode_covariates_modular(mod, n_samples, mean_model="ols", gam_opts=None):
     """Centralized covariate encoding for modular ComBat.
 
@@ -892,8 +883,7 @@ def _encode_covariates_modular(mod, n_samples, mean_model="ols", gam_opts=None):
     mod_arr = np.nan_to_num(mod_enc_df.to_numpy(dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
 
     return mod_arr, diagnostics
-
-
+#--------------------------------------------------------------------------------------
 def combat_modular(
     data,
     batch,
@@ -1292,8 +1282,7 @@ def combat_modular(
         "hist": eb_hist,
     }
     return output
-
-
+#--------------------------------------------------------------------------------------
 def summarize_priors_output(output, print_summary=True):
     """Summarize prior structures and key shapes from ComBat outputs.
 
@@ -1398,8 +1387,7 @@ def summarize_priors_output(output, print_summary=True):
             print("  -", k, v)
 
     return summary
-
-
+#--------------------------------------------------------------------------------------
 def _fit_mean_model(data, design, n_batch, batches, ReferenceBatch=None):
     """
     Fit an OLS mean model and compute standardization terms.
@@ -1473,14 +1461,12 @@ def _fit_mean_model(data, design, n_batch, batches, ReferenceBatch=None):
         Cov_effects = np.zeros_like(data)
 
     return B_hat, stand_mean, var_pooled, Cov_effects
-
-
+#--------------------------------------------------------------------------------------
 def _standardize(data, stand_mean, var_pooled):
     """Standardize data using provided mean and pooled variance."""
     s_data = (data - stand_mean) / (np.sqrt(var_pooled)[:, None] + 1e-8)
     return s_data
-
-
+#--------------------------------------------------------------------------------------
 def _estimate_raw_batch(s_data, design, n_batch, batches):
     """Estimate raw batch-wise means and variances from standardized data."""
     batch_design = design[:, :n_batch]
@@ -1497,8 +1483,7 @@ def _estimate_raw_batch(s_data, design, n_batch, batches):
             delta_hat[i, :] = np.var(s_data[:, indices], axis=1, ddof=0) + 1e-6
 
     return gamma_hat, delta_hat
-
-
+#--------------------------------------------------------------------------------------
 def _construct_priors(gamma_hat, delta_hat):
     """Construct global priors (gamma_bar, t2, aprior, bprior) per batch."""
     gamma_bar = np.mean(gamma_hat, axis=1)
@@ -1513,8 +1498,7 @@ def _construct_priors(gamma_hat, delta_hat):
         b_prior[i] = bprior(delta_hat[i, :])
 
     return gamma_bar, t2, a_prior, b_prior
-
-
+#--------------------------------------------------------------------------------------
 def _eb_shrinkage(s_data, gamma_hat, delta_hat, gamma_bar, t2, a_prior, b_prior, batches, parametric=True, conv=0.001):
     """Apply empirical Bayes shrinkage per batch using `itSol` iterator."""
     if not parametric:
@@ -1547,8 +1531,7 @@ def _eb_shrinkage(s_data, gamma_hat, delta_hat, gamma_bar, t2, a_prior, b_prior,
         eb_hist["counts"][i] = count
 
     return gamma_star, delta_star, eb_hist
-
-
+#--------------------------------------------------------------------------------------
 def _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, stand_mean, Cov_effects, DeltaCorrection=True, GammaCorrection=True, RegressCovariates=False,covbat_mode=False):
     """Apply batch corrections and inverse-standardize to reconstruct harmonized data."""
     bayesdata = s_data.copy()
@@ -1583,14 +1566,16 @@ def _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, sta
         )
         bayesdata = _run_covbat_for_combat_modular(bayesdata, batch)
 
+    
+    
     if RegressCovariates:
         bayesdata = (bayesdata * (np.sqrt(var_pooled)[:, None])) + (stand_mean - Cov_effects)
     else:
         bayesdata = (bayesdata * (np.sqrt(var_pooled)[:, None])) + stand_mean
+    harm_std = bayesdata
 
     return bayesdata
-
-
+#--------------------------------------------------------------------------------------
 def _run_covbat_for_combat_modular(bayesdata,batch,mod=None):
         import numpy as np
         from sklearn.preprocessing import StandardScaler
@@ -1669,7 +1654,7 @@ def _run_covbat_for_combat_modular(bayesdata,batch,mod=None):
         # final output
         bayesdata = x_covbat.copy()
         print('[covbat] Finished CovBat adjustment')
-
+#--------------------------------------------------------------------------------------
 def _fit_gam_covariates(data, mod_df, gam_opts=None):
     """Fit covariate effects using GAM or spline-basis fallback.
 
@@ -1730,8 +1715,7 @@ def _fit_gam_covariates(data, mod_df, gam_opts=None):
 
     cov_effects = (X_design @ W).T
     return cov_effects
-
-
+#--------------------------------------------------------------------------------------
 def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, weight_methods=None, weight_opts=None, global_priors=None):
     """Construct feature-wise, batch-wise local priors using weighted pooling.
 
@@ -2026,14 +2010,12 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
         "min_effective": min_effective,
         "method_weights": method_weights,
     }
-
+#--------------------------------------------------------------------------------------
 def it_sol(sdat, g_hat, d_hat, g_bar, t2, a, b, conv=0.0001):
     """Iteratively solve for the posterior mean and variance of the batch effect parameters.
     This version is used by CovBat and taken from: https://github.com/andy1764/CovBat_Harmonisation
     Chen, A. A., Beer, J. C., Tustison, N. J., Cook, P. A., Shinohara, R. T., Shou, H., & Initiative, T. A. D. N. (2022). Mitigating site effects in covariance for machine learning in neuroimaging data. Human Brain Mapping, 43(4), 1179–1195. https://doi.org/10.1002/hbm.25688)
     """
-
-
 
     n = (1 - np.isnan(sdat)).sum(axis=1)
     g_old = g_hat.copy()
@@ -2053,15 +2035,14 @@ def it_sol(sdat, g_hat, d_hat, g_bar, t2, a, b, conv=0.0001):
         count = count + 1
     adjust = (g_new, d_new)
     return adjust 
-
+#--------------------------------------------------------------------------------------
 def adjust_nums(numerical_covariates, drop_idxs):
     # if we dropped some values, have to adjust those with a larger index.
     if numerical_covariates is None: return drop_idxs
     return [nc - sum(nc < di for di in drop_idxs) for nc in numerical_covariates]
-
+#--------------------------------------------------------------------------------------
 
 # Define CovBat harmonisation function: from Chen et al. 2022
-
 # Define harmonisation via mixed effects model (Regression analysis)
 import numpy as np
 import pandas as pd
@@ -2073,7 +2054,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from statsmodels.formula.api import mixedlm
-
+#--------------------------------------------------------------------------------------
 def lme_harmonisation(data, batch, mod, variable_names):
     """
     Fits a per feature linear mixed model to harmonize data across batches while adjusting for covariates. This function is an alternative to ComBat that uses mixed effects modeling to estimate and remove batch effects.
