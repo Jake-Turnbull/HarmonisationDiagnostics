@@ -1244,6 +1244,41 @@ def clustering_analysis_all(
                     best_embedding = emb
 
             UMAP_neighbors, UMAP_min_dist = best_params
+        
+        if UMAP_tuning == "cluster":
+            # Test random distances and neighbourhood sizes, pick the one that forms the most compact clusters (e.g. using silhouette score or Davies-Bouldin index)
+            from sklearn.metrics import silhouette_score
+            best_score = -1
+            best_params = None
+            best_embedding = None
+            param_grid = [
+                (n, d)
+                for n in [10, 15, 30, 50]
+                for d in [0.01, 0.1, 0.3]
+            ]
+            
+            # Take several random subsamples of the data to choose optimal parameters for UMAP, to avoid overfitting to a single subsample
+            n_samples = data.shape[0]
+            if n_samples > 5000:
+                idx = np.random.choice(n_samples, size=int(np.round(n_samples/10)), replace=False)
+                data_sub = data[idx]
+                batch_sub = batch[idx]
+            else:
+                data_sub = data
+                batch_sub = batch
+            
+            for n, d in param_grid:
+                reducer = umap.UMAP(n_neighbors=n, min_dist=d, random_state=42)
+                emb = reducer.fit_transform(data_sub)
+
+                score = silhouette_score(emb, batch_sub)
+
+                if score > best_score:
+                    best_score = score
+                    best_params = (n, d)
+                    best_embedding = emb
+            
+            UMAP_neighbors, UMAP_min_dist = best_params
 
         
         reducer = umap.UMAP(n_neighbors=UMAP_neighbors, min_dist=UMAP_min_dist, metric=UMAP_metric, random_state=42)
@@ -2387,6 +2422,199 @@ def _configure_hbar_panel(
                 handlelength=1.5,
                 borderaxespad=0.25,
             )
+
+def n_dim_umap_visualisation(data, batch, n_dimensions=2, covariates=None, n_neighbors=15, min_dist=0.1, metric='euclidean', random_state=42, show=False):
+    """
+    Perform UMAP dimensionality reduction on the provided data and visualize the results in 2D or 3D scatter plots, colored by batch and optionally by covariates.
+
+    This visualisation is standalone and not suitable for inclusion in report workflows due to interactive elements. For report workflows, use the `cluster_analysis_all` or 'cluster_analysis_umap' function instead.
+    Parameters
+    ----------
+    data : array-like
+        The input data for UMAP.
+    batch : array-like
+        Batch labels for coloring the points.
+    n_dimensions : int, optional
+        Number of dimensions for UMAP (default is 2).
+    covariates : array-like, optional
+        Additional covariates for coloring the points.
+    n_neighbors : int, optional
+        Number of neighbors for UMAP (default is 15).
+    min_dist : float, optional
+        Minimum distance for UMAP (default is 0.1).
+    metric : str, optional
+        Distance metric for UMAP (default is 'euclidean').
+    random_state : int, optional
+        Random state for reproducibility (default is 42).
+    show : bool, optional
+        Whether to show the plot (default is False).
+    """
+    
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import umap
+
+    def _is_numeric(values):
+        arr = np.asarray(values)
+        return np.issubdtype(arr.dtype, np.number)
+
+    active_cbar = [None]
+    active_cbar_ax = [None]
+
+    def _ensure_cbar_ax():
+        if active_cbar_ax[0] is None:
+            active_cbar_ax[0] = fig.add_axes([0.82, 0.20, 0.16, 0.04])
+        return active_cbar_ax[0]
+
+    def _clear_active_cbar():
+        active_cbar[0] = None
+        if active_cbar_ax[0] is not None:
+            active_cbar_ax[0].cla()
+            active_cbar_ax[0].set_visible(False)
+
+    def _plot_colored_scatter(ax, emb, values, label, is_3d=False):
+        """Plot continuous values with a colorbar, categorical values with a legend."""
+        vals = np.asarray(values).reshape(-1)
+        if vals.shape[0] != emb.shape[0]:
+            raise ValueError(
+                f"Color values length ({vals.shape[0]}) does not match embedding rows ({emb.shape[0]})."
+            )
+
+        _clear_active_cbar()
+
+        if _is_numeric(vals):
+            vals = vals.astype(float)
+            if is_3d:
+                scatter_obj = ax.scatter(
+                    emb[:, 0], emb[:, 1], emb[:, 2],
+                    c=vals, cmap='Spectral', s=50
+                )
+            else:
+                scatter_obj = ax.scatter(
+                    emb[:, 0], emb[:, 1],
+                    c=vals, cmap='Spectral', s=50
+                )
+            cax = _ensure_cbar_ax()
+            cax.clear()
+            cax.set_visible(True)
+            cbar = fig.colorbar(scatter_obj, cax=cax, orientation='horizontal')
+            cbar.set_label(str(label))
+            active_cbar[0] = cbar
+            return
+
+        categories = pd.Categorical(vals)
+        cats = categories.categories
+        cmap = plt.get_cmap('tab10', max(len(cats), 1))
+        for i, cat in enumerate(cats):
+            mask = categories == cat
+            if is_3d:
+                ax.scatter(
+                    emb[mask, 0], emb[mask, 1], emb[mask, 2],
+                    color=cmap(i), s=50, label=str(cat)
+                )
+            else:
+                ax.scatter(
+                    emb[mask, 0], emb[mask, 1],
+                    color=cmap(i), s=50, label=str(cat)
+                )
+        ax.legend(title=str(label), loc='upper right')
+
+    # Perform UMAP dimensionality reduction
+    reducer = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_dist, n_components=n_dimensions, metric=metric, random_state=random_state)
+    embedding = reducer.fit_transform(data)
+    returned_embedding = embedding  # Keep the full embedding for return
+
+    # Warn if n_dimensions is not 2 or 3
+    if n_dimensions not in [2, 3]:
+        warnings.warn("n_dimensions should be 2 or 3 for visualization. Plotting only the first 2 dimensions in this case, but returning full embedding to user")
+        n_dimensions = 2
+        # Take first two dimensions of embedding for plotting
+        embedding = embedding[:, :2]
+
+    is_3d = (n_dimensions == 3)
+
+    if is_3d:
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        _plot_colored_scatter(ax, embedding, batch, label='Batch', is_3d=True)
+        ax.set_title('UMAP projection (3D)', fontsize=15)
+        ax.set_xlabel('UMAP 1')
+        ax.set_ylabel('UMAP 2')
+        ax.set_zlabel('UMAP 3')
+    else:
+        fig, ax = plt.subplots(figsize=(10, 8))
+        _plot_colored_scatter(ax, embedding, batch, label='Batch', is_3d=False)
+        ax.set_title('UMAP projection (2D)', fontsize=15)
+        ax.set_xlabel('UMAP 1')
+        ax.set_ylabel('UMAP 2')
+
+    if covariates is not None and show:
+        if isinstance(covariates, pd.DataFrame):
+            covariate_keys = list(covariates.columns)
+            get_values = lambda key: covariates[key].to_numpy()
+        elif isinstance(covariates, dict):
+            covariate_keys = list(covariates.keys())
+            get_values = lambda key: np.asarray(covariates[key])
+        else:
+            covariate_keys = []
+            get_values = None
+
+        if len(covariate_keys) > 0:
+            from matplotlib.widgets import RadioButtons
+
+            fig.subplots_adjust(right=0.80)
+            selector_ax = fig.add_axes([0.82, 0.35, 0.16, 0.30])
+            selector_ax.set_title('Color by', fontsize=10)
+            options = ['batch'] + covariate_keys
+            selector = RadioButtons(selector_ax, options, active=0)
+
+            def _redraw(color_by):
+                try:
+                    ax.clear()
+                    values = batch if color_by == 'batch' else get_values(color_by)
+                    _plot_colored_scatter(ax, embedding, values, label=color_by, is_3d=is_3d)
+                    if is_3d:
+                        ax.set_title(f'UMAP projection (3D) colored by {color_by}', fontsize=15)
+                        ax.set_xlabel('UMAP 1')
+                        ax.set_ylabel('UMAP 2')
+                        ax.set_zlabel('UMAP 3')
+                    else:
+                        ax.set_title(f'UMAP projection (2D) colored by {color_by}', fontsize=15)
+                        ax.set_xlabel('UMAP 1')
+                        ax.set_ylabel('UMAP 2')
+                    fig.canvas.draw_idle()
+                except Exception as exc:
+                    warnings.warn(f"Failed to redraw UMAP colors for '{color_by}': {exc}. Reverting to batch coloring.")
+                    ax.clear()
+                    _plot_colored_scatter(ax, embedding, batch, label='batch', is_3d=is_3d)
+                    if is_3d:
+                        ax.set_title('UMAP projection (3D) colored by batch', fontsize=15)
+                        ax.set_xlabel('UMAP 1')
+                        ax.set_ylabel('UMAP 2')
+                        ax.set_zlabel('UMAP 3')
+                    else:
+                        ax.set_title('UMAP projection (2D) colored by batch', fontsize=15)
+                        ax.set_xlabel('UMAP 1')
+                        ax.set_ylabel('UMAP 2')
+                    fig.canvas.draw_idle()
+
+            selector.on_clicked(_redraw)
+            # Keep a reference so widgets stay alive while the figure is open.
+            fig._umap_color_selector = selector
+        else:
+            warnings.warn("Covariates provided without named columns/keys; color selector not shown.")
+
+    if show:
+        plt.show()
+
+    # Return the full embedding to the user, even if only 2D or 3D is plotted, this code is not suitable for rep workflow:
+    # Only return the data
+    return returned_embedding
+    
+    
 
 
 # ============================================================================
@@ -4408,6 +4636,224 @@ def plot_AddMultEffects(
     return _handle_rep_show(fig, rep, "", show)
 
 
+def plot_age_percentile_chart(
+    df,
+    age_col="age",
+    value_col="y",
+    batch_col="batch",
+    percentiles=(5, 25, 50, 75, 95),
+    n_bins=25,
+    smooth_frac=0.25,
+    show_points=True,
+    show_batch_coloring=True,
+    figsize=(10, 6),
+    title=None,
+):
+    """
+    Plot smoothed percentile curves of a value against age.
 
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Input data.
+    age_col : str
+        Age variable to use on the x-axis.
+    value_col : str
+        Outcome / feature to summarize on the y-axis.
+    batch_col : str or None
+        Optional batch column for point coloring.
+    percentiles : tuple[int]
+        Percentiles to plot.
+    n_bins : int
+        Number of age bins used to estimate local percentile curves.
+    smooth_frac : float
+        LOWESS smoothing fraction applied to the binned percentile estimates.
+    show_points : bool
+        If True, scatter the raw data faintly.
+    show_batch_coloring : bool
+        If True, use batch colors for raw points.
+    figsize : tuple
+        Figure size.
+    title : str or None
+        Plot title. If None, a default title is used.
 
+    Returns
+    -------
+    fig, ax
+    """
+    try:
+        from statsmodels.nonparametric.smoothers_lowess import lowess
+    except ImportError as e:
+        raise ImportError(
+            "This function requires statsmodels. Install it with `pip install statsmodels`."
+        ) from e
 
+    if age_col not in df.columns:
+        raise ValueError(f"'{age_col}' was not found in the dataframe.")
+    if value_col not in df.columns:
+        raise ValueError(f"'{value_col}' was not found in the dataframe.")
+    if batch_col is not None and batch_col not in df.columns:
+        batch_col = None
+
+    if n_bins < 2:
+        raise ValueError("n_bins must be at least 2.")
+    if not (0 < smooth_frac <= 1):
+        raise ValueError("smooth_frac must be in (0, 1].")
+
+    try:
+        percentiles = sorted({float(p) for p in percentiles})
+    except Exception as e:
+        raise ValueError("percentiles must be an iterable of numeric values.") from e
+    if not percentiles:
+        raise ValueError("percentiles must not be empty.")
+    if any((p < 0 or p > 100) for p in percentiles):
+        raise ValueError("All percentiles must be between 0 and 100.")
+
+    d = df[[age_col, value_col] + ([batch_col] if batch_col else [])].copy()
+    d = d.dropna(subset=[age_col, value_col])
+
+    d[age_col] = pd.to_numeric(d[age_col], errors="coerce")
+    d[value_col] = pd.to_numeric(d[value_col], errors="coerce")
+    d = d.dropna(subset=[age_col, value_col])
+
+    if len(d) < 10:
+        raise ValueError("Not enough data to plot percentile curves.")
+
+    # Build age bins
+    try:
+        bins = pd.qcut(d[age_col], q=min(n_bins, d.shape[0]), duplicates="drop")
+    except ValueError:
+        bins = pd.cut(d[age_col], bins=min(n_bins, max(3, d.shape[0] // 2)))
+
+    d = d.assign(_age_bin=bins)
+
+    # Compute binned percentile estimates
+    rows = []
+    for bin_id, g in d.groupby("_age_bin", observed=True):
+        if g.shape[0] < 3:
+            continue
+        row = {
+            "age_center": float(g[age_col].median()),
+            "n": int(g.shape[0]),
+        }
+        for p in percentiles:
+            row[f"p{p}"] = float(np.percentile(g[value_col], p))
+        rows.append(row)
+
+    summary = pd.DataFrame(rows).sort_values("age_center")
+    if summary.empty:
+        raise ValueError(
+            "Could not compute percentile bins. Try fewer bins or more data."
+        )
+
+    x_grid = np.linspace(d[age_col].min(), d[age_col].max(), 400)
+
+    def smooth_curve(x, y, frac=smooth_frac):
+        """
+        LOWESS smoothing on binned percentile estimates, then interpolate to the grid.
+        """
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+
+        order = np.argsort(x)
+        x = x[order]
+        y = y[order]
+
+        if len(x) < 4:
+            return np.interp(x_grid, x, y)
+
+        sm = lowess(y, x, frac=frac, return_sorted=True)
+        xs, ys = sm[:, 0], sm[:, 1]
+
+        # Ensure unique x values for interpolation
+        xs_unique, idx = np.unique(xs, return_index=True)
+        ys_unique = ys[idx]
+
+        return np.interp(x_grid, xs_unique, ys_unique)
+
+    curves = {}
+    for p in percentiles:
+        curves[p] = smooth_curve(summary["age_center"], summary[f"p{p}"])
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Raw points, if requested
+    if show_points:
+        if show_batch_coloring and batch_col is not None:
+            batches = list(pd.unique(d[batch_col]))
+            cmap = plt.get_cmap("tab10")
+            for i, b in enumerate(batches):
+                g = d[d[batch_col] == b]
+                ax.scatter(
+                    g[age_col],
+                    g[value_col],
+                    s=12,
+                    alpha=0.18,
+                    label=str(b),
+                    color=cmap(i % 10),
+                    edgecolors="none",
+                )
+        else:
+            ax.scatter(
+                d[age_col],
+                d[value_col],
+                s=12,
+                alpha=0.15,
+                color="0.5",
+                edgecolors="none",
+            )
+
+    lower = [p for p in percentiles if p < 50]
+    upper = [p for p in percentiles if p > 50]
+
+    # Shaded percentile bands (adaptive to supplied percentiles)
+    if lower and upper:
+        if 25.0 in curves and 75.0 in curves:
+            p_lo_inner, p_hi_inner = 25.0, 75.0
+        else:
+            p_lo_inner = max(lower)
+            p_hi_inner = min(upper)
+
+        ax.fill_between(
+            x_grid,
+            curves[p_lo_inner],
+            curves[p_hi_inner],
+            alpha=0.18,
+            label=f"{p_lo_inner:g}th-{p_hi_inner:g}th",
+        )
+
+        if 5.0 in curves and 95.0 in curves:
+            p_lo_outer, p_hi_outer = 5.0, 95.0
+        else:
+            p_lo_outer = min(lower)
+            p_hi_outer = max(upper)
+
+        if (p_lo_outer, p_hi_outer) != (p_lo_inner, p_hi_inner):
+            ax.fill_between(
+                x_grid,
+                curves[p_lo_outer],
+                curves[p_hi_outer],
+                alpha=0.08,
+                label=f"{p_lo_outer:g}th-{p_hi_outer:g}th",
+            )
+
+    # Main percentile curves
+    for p in percentiles:
+        linewidth = 2.6 if np.isclose(p, 50.0) else 1.6
+        ax.plot(x_grid, curves[p], linewidth=linewidth, label=f"{p:g}th percentile")
+
+    ax.set_xlabel(age_col.capitalize())
+    ax.set_ylabel(value_col.capitalize() if value_col else "Value")
+    ax.set_title(title or f"Smoothed percentile chart of {value_col} by age")
+
+    ax.grid(True, alpha=0.2)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    # Keep the legend readable without clutter
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles, labels, frameon=False, ncol=2, loc="best")
+    plt.show()
+
+    fig.tight_layout()
+    return fig, ax

@@ -173,9 +173,23 @@ def plot_compare_cohens_d(results):
             x2 = np.arange(vec.size)
             ax2.plot(x2, vec, "b-", linewidth=1)
             ax2.plot(x2, vec, "r.", markersize=2)
-            for thresh, color in [(0.2, "green"), (0.5, "orange"), (0.8, "red")]:
-                ax2.axhline(y=thresh, color=color, linestyle="--", linewidth=1)
-                ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
+            # Check the max values of x2, if x2 is too small, avoid plotting the horizontal lines to prevent clutter
+
+            if max(abs(vec)) > 0.2:
+                for thresh, color in [(0.2, "green"), (0.5, "orange"), (0.8, "red")]:
+                    ax2.axhline(y=thresh, color=color, linestyle="--", linewidth=1)
+                    ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
+            elif max(abs(vec)) > 0.1:
+                for thresh, color in [(0.1, "green"), (0.2, "orange"), (0.5, "red")]:
+                    ax2.axhline(y=thresh, color=color, linestyle="--", linewidth=1)
+                    ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
+            elif max(abs(vec)) > 0.05:
+                # Draw line at 1.1 times max and -1.1 max and label what the max observed value is
+                max_val = max(abs(vec))
+                ax2.axhline(y=1.1 * max_val, color="purple", linestyle="--", linewidth=1)
+                ax2.axhline(y=-1.1 * max_val, color="purple", linestyle="--", linewidth=1)
+                ax2.text(0.5, 1.15 * max_val, f"Max observed |d|: {max_val:.3f}", color="purple", fontsize=6, ha="center")  
+            
             y_max = np.nanmax(np.abs(vec)) if vec.size else 1.0
             y_max = max(1.0, y_max)
             ax2.set_ylim(-y_max, y_max)
