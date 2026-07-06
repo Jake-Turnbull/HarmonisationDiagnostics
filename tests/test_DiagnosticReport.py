@@ -303,6 +303,37 @@ def test_min_report_accepts_dataframe_data_and_series_batch_without_covariates(t
     assert report_path.exists() and report_path.stat().st_size > 100
 
 
+def test_full_report_runs_without_covariates(test_results_dir, monkeypatch):
+    monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig_full_no_cov"))
+
+    from DiagnoseHarmonisation import PlotDiagnosticResults
+    monkeypatch.setattr(PlotDiagnosticResults, "clustering_analysis_all", lambda *args, **kwargs: None)
+
+    n_samples = 40
+    n_features = 10
+    rng = np.random.default_rng(123)
+    data = rng.normal(size=(n_samples, n_features))
+    batch = np.array(["A"] * 20 + ["B"] * 20)
+
+    from DiagnoseHarmonisation import DiagnosticReport
+
+    DiagnosticReport.CrossSectionalReport(
+        data=data,
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        save_dir=str(test_results_dir / "full_no_covariates"),
+        report_name="Full_No_Covariates",
+        show=False,
+        save_data=False,
+        timestamped_reports=False,
+        UMAP_embedding=False,
+    )
+
+    report_path = test_results_dir / "full_no_covariates" / "Full_No_Covariates.html"
+    assert report_path.exists() and report_path.stat().st_size > 100
+
+
 
 
 import os

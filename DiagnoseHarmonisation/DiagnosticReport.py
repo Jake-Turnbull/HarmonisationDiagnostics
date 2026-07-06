@@ -1893,6 +1893,7 @@ def CrossSectionalReport(
         report.text_simple("\n\n")
 
         # Repeat data replacement process for covariates if needed:
+        covariates_numeric = None
         if covariates is not None:
             covariates_numeric = covariates
             # if dataframe or dictionary, convert to numeric array:
@@ -2060,7 +2061,7 @@ def CrossSectionalReport(
         for b, dist in centroid_distances.items():
             report.text_simple(f"Mahalanobis distance of {b} to overall centroid: {dist:.4f}")
 
-        centroid_resid_distance = mahalanobis_results.get("centroid_resid", {})
+        centroid_resid_distance = mahalanobis_results.get("centroid_resid") or {}
         for b, dist in centroid_resid_distance.items():
             report.text_simple(f"Mahalanobis distance of {b} to overall centroid after residualising by covariates: {dist:.4f}")
         data_dict = {}
