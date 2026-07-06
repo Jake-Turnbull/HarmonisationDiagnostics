@@ -10,6 +10,16 @@ import matplotlib.pyplot as plt
 import matplotlib.figure as mfig
 from scipy import stats
 
+
+FEATURE_LABEL_HIDE_THRESHOLD = 20
+
+
+def _feature_tick_policy(labels: list[str]) -> tuple[list[str], int]:
+    """For many features keep ticks but hide labels; for few features use diagonal labels."""
+    if len(labels) > FEATURE_LABEL_HIDE_THRESHOLD:
+        return ["" for _ in labels], 0
+    return labels, 45
+
 def LMM_Diagnostics_Plot(
     results_df,
     feature_order="original",
@@ -85,7 +95,8 @@ def LMM_Diagnostics_Plot(
     ax1.set_ylim(bottom=0)
 
     ax1.set_xticks(x)
-    ax1.set_xticklabels(x_labels, rotation=90 if len(df_plot) <= 100 else 0)
+    shown_labels_1, rot_1 = _feature_tick_policy(list(x_labels))
+    ax1.set_xticklabels(shown_labels_1, rotation=rot_1, ha="right" if rot_1 else "center")
 
     figs.append(("ICC per feature", fig1))
 
@@ -105,7 +116,8 @@ def LMM_Diagnostics_Plot(
     ax2.set_ylim(bottom=0)
 
     ax2.set_xticks(x2)
-    ax2.set_xticklabels(x_labels2, rotation=90 if len(df_icc_sorted) <= 100 else 0)
+    shown_labels_2, rot_2 = _feature_tick_policy(list(x_labels2))
+    ax2.set_xticklabels(shown_labels_2, rotation=rot_2, ha="right" if rot_2 else "center")
 
     figs.append(("ICC per feature sorted", fig2))
 
@@ -127,7 +139,8 @@ def LMM_Diagnostics_Plot(
     ax3.set_ylim(bottom=0)
 
     ax3.set_xticks(x_r2)
-    ax3.set_xticklabels(x_labels, rotation=90 if len(df_plot) <= 100 else 0)
+    shown_labels_3, rot_3 = _feature_tick_policy(list(x_labels))
+    ax3.set_xticklabels(shown_labels_3, rotation=rot_3, ha="right" if rot_3 else "center")
     ax3.legend()
 
     figs.append(("Marginal and Conditional R² per feature", fig3))
@@ -147,24 +160,10 @@ def LMM_Diagnostics_Plot(
         ax4.set_xlabel("Feature")
         ax4.set_ylabel("Delta R²")
 
-        max_labels = 100
-        # Only show x labels if not too many features, otherwise, have no labels and just ticks:
-        if len(df_delta) <= max_labels:
-            ax4.set_xticks(np.arange(len(df_delta)))
-            if len(df_delta) <= max_labels-20:
-                ax4.set_xticklabels(
-                    df_delta["feature"].astype(str).tolist(),
-                    rotation=90
-                )
-            else:
-                ax4.set_xticks(np.arange(len(df_delta)))
-                ax4.set_xticklabels(
-                    df_delta["feature"].astype(str).tolist(),
-                    rotation=90 if len(df_delta) <= 100 else 0
-                )
-        else: 
-            ax4.set_xticks(np.arange(len(df_delta)))
-            ax4.set_xticklabels([""] * len(df_delta))
+        ax4.set_xticks(np.arange(len(df_delta)))
+        delta_labels = df_delta["feature"].astype(str).tolist()
+        shown_delta_labels, rot_delta = _feature_tick_policy(delta_labels)
+        ax4.set_xticklabels(shown_delta_labels, rotation=rot_delta, ha="right" if rot_delta else "center")
 
         figs.append(("Delta R² per feature", fig4))
 
@@ -495,7 +494,7 @@ def Levenes_Test_with_residuals(
     for comp, res_raw in levene_results_raw.items():
         stat_raw = np.asarray(res_raw.get("stat") if "stat" in res_raw else res_raw.get("statistic"))
         pval_raw = None
-        for key in ("pvalue", "p_val", "pvalues", "p"):
+        for key in ("p_value", "pvalue", "p_val", "pvalues", "p"):
             if key in res_raw:
                 pval_raw = np.asarray(res_raw[key])
                 break
@@ -507,7 +506,7 @@ def Levenes_Test_with_residuals(
         if levene_results_resid is not None and comp in levene_results_resid:
             res_res = levene_results_resid[comp]
             stat_res = np.asarray(res_res.get("stat") if "stat" in res_res else res_res.get("statistic"))
-            for key in ("pvalue", "p_val", "pvalues", "p"):
+            for key in ("p_value", "pvalue", "p_val", "pvalues", "p"):
                 if key in res_res:
                     pval_res = np.asarray(res_res[key])
                     break
@@ -518,7 +517,8 @@ def Levenes_Test_with_residuals(
             continue
 
         ncols = 2 if stat_res is not None else 1
-        fig, axes = plt.subplots(1, ncols, figsize=(max(6, n_features * 0.12) * ncols, 4), squeeze=False)
+        square_side = max(6.0, min(12.0, n_features * 0.2))
+        fig, axes = plt.subplots(1, ncols, figsize=(square_side * ncols, square_side), squeeze=False)
         x = np.arange(n_features)
 
         ax = axes[0, 0]
@@ -555,13 +555,11 @@ def Levenes_Test_with_residuals(
         fig.suptitle(f"Levene's test: {left_label} vs {right_label}")
 
         for ax_plot in axes[0, :ncols]:
+            if hasattr(ax_plot, "set_box_aspect"):
+                ax_plot.set_box_aspect(1)
             ax_plot.set_xticks(x)
-            if n_features <= 50:
-                ax_plot.set_xticklabels(feature_names, rotation=90)
-            else:
-                step = max(1, n_features // 40)
-                labels = [feature_names[i] if (i % step == 0) else "" for i in range(n_features)]
-                ax_plot.set_xticklabels(labels, rotation=90)
+            shown_labels, rotation = _feature_tick_policy(list(feature_names))
+            ax_plot.set_xticklabels(shown_labels, rotation=rotation, ha="right" if rotation else "center")
 
         ax.text(0.98, 0.95, f"n_significant_raw={int(np.sum(sig_raw))}", transform=ax.transAxes, ha="right", va="top")
         if stat_res is not None:
@@ -622,7 +620,7 @@ def Levenes_Test(
         stat = np.asarray(res.get("stat") if "stat" in res else res.get("statistic"))
         # try a few common p-value keys
         pval = None
-        for key in ("pvalue", "p_val", "pvalues", "p"):
+        for key in ("p_value", "pvalue", "p_val", "pvalues", "p"):
             if key in res:
                 pval = np.asarray(res[key])
                 break
@@ -633,7 +631,8 @@ def Levenes_Test(
         if stat.shape[0] != n_features:
             continue
 
-        fig, ax = plt.subplots(figsize=(max(6, n_features * 0.12), 4))
+        square_side = max(6.0, min(12.0, n_features * 0.2))
+        fig, ax = plt.subplots(figsize=(square_side, square_side))
         x = np.arange(n_features)
         bars = ax.bar(x, stat, color="C0", alpha=0.8)
 
@@ -648,13 +647,11 @@ def Levenes_Test(
         ax.set_title(f"Levene's test: {left_label} vs {right_label}")
         ax.set_xlabel("Feature")
         ax.set_ylabel("Levene statistic")
+        if hasattr(ax, "set_box_aspect"):
+            ax.set_box_aspect(1)
         ax.set_xticks(x)
-        if n_features <= 50:
-            ax.set_xticklabels(feature_names, rotation=90)
-        else:
-            step = max(1, n_features // 40)
-            labels = [feature_names[i] if (i % step == 0) else "" for i in range(n_features)]
-            ax.set_xticklabels(labels, rotation=90)
+        shown_labels, rotation = _feature_tick_policy(list(feature_names))
+        ax.set_xticklabels(shown_labels, rotation=rotation, ha="right" if rotation else "center")
 
         # annotate number of significant features
         n_sig = int(np.sum(sig))

@@ -274,6 +274,35 @@ def test_min_script(test_results_dir, monkeypatch):
     assert report_path.exists() and report_path.stat().st_size > 100, "Minimal script did not generate expected report."
 
 
+def test_min_report_accepts_dataframe_data_and_series_batch_without_covariates(test_results_dir, monkeypatch):
+    monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig"))
+
+    n_samples = 30
+    n_features = 6
+    data_df = pd.DataFrame(
+        np.random.randn(n_samples, n_features),
+        columns=[f"f{i+1}" for i in range(n_features)],
+    )
+    batch_series = pd.Series(np.array(["A"] * 15 + ["B"] * 15), name="batch")
+
+    from DiagnoseHarmonisation import DiagnosticReport
+
+    DiagnosticReport.CrossSectionalReportMin(
+        data=data_df,
+        batch=batch_series,
+        covariates=None,
+        covariate_names=None,
+        save_dir=str(test_results_dir / "minimal_dataframe_inputs"),
+        report_name="Minimal_DataFrame_Inputs",
+        show=False,
+        timestamped_reports=False,
+        save_data=False,
+    )
+
+    report_path = test_results_dir / "minimal_dataframe_inputs" / "Minimal_DataFrame_Inputs.html"
+    assert report_path.exists() and report_path.stat().st_size > 100
+
+
 
 
 import os

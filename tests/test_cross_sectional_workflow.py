@@ -177,6 +177,38 @@ def test_run_cross_sectional_report_invokes_report_backend(monkeypatch, test_res
     assert result.report_path == test_results_dir / "example_report.html"
 
 
+def test_run_cross_sectional_report_allows_empty_covariates(monkeypatch, test_results_dir):
+    data_path, covariates_path = _write_example_inputs(test_results_dir / "cross_sectional_report_no_covariates")
+    captured = {}
+
+    class DummyReport:
+        report_path = test_results_dir / "example_report_no_covariates.html"
+
+    def fake_cross_sectional_report(data, **kwargs):
+        captured["kwargs"] = kwargs
+        return DummyReport()
+
+    from DiagnoseHarmonisation import DiagnosticReport
+
+    monkeypatch.setattr(DiagnosticReport, "CrossSectionalReport", fake_cross_sectional_report)
+
+    config = CrossSectionalRunConfig(
+        data_path=data_path,
+        covariates_path=covariates_path,
+        output_dir=test_results_dir,
+        report_name="example_report_no_covariates",
+        timestamped_reports=False,
+        selected_covariates=[],
+    )
+
+    result = run_cross_sectional_report(config)
+
+    assert captured["kwargs"]["covariates"] is None
+    assert captured["kwargs"]["covariate_names"] is None
+    assert result.report_path == test_results_dir / "example_report_no_covariates.html"
+    assert any("LMM diagnostics will be skipped" in warning for warning in result.warnings)
+
+
 def test_run_pipeline_from_cli_uses_selected_batch_column(monkeypatch, test_results_dir):
     data_path, covariates_path = _write_example_inputs(test_results_dir / "cross_sectional_cli_inputs")
     captured = {}

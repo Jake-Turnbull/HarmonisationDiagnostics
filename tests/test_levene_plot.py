@@ -5,6 +5,7 @@ import pytest
 
 from DiagnoseHarmonisation.DiagnosticFunctions import Levenes_Test
 from DiagnoseHarmonisation import PlotDiagnosticResults as PDR
+from DiagnoseHarmonisation import PlotComparisonResults as PCR
 
 
 def test_levene_plot_smoke():
@@ -36,16 +37,59 @@ def test_levene_plot_smoke():
     for cap, fig in figs:
         assert hasattr(fig, "savefig")
 
-    # optionally: ensure that at least one comparison found significant features
-    any_sig = False
-    for res in levene_results.values():
-        pvals = None
-        for k in ("pvalue", "p_val", "pvalues", "p"):
-            if k in res:
-                pvals = np.asarray(res[k])
-                break
-        if pvals is None:
-            continue
-        if (pvals < 0.05).any():
-            any_sig = True
-            break
+
+def test_levene_plot_uses_p_value_key_and_feature_label_policy():
+    n_features = 24
+    stats = np.linspace(0.1, 3.0, n_features)
+    pvals = np.linspace(0.001, 0.2, n_features)
+    levene_results = {("A", "B"): {"statistic": stats, "p_value": pvals}}
+    feature_names = [f"f{i+1}" for i in range(n_features)]
+
+    figs = PDR.Levenes_Test(levene_results, feature_names=feature_names, alpha=0.05, show=False)
+    assert len(figs) == 1
+    _, fig = figs[0]
+    ax = fig.axes[0]
+
+    rendered_labels = [tick.get_text() for tick in ax.get_xticklabels()]
+    assert all(label == "" for label in rendered_labels)
+
+
+def test_levene_plot_diagonal_labels_for_20_or_fewer_features():
+    n_features = 20
+    stats = np.linspace(0.1, 2.0, n_features)
+    pvals = np.linspace(0.01, 0.3, n_features)
+    levene_results = {("A", "B"): {"stat": stats, "p_value": pvals}}
+    feature_names = [f"f{i+1}" for i in range(n_features)]
+
+    figs = PDR.Levenes_Test(levene_results, feature_names=feature_names, alpha=0.05, show=False)
+    assert len(figs) == 1
+    _, fig = figs[0]
+    ax = fig.axes[0]
+
+    first_rotation = ax.get_xticklabels()[0].get_rotation()
+    assert int(first_rotation) == 45
+
+
+def test_levene_with_residuals_uses_square_axes_and_p_value_key():
+    n_features = 12
+    raw = {("A", "B"): {"stat": np.ones(n_features), "p_value": np.full(n_features, 0.04)}}
+    resid = {("A", "B"): {"stat": np.ones(n_features) * 0.8, "p_value": np.full(n_features, 0.06)}}
+
+    figs = PDR.Levenes_Test_with_residuals(raw, resid, feature_names=[f"f{i+1}" for i in range(n_features)], show=False)
+    assert len(figs) == 1
+    _, fig = figs[0]
+    assert len(fig.axes) == 2
+    for ax in fig.axes:
+        assert round(float(ax.get_box_aspect()), 2) == 1.0
+
+
+def test_comparison_feature_label_policy_thresholds():
+    labels_small, rot_small = PCR._feature_labels(20)
+    assert len(labels_small) == 20
+    assert rot_small == 45
+    assert all(label != "" for label in labels_small)
+
+    labels_large, rot_large = PCR._feature_labels(21)
+    assert len(labels_large) == 21
+    assert rot_large == 0
+    assert all(label == "" for label in labels_large)

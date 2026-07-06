@@ -4,6 +4,22 @@ This page documents the multi-method comparison workflow used to evaluate raw an
 
 The comparison report expects a dictionary of equally shaped data matrices that share the same batch labels and optional covariates. It runs the same diagnostic suite on each method, then combines the outputs into a scorecard and a short recommendation summary.
 
+## Behaviour notes
+
+- Inputs are normalized from pandas-native types:
+  - `datasets` entries can be `pandas.DataFrame` or array-like.
+  - `batch` can be a `Series`, one-column `DataFrame`, or array-like.
+  - multi-column batch `DataFrame` inputs raise a clear validation error.
+- If covariates are not provided, the report continues and skips only LMM diagnostics. The report summary records this as `skipped_missing_covariates`.
+- Feature label policy in comparison feature-wise plots:
+  - `<= 20` features: diagonal labels (`45°`).
+  - `> 20` features: tick labels hidden while keeping plotted values.
+- In `save_data=True` mode, per-method exports include:
+  - UMAP embeddings (when computed).
+  - PCA scores, explained variance, and PC-correlation tables.
+  - Frobenius covariance matrices (raw and normalized).
+  - Per-batch scree and cumulative variance tables.
+
 ## Public entry point
 
 ::: DiagnoseHarmonisation.DiagnosticReport.CrossSectionalComparisonReport

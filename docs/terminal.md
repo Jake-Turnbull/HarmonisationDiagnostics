@@ -26,6 +26,8 @@ This opens a Tkinter-based desktop window where you can:
 
 The GUI keeps advanced report settings on sensible defaults for the first version and shows status messages while the report is running.
 
+If no covariates are selected, the run continues and emits a warning that LMM diagnostics are skipped. All other diagnostics still run and the report is generated.
+
 ## Scripted CLI Options
 
 The options for `harmdiag run` are shown below:
@@ -44,6 +46,13 @@ The options for `harmdiag run` are shown below:
     "--report-name", default=None, help="Optional name for the report (used in filenames)."
     "--save-data", default = True, help="Whether to save the aligned data and covariates used for the report (for debugging)."
     "--save-data-name", default=None, help="Optional name for the saved data files (used in filenames)."
+
+### Additional CLI behaviour notes
+
+- Data and batch inputs are normalized from pandas-friendly formats where relevant in the workflow layer.
+- Feature-heavy plots follow a readability policy:
+  - `<= 20` features: diagonal labels.
+  - `> 20` features: labels hidden, values still plotted.
 
 # Using DiagnoseHarmonisation from the Command Line for Longitudinal data
 

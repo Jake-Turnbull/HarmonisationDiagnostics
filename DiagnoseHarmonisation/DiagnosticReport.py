@@ -46,6 +46,81 @@ def covariate_to_numeric(covariates) -> np.ndarray | None:
     return covariate_numeric
 
 
+def _normalize_data_matrix(data, feature_names=None) -> tuple[np.ndarray, list | None]:
+    """Normalize feature input to a numeric 2D matrix and aligned feature names."""
+    inferred_feature_names = None
+    if isinstance(data, pd.DataFrame):
+        inferred_feature_names = [str(col) for col in data.columns]
+        data_numeric = data.apply(pd.to_numeric, errors="coerce")
+        matrix = data_numeric.to_numpy(dtype=float)
+    else:
+        matrix = np.asarray(data)
+        if matrix.ndim == 1:
+            matrix = matrix.reshape(-1, 1)
+        if matrix.ndim != 2:
+            raise ValueError(f"data must be 2D (samples x features). Got shape {matrix.shape}.")
+        matrix = pd.DataFrame(matrix).apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+
+    if matrix.ndim != 2:
+        raise ValueError(f"data must be 2D (samples x features). Got shape {matrix.shape}.")
+
+    if feature_names is None and inferred_feature_names is not None:
+        feature_names = inferred_feature_names
+
+    if feature_names is not None and len(feature_names) != matrix.shape[1]:
+        raise ValueError(
+            f"feature_names length mismatch: expected {matrix.shape[1]}, got {len(feature_names)}."
+        )
+
+    return matrix, feature_names
+
+
+def _normalize_batch_vector(batch, n_samples: int) -> np.ndarray:
+    """Normalize batch labels to a 1D vector with n_samples entries."""
+    if isinstance(batch, pd.Series):
+        batch_arr = batch.to_numpy()
+    elif isinstance(batch, pd.DataFrame):
+        if batch.shape[1] != 1:
+            raise ValueError(
+                "batch DataFrame must have exactly one column. "
+                f"Got {batch.shape[1]} columns."
+            )
+        batch_arr = batch.iloc[:, 0].to_numpy()
+    else:
+        batch_arr = np.asarray(batch)
+
+    if batch_arr.ndim != 1:
+        raise ValueError("batch must be a 1D vector of length n_samples.")
+    if batch_arr.shape[0] != n_samples:
+        raise ValueError(
+            f"batch length mismatch: expected {n_samples} samples, got {batch_arr.shape[0]}."
+        )
+    return batch_arr
+
+
+def _normalize_covariates_input(covariates, n_samples: int):
+    """Normalize covariates to 2D array-like with n_samples rows or None."""
+    if covariates is None:
+        return None
+
+    if isinstance(covariates, dict):
+        cov_arr = np.column_stack(list(covariates.values()))
+    elif isinstance(covariates, pd.DataFrame):
+        cov_arr = covariates.to_numpy()
+    else:
+        cov_arr = np.asarray(covariates)
+
+    if cov_arr.ndim == 1:
+        cov_arr = cov_arr.reshape(-1, 1)
+    if cov_arr.ndim != 2:
+        raise ValueError("covariates must be a 2D array-like with n_samples rows.")
+    if cov_arr.shape[0] != n_samples:
+        raise ValueError(
+            f"covariates row mismatch: expected {n_samples}, got {cov_arr.shape[0]}."
+        )
+    return cov_arr
+
+
 def _generate_harmonisation_advice(
     cohens_d_results,
     mahalanobis_results,
@@ -252,6 +327,7 @@ def validate_comparison_datasets(
     normalized: dict[str, np.ndarray] = {}
     seen_names = set()
     expected_shape = None
+    inferred_feature_names = None
 
     for method_name, data in datasets.items():
         if not isinstance(method_name, str) or method_name.strip() == "":
@@ -261,11 +337,18 @@ def validate_comparison_datasets(
             raise ValueError(f"Duplicate method name detected after stripping whitespace: {clean_name}")
         seen_names.add(clean_name)
 
-        arr = np.asarray(data)
-        if arr.ndim != 2:
-            raise ValueError(f"Dataset '{clean_name}' must be 2D (samples x features). Got shape {arr.shape}.")
+        arr, inferred_names = _normalize_data_matrix(data, feature_names=None)
         if arr.shape[0] == 0 or arr.shape[1] == 0:
             raise ValueError(f"Dataset '{clean_name}' must be non-empty. Got shape {arr.shape}.")
+
+        if inferred_names is not None:
+            if inferred_feature_names is None:
+                inferred_feature_names = inferred_names
+            elif inferred_feature_names != inferred_names:
+                raise ValueError(
+                    "All DataFrame datasets must use identical feature columns and order. "
+                    f"Mismatch found for '{clean_name}'."
+                )
 
         if expected_shape is None:
             expected_shape = arr.shape
@@ -274,28 +357,16 @@ def validate_comparison_datasets(
                 f"All datasets must have identical shape. Expected {expected_shape}, got {arr.shape} for '{clean_name}'."
             )
 
-        normalized[clean_name] = np.asarray(arr, dtype=float)
+        normalized[clean_name] = arr
 
     n_samples, n_features = expected_shape
 
-    batch_arr = np.asarray(batch)
-    if batch_arr.ndim != 1:
-        raise ValueError("batch must be a 1D vector of length n_samples.")
-    if batch_arr.shape[0] != n_samples:
-        raise ValueError(
-            f"batch length mismatch: expected {n_samples} samples, got {batch_arr.shape[0]}."
-        )
+    _normalize_batch_vector(batch, n_samples)
 
-    if covariates is not None:
-        cov_arr = np.asarray(covariates)
-        if cov_arr.ndim == 1:
-            cov_arr = cov_arr.reshape(-1, 1)
-        if cov_arr.ndim != 2:
-            raise ValueError("covariates must be a 2D array-like with n_samples rows.")
-        if cov_arr.shape[0] != n_samples:
-            raise ValueError(
-                f"covariates row mismatch: expected {n_samples}, got {cov_arr.shape[0]}."
-            )
+    _normalize_covariates_input(covariates, n_samples)
+
+    if feature_names is None and inferred_feature_names is not None:
+        feature_names = inferred_feature_names
 
     if feature_names is not None and len(feature_names) != n_features:
         raise ValueError(
@@ -624,6 +695,7 @@ def _format_list_block(title: str, items: list[str]) -> str:
 
 def _save_comparison_results(
     result: CrossSectionalDiagnosticResult,
+    batch: np.ndarray,
     save_dir: Path,
     report_date: str,
     report_name: str | None,
@@ -758,9 +830,20 @@ def _save_comparison_results(
         )
 
     if result.covariance_results is not None:
+        cov_raw = result.covariance_results.get("pairwise_frobenius")
+        if cov_raw is not None:
+            saved_paths["covariance_frobenius"] = save_test_results(
+                cov_raw,
+                test_name=f"{prefix}_CovarianceFrobenius",
+                save_root=save_dir,
+                feature_names=feature_names,
+                report_date=report_date,
+                report_name=report_name,
+            )
+
         cov_norm = result.covariance_results.get("pairwise_frobenius_normalized")
         if cov_norm is not None:
-            saved_paths["covariance"] = save_test_results(
+            saved_paths["covariance_frobenius_normalized"] = save_test_results(
                 cov_norm,
                 test_name=f"{prefix}_CovarianceFrobeniusNormalized",
                 save_root=save_dir,
@@ -780,6 +863,103 @@ def _save_comparison_results(
             report_date=report_date,
             report_name=report_name,
         )
+
+        explained = result.pca_results.get("explained_variance")
+        if explained is not None:
+            explained_arr = np.asarray(explained, dtype=float)
+            explained_df = pd.DataFrame(
+                {
+                    "PC": [f"PC{i+1}" for i in range(explained_arr.shape[0])],
+                    "explained_variance_ratio": explained_arr,
+                    "cumulative_explained_variance_ratio": np.cumsum(explained_arr),
+                }
+            )
+            saved_paths["pca_explained_variance"] = save_test_results(
+                explained_df,
+                test_name=f"{prefix}_PCAExplainedVariance",
+                save_root=save_dir,
+                feature_names=list(explained_df.columns),
+                report_date=report_date,
+                report_name=report_name,
+            )
+
+        corr_dict = result.pca_results.get("pc_correlations", {})
+        if isinstance(corr_dict, dict) and len(corr_dict) > 0:
+            corr_rows = []
+            for variable_name, corr_values in corr_dict.items():
+                corr = np.asarray(corr_values.get("correlation", []), dtype=float)
+                pval = np.asarray(corr_values.get("p_value", []), dtype=float)
+                n_pc = int(max(corr.shape[0], pval.shape[0]))
+                for i in range(n_pc):
+                    corr_rows.append(
+                        {
+                            "variable": str(variable_name),
+                            "PC": f"PC{i+1}",
+                            "correlation": float(corr[i]) if i < corr.shape[0] else np.nan,
+                            "p_value": float(pval[i]) if i < pval.shape[0] else np.nan,
+                        }
+                    )
+            if corr_rows:
+                corr_df = pd.DataFrame(corr_rows)
+                saved_paths["pca_correlations"] = save_test_results(
+                    corr_df,
+                    test_name=f"{prefix}_PCACorrelations",
+                    save_root=save_dir,
+                    feature_names=list(corr_df.columns),
+                    report_date=report_date,
+                    report_name=report_name,
+                )
+
+        if pca_scores.ndim == 2 and pca_scores.shape[0] == result.data.shape[0]:
+            n_pc = min(pca_scores.shape[1], 20)
+            batch_arr = np.asarray(batch)
+            unique_batches = np.unique(batch_arr)
+            scree_rows = []
+            for batch_name in unique_batches:
+                idx = np.where(batch_arr == batch_name)[0]
+                if idx.size < 2:
+                    continue
+                var = np.var(pca_scores[idx, :n_pc], axis=0, ddof=1)
+                total = np.nansum(var)
+                frac = var / total if total > 0 else np.zeros_like(var)
+                cum = np.cumsum(frac)
+                for i in range(n_pc):
+                    scree_rows.append(
+                        {
+                            "batch": str(batch_name),
+                            "PC": f"PC{i+1}",
+                            "variance_fraction": float(frac[i]),
+                            "cumulative_variance_fraction": float(cum[i]),
+                        }
+                    )
+            if scree_rows:
+                scree_df = pd.DataFrame(scree_rows)
+                saved_paths["batch_scree"] = save_test_results(
+                    scree_df,
+                    test_name=f"{prefix}_BatchScree",
+                    save_root=save_dir,
+                    feature_names=list(scree_df.columns),
+                    report_date=report_date,
+                    report_name=report_name,
+                )
+
+    if result.umap_results is not None and "embedding" in result.umap_results:
+        embedding = np.asarray(result.umap_results["embedding"], dtype=float)
+        if embedding.ndim == 2 and embedding.shape[1] >= 2:
+            embedding_df = pd.DataFrame(
+                {
+                    "UMAP1": embedding[:, 0],
+                    "UMAP2": embedding[:, 1],
+                }
+            )
+            saved_paths["umap_embedding"] = save_test_results(
+                embedding_df,
+                test_name=f"{prefix}_UMAPEmbedding",
+                save_root=save_dir,
+                feature_names=["UMAP1", "UMAP2"],
+                report_date=report_date,
+                report_name=report_name,
+            )
 
     if result.summary_metrics is not None:
         metrics_df = pd.DataFrame([result.summary_metrics])
@@ -804,6 +984,7 @@ def _run_single_method_diagnostics(
     covariate_types,
     feature_names,
     ratio_type: str,
+    compute_umap: bool = True,
 ) -> CrossSectionalDiagnosticResult:
     """Execute the full diagnostic suite for one harmonisation method.
 
@@ -853,19 +1034,26 @@ def _run_single_method_diagnostics(
     except Exception as exc:
         result.errors.append(f"Mahalanobis_Distance failed: {exc}")
 
-    try:
-        lmm_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(
-            data,
-            batch,
-            covariates=covariates_numeric,
-            feature_names=feature_names,
-            covariate_names=covariate_names,
-            min_group_n=2,
-        )
-        result.lmm_results = lmm_df
-        result.lmm_summary = lmm_summary
-    except Exception as exc:
-        result.errors.append(f"Run_LMM_cross_sectional failed: {exc}")
+    has_covariates = covariates_numeric is not None and np.asarray(covariates_numeric).shape[1] > 0
+    if has_covariates:
+        try:
+            lmm_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(
+                data,
+                batch,
+                covariates=covariates_numeric,
+                feature_names=feature_names,
+                covariate_names=covariate_names,
+                min_group_n=2,
+            )
+            result.lmm_results = lmm_df
+            result.lmm_summary = lmm_summary
+        except Exception as exc:
+            result.errors.append(f"Run_LMM_cross_sectional failed: {exc}")
+    else:
+        result.lmm_summary = {
+            "status": "skipped_missing_covariates",
+            "reason": "No covariates provided; skipping LMM diagnostics.",
+        }
 
     try:
         variance_ratios, pair_labels = DiagnosticFunctions.Variance_Ratios(
@@ -935,6 +1123,20 @@ def _run_single_method_diagnostics(
     except Exception as exc:
         result.errors.append(f"PC_Correlations failed: {exc}")
 
+    if compute_umap:
+        try:
+            import umap  # type: ignore
+
+            reducer = umap.UMAP(n_neighbors=10, min_dist=0.1, random_state=42)
+            embedding = reducer.fit_transform(data)
+            result.umap_results = {
+                "embedding": embedding,
+                "n_neighbors": 10,
+                "min_dist": 0.1,
+            }
+        except Exception as exc:
+            result.errors.append(f"UMAP embedding failed: {exc}")
+
     result.summary_metrics = extract_summary_metrics(result)
     return result
 
@@ -983,6 +1185,10 @@ def CrossSectionalReportMin(data,
         StatsReporter: The report object containing the generated figures, text,
         and saved artifact references.
     """
+
+    data, feature_names = _normalize_data_matrix(data, feature_names=feature_names)
+    batch = _normalize_batch_vector(batch, data.shape[0])
+    covariates = _normalize_covariates_input(covariates, data.shape[0])
 
     if save_dir is None:
         save_dir = Path.cwd()
@@ -1178,10 +1384,23 @@ def CrossSectionalReportMin(data,
 
         # Use the same code from CrossSectionalReport, report LMM diagnostics, Variance ratio
         # run LMM diagnostics
-        lmm_results_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(data, batch, covariates=covariates,
-                                                feature_names=feature_names,
-                                                covariate_names=covariate_names,
-                                                min_group_n=2)
+        if covariates is not None and covariates.shape[1] > 0:
+            lmm_results_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(
+                data,
+                batch,
+                covariates=covariates,
+                feature_names=feature_names,
+                covariate_names=covariate_names,
+                min_group_n=2,
+            )
+        else:
+            lmm_results_df = pd.DataFrame()
+            lmm_summary = {
+                "n_features": data.shape[1],
+                "status": "skipped_missing_covariates",
+                "reason": "No covariates were provided; skipping LMM diagnostics.",
+            }
+            report.text_simple("Warning: no covariates provided; LMM diagnostics were skipped.")
 
         report.text_simple("LMM diagnostics completed.")
         report.log_text("LMM results table added to report")
@@ -1195,10 +1414,17 @@ def CrossSectionalReportMin(data,
 
         # list common notes
         note_lines = []
-        for tag, count in sorted(lmm_summary.items(), key=lambda x: -x[1])[:10]:
+        numeric_items = [
+            (tag, count)
+            for tag, count in lmm_summary.items()
+            if isinstance(count, (int, float, np.integer, np.floating))
+        ]
+        for tag, count in sorted(numeric_items, key=lambda x: -float(x[1]))[:10]:
             if tag == 'n_features':
                 continue
             note_lines.append(f"{tag}: {count}")
+        if "reason" in lmm_summary:
+            note_lines.append(f"reason: {lmm_summary['reason']}")
         report.text_simple("LMM diagnostics notes (top):\n" + "\n".join(note_lines))
         data_dict = {}
         # Save DF if needed
@@ -1244,7 +1470,10 @@ def CrossSectionalReportMin(data,
         # Plot conditional and marginal R^2 per feature, indicate what each means for interpretation
         report.text_simple("Marginal R² represents the variance explained by fixed effects (covariates)\n"
                            "while Conditional R² represents the variance explained by both fixed and random effects (batch + covariates).")
-        lmm_r = lmm_results_df[['R2_marginal', 'R2_conditional']].dropna()
+        if {"R2_marginal", "R2_conditional"}.issubset(lmm_results_df.columns):
+            lmm_r = lmm_results_df[['R2_marginal', 'R2_conditional']].dropna()
+        else:
+            lmm_r = pd.DataFrame()
         if len(lmm_r) > 0:
             plt.figure(figsize=(10, 4))
             plt.plot(lmm_r['R2_marginal'].values, label='Marginal R²', alpha=0.7)
@@ -1483,6 +1712,10 @@ def CrossSectionalReport(
 
     """
 
+
+    data, feature_names = _normalize_data_matrix(data, feature_names=feature_names)
+    batch = _normalize_batch_vector(batch, data.shape[0])
+    covariates = _normalize_covariates_input(covariates, data.shape[0])
 
     # Check inputs and revert to defaults as needed
     if save_dir is None:
@@ -1858,14 +2091,23 @@ def CrossSectionalReport(
 
         from DiagnoseHarmonisation import temp
         # run LMM diagnostics
-        lmm_results_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(
-        data,
-        batch,
-        covariates=covariates,
-        feature_names=feature_names,
-        covariate_names=covariate_names,
-        min_group_n=2
-    )
+        if covariates is not None and covariates.shape[1] > 0:
+            lmm_results_df, lmm_summary = DiagnosticFunctions.Run_LMM_cross_sectional(
+                data,
+                batch,
+                covariates=covariates,
+                feature_names=feature_names,
+                covariate_names=covariate_names,
+                min_group_n=2,
+            )
+        else:
+            lmm_results_df = pd.DataFrame()
+            lmm_summary = {
+                "n_features": data.shape[1],
+                "status": "skipped_missing_covariates",
+                "reason": "No covariates were provided; skipping LMM diagnostics.",
+            }
+            report.text_simple("Warning: no covariates provided; LMM diagnostics were skipped.")
 
         report.text_simple("LMM diagnostics completed.")
         report.log_text("LMM results table added to report")
@@ -1878,10 +2120,17 @@ def CrossSectionalReport(
 
         # list common notes
         note_lines = []
-        for tag, count in sorted(lmm_summary.items(), key=lambda x: -x[1])[:10]:
+        numeric_items = [
+            (tag, count)
+            for tag, count in lmm_summary.items()
+            if isinstance(count, (int, float, np.integer, np.floating))
+        ]
+        for tag, count in sorted(numeric_items, key=lambda x: -float(x[1]))[:10]:
             if tag == 'n_features':
                 continue
             note_lines.append(f"{tag}: {count}")
+        if "reason" in lmm_summary:
+            note_lines.append(f"reason: {lmm_summary['reason']}")
         report.text_simple("LMM diagnostics notes (top):\n" + "\n".join(note_lines))
         data_dict = {}
         # Save DF if needed
@@ -1912,17 +2161,20 @@ def CrossSectionalReport(
         # Plot conditional and marginal R^2 per feature, indicate what each means for interpretation
         report.text_simple("Marginal R² represents the variance explained by fixed effects (covariates)\n"
                            "while Conditional R² represents the variance explained by both fixed and random effects (batch + covariates).")
-        lmm_r = lmm_results_df[['R2_marginal', 'R2_conditional']].dropna()
-        lmm_figs = PlotDiagnosticResults.LMM_Diagnostics_Plot(
-        lmm_results_df,
-        feature_order="original",
-        include_delta_r2=True,
-        include_status_summary=True,
-    )
+        if {"R2_marginal", "R2_conditional"}.issubset(lmm_results_df.columns):
+            lmm_r = lmm_results_df[['R2_marginal', 'R2_conditional']].dropna()
+            lmm_figs = PlotDiagnosticResults.LMM_Diagnostics_Plot(
+                lmm_results_df,
+                feature_order="original",
+                include_delta_r2=True,
+                include_status_summary=True,
+            )
 
-        for caption, fig in lmm_figs:
-            report.log_plot(fig, caption=caption)
-            plt.close(fig)
+            for caption, fig in lmm_figs:
+                report.log_plot(fig, caption=caption)
+                plt.close(fig)
+        else:
+            lmm_r = pd.DataFrame()
 
         # ---------------------
         # Multiplicative tests
@@ -2362,6 +2614,14 @@ def CrossSectionalComparisonReport(
         side-by-side plots, scorecard, and advice.
     """
 
+    if not isinstance(datasets, dict) or len(datasets) == 0:
+        raise ValueError("datasets must be a non-empty dictionary mapping method name to data array.")
+
+    first_dataset = next(iter(datasets.values()))
+    first_matrix, inferred_feature_names = _normalize_data_matrix(first_dataset, feature_names=feature_names)
+    if feature_names is None and inferred_feature_names is not None:
+        feature_names = inferred_feature_names
+
     normalized_datasets = validate_comparison_datasets(
         datasets=datasets,
         batch=batch,
@@ -2372,7 +2632,8 @@ def CrossSectionalComparisonReport(
         normalized_datasets = {k: v for k, v in normalized_datasets.items() if k != raw_name}
         if len(normalized_datasets) == 0:
             raise ValueError("No datasets remain after excluding raw dataset. Provide at least one method dataset.")
-    batch_arr = np.asarray(batch)
+    batch_arr = _normalize_batch_vector(batch, first_matrix.shape[0])
+    covariates = _normalize_covariates_input(covariates, first_matrix.shape[0])
 
     if save_dir is None:
         save_dir = Path.cwd()
@@ -2442,10 +2703,13 @@ def CrossSectionalComparisonReport(
         )
         covariates_numeric = None
         if covariates is not None:
-            cov_arr = np.asarray(covariates)
-            if cov_arr.ndim == 1:
-                cov_arr = cov_arr.reshape(-1, 1)
-            covariates_numeric = covariate_to_numeric(cov_arr.copy())       
+            covariates_numeric = covariate_to_numeric(np.asarray(covariates).copy())
+            if covariates_numeric is not None and covariates_numeric.shape[1] == 0:
+                covariates_numeric = None
+        if covariates_numeric is None:
+            report.text_simple(
+                "Warning: no covariates were provided. LMM diagnostics are skipped; all other diagnostics continue."
+            )
 
         shape = next(iter(normalized_datasets.values())).shape
         n_samples, n_features = shape
@@ -2484,6 +2748,7 @@ def CrossSectionalComparisonReport(
                 covariate_types=covariate_types,
                 feature_names=feature_names,
                 ratio_type=ratio_type,
+                compute_umap=UMAP_embedding,
             )
             method_results[method_name] = method_result
 
@@ -2496,10 +2761,13 @@ def CrossSectionalComparisonReport(
             report.text_simple(f"Summary metrics for {method_name}:")
             metric_lines = [f"- {k}: {v}" for k, v in metrics.items()]
             report.text_simple("\n".join(metric_lines))
+            if isinstance(method_result.lmm_summary, dict) and method_result.lmm_summary.get("status") == "skipped_missing_covariates":
+                report.text_simple(f"LMM status for {method_name}: skipped (missing covariates).")
 
             if save_data:
                 saved_paths[method_name] = _save_comparison_results(
                     result=method_result,
+                    batch=batch_arr,
                     save_dir=save_dir,
                     report_date=report_date,
                     report_name=report_name,

@@ -196,8 +196,12 @@ def prepare_cross_sectional_inputs(
         _emit_status(status_callback, f"Warning: {message}")
 
     if covariates_df.empty:
-        raise ValueError(
-            "At least one covariate column must be selected for the cross-sectional report."
+        warnings.append(
+            "no covariates selected; LMM diagnostics will be skipped while other diagnostics continue"
+        )
+        _emit_status(
+            status_callback,
+            "Warning: no covariates selected; LMM diagnostics will be skipped.",
         )
 
     save_dir = Path(config.output_dir) if config.output_dir is not None else Path.cwd()
@@ -233,8 +237,8 @@ def run_cross_sectional_report(
     report = DiagnosticReport.CrossSectionalReport(
         prepared.data,
         batch=prepared.batch,
-        covariates=prepared.covariates,
-        covariate_names=prepared.covariate_names,
+        covariates=None if prepared.covariates.empty else prepared.covariates,
+        covariate_names=None if prepared.covariates.empty else prepared.covariate_names,
         feature_names=prepared.feature_names,
         save_dir=prepared.save_dir,
         save_data=config.save_data,

@@ -62,12 +62,11 @@ def _safe_covariate_matrix(covariates):
     return cov
 
 
-def _feature_labels(n_features: int, max_labels: int = 40):
+def _feature_labels(n_features: int):
     labels = [f"f{i+1}" for i in range(n_features)]
-    if n_features <= max_labels:
-        return labels
-    step = max(1, int(np.ceil(n_features / max_labels)))
-    return [labels[i] if (i % step == 0) else "" for i in range(n_features)]
+    if n_features > 20:
+        return ["" for _ in labels], 0
+    return labels, 45
 
 
 def _add_top_colorbar(fig, ax, mappable, label: str | None = None):
@@ -109,7 +108,23 @@ def plot_compare_zscore_distributions(results, batch):
                 continue
             color = cmap(np.where(unique_batches == b)[0][0])
             ax.hist(vals, bins=shared_bins, alpha=0.45, label=str(b), color=color)
-
+            # Add probabulity density curve
+            # Use the mean and variance of the z-scores for this batch to plot a normal distribution curve
+            """mean = np.mean(vals)
+            std = np.std(vals)
+            x = np.linspace(-5, 5, 100)
+            pdf = (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean) / std) ** 2)
+            # Scale the pdf to match the histogram height
+            hist_height = np.histogram(vals, bins=shared_bins)[0]
+            ax.plot(x, pdf * 0.9 * hist_height.max() / pdf.max(), color=color, linewidth=1.5, alpha=0.7)
+            """
+            # Use a gaussian kernel density estimate to plot a smooth curve of the distribution
+            from scipy.stats import gaussian_kde
+            kde = gaussian_kde(vals)
+            x = np.linspace(-5, 5, 100)
+            # Scale the kde to match the histogram height
+            ax.plot(x, kde(x) * 0.9 * ax.get_ylim()[1], color=color, linewidth=1.5, alpha=0.7)
+            
         ax.set_xlim([-8, 8])
         ax.invert_xaxis()
         ax.set_title(_title(method))
@@ -196,9 +211,9 @@ def plot_compare_cohens_d(results):
             ax2.set_title(_title(method))
             ax2.set_xlabel("Feature")
             ax2.set_ylabel("Median |d| across comparisons")
-            labels = _feature_labels(vec.size)
+            labels, rotation = _feature_labels(vec.size)
             ax2.set_xticks(np.arange(vec.size))
-            ax2.set_xticklabels(labels, rotation=90, fontsize=6)
+            ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax2.grid(True, alpha=0.2)
 
         _hide_unused_axes(axes, len(featurewise))
@@ -263,9 +278,9 @@ def plot_compare_variance_ratios(results):
             ax2.set_title(_title(method))
             ax2.set_xlabel("Feature")
             ax2.set_ylabel("Median log variance ratio")
-            labels = _feature_labels(vec.size)
+            labels, rotation = _feature_labels(vec.size)
             ax2.set_xticks(np.arange(vec.size))
-            ax2.set_xticklabels(labels, rotation=90, fontsize=6)
+            ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax2.grid(True, alpha=0.2)
 
         _hide_unused_axes(axes, len(featurewise))
@@ -301,9 +316,9 @@ def plot_compare_lmm_icc(results):
             ax.set_xlabel("Feature")
             ax.set_ylabel("ICC")
             ax.set_ylim(bottom=0)
-            labels = _feature_labels(len(icc))
+            labels, rotation = _feature_labels(len(icc))
             ax.set_xticks(x)
-            ax.set_xticklabels(labels, rotation=90, fontsize=6)
+            ax.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
         _hide_unused_axes(axes, len(icc_items))
         fig_icc.tight_layout()
         figs.append(("Comparison: LMM ICC per feature", fig_icc))
@@ -318,9 +333,9 @@ def plot_compare_lmm_icc(results):
             ax.set_xlabel("Feature")
             ax.set_ylabel("R2")
             ax.set_ylim(bottom=0)
-            labels = _feature_labels(len(r2m))
+            labels, rotation = _feature_labels(len(r2m))
             ax.set_xticks(x)
-            ax.set_xticklabels(labels, rotation=90, fontsize=6)
+            ax.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax.legend(fontsize=7, frameon=False)
         _hide_unused_axes(axes, len(r2_items))
         fig_r2.tight_layout()
@@ -401,9 +416,9 @@ def plot_compare_ks(results):
             ax2.set_title(_title(method))
             ax2.set_xlabel("Feature")
             ax2.set_ylabel("-log10(min adjusted p)")
-            labels = _feature_labels(min_p.size)
+            labels, rotation = _feature_labels(min_p.size)
             ax2.set_xticks(np.arange(min_p.size))
-            ax2.set_xticklabels(labels, rotation=90, fontsize=6)
+            ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax2.grid(True, alpha=0.2)
 
         _hide_unused_axes(axes, len(featurewise))
