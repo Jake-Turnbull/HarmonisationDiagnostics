@@ -2486,13 +2486,22 @@ def n_dim_umap_visualisation(data, batch, n_dimensions=2, covariates=None, n_nei
             if is_3d:
                 scatter_obj = ax.scatter(
                     emb[:, 0], emb[:, 1], emb[:, 2],
-                    c=vals, cmap='Spectral', s=50
+                    c=vals, cmap='Spectral', s=30
                 )
+                # Reduce marker size for 3D splots to avoid clutter, use total sample size to adjust size dynamically
+                total_samples = emb.shape[0]
+                if total_samples > 1000:
+                    scatter_obj.set_sizes([10])  # smaller size for large datasets
             else:
                 scatter_obj = ax.scatter(
                     emb[:, 0], emb[:, 1],
-                    c=vals, cmap='Spectral', s=50
+                    c=vals, cmap='Spectral', s=30
                 )
+                # Adjust marker size for 2D plots based on total sample size
+                total_samples = emb.shape[0]
+                if total_samples > 1000:
+                    scatter_obj.set_sizes([10])  # smaller size for large datasets
+
             cax = _ensure_cbar_ax()
             cax.clear()
             cax.set_visible(True)
