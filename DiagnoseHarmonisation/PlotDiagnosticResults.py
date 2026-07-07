@@ -2420,7 +2420,7 @@ def _configure_hbar_panel(
                 borderaxespad=0.25,
             )
 
-def n_dim_umap_visualisation(data, batch, n_dimensions=2, covariates=None, n_neighbors=15, min_dist=0.1, metric='euclidean', random_state=42, show=False):
+def n_dim_umap_visualisation(data, batch, n_dimensions=2, covariates=None, n_neighbors=15, min_dist=0.1, metric='euclidean', random_state=42, show=False,marker_size=30):
     """
     Perform UMAP dimensionality reduction on the provided data and visualize the results in 2D or 3D scatter plots, colored by batch and optionally by covariates.
 
@@ -2486,7 +2486,7 @@ def n_dim_umap_visualisation(data, batch, n_dimensions=2, covariates=None, n_nei
             if is_3d:
                 scatter_obj = ax.scatter(
                     emb[:, 0], emb[:, 1], emb[:, 2],
-                    c=vals, cmap='Spectral', s=30
+                    c=vals, cmap='Spectral', s=marker_size
                 )
                 # Reduce marker size for 3D splots to avoid clutter, use total sample size to adjust size dynamically
                 total_samples = emb.shape[0]
@@ -2495,7 +2495,7 @@ def n_dim_umap_visualisation(data, batch, n_dimensions=2, covariates=None, n_nei
             else:
                 scatter_obj = ax.scatter(
                     emb[:, 0], emb[:, 1],
-                    c=vals, cmap='Spectral', s=30
+                    c=vals, cmap='Spectral', s=marker_size
                 )
                 # Adjust marker size for 2D plots based on total sample size
                 total_samples = emb.shape[0]
