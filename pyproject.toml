@@ -17,12 +17,12 @@ authors = [
 
 # Based on pip freeze and package imports as of 2026-01-09
 dependencies = [
-  "numpy>=2.3,<3.0",
+  "numpy>=2.3,<2.5",
   "pandas>=2.3,<3.0",
   "scipy>=1.16,<2.0",
   "statsmodels>=0.14,<0.15",
   "scikit-learn>=1.7,<2.0",
-  "matplotlib>=3.10,<4.0",
+  "matplotlib>=3.10,<3.11",
   "seaborn>=0.13,<0.14",
   "pyarrow>=21.0,<22.0",
   "requests>=2.32,<3.0",
