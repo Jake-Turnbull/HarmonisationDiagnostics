@@ -318,7 +318,6 @@ def Z_Score_Plot(data, batch, probablity_distribution=False,draw_PDF=True):
     import matplotlib.gridspec as gridspec
     import numpy as np
     from matplotlib.figure import Figure
-    from scipy import stats
 
     # ---- Validation ----
     if not isinstance(data, np.ndarray):
@@ -330,36 +329,16 @@ def Z_Score_Plot(data, batch, probablity_distribution=False,draw_PDF=True):
             batch = np.array(batch)
         else:
             raise ValueError("batch must be a NumPy array or a list.")
-    # Sort data by batch, batch can either be numeric or string labels here:
-    sorted_indices = np.argsort(batch)
-    sorted_data = data[sorted_indices, :]
-    sorted_batch = batch[sorted_indices]
-    unique_batches, batch_counts = np.unique(sorted_batch, return_counts=True)  
-    # Create figure with gridspec
+    # Create figure with a single axis for batch-wise histogram overlays.
     fig = plt.figure(figsize=(14, 8))
-    # Loop over unique batches and plot as histogram on same axis:
     ax1 = fig.add_subplot()
-    import matplotlib
-    # Define colours for each histogram based on number of unique batches:
-    colors = matplotlib.pyplot.get_cmap('tab10', len(unique_batches))
-
-    if probablity_distribution==True:
-        plot_type = 'density'
-    else:
-        plot_type = 'frequency'
-
-    for i in np.unique(batch):
-        batch_data = data[batch == i, :].flatten()
-        # Match colours of the histogram for each batch:
-        color = colors(np.where(unique_batches == i)[0][0])
-        ax1.hist(batch_data, bins=80, density=plot_type, alpha=0.5, label=str(i), color=color)
-        # Draw an estimated normal distribution curve over histogram:
-        if draw_PDF==True:
-            mu, std = np.mean(batch_data), np.std(batch_data)
-            xmin, xmax = ax1.get_xlim()
-            x = np.linspace(xmin, xmax, 100)
-            p = stats.norm.pdf(x, mu, std)            
-            ax1.plot(x, p, color=color, linewidth=2)
+    _plot_zscore_hist_on_axis(
+        ax=ax1,
+        data=data,
+        batch=batch,
+        probablity_distribution=probablity_distribution,
+        draw_PDF=draw_PDF,
+    )
 
     ax1.set_xlabel("Z-scores of all unique measures")
     # Set axis limits to -8 to 8 for better visualisation:
@@ -373,6 +352,82 @@ def Z_Score_Plot(data, batch, probablity_distribution=False,draw_PDF=True):
     figs.append(("Z-score histogram", fig))
     #figs.append(("Z-score heatmap", fig2))
     return figs
+
+
+def _plot_zscore_hist_on_axis(ax, data, batch, probablity_distribution=False, draw_PDF=True):
+    import matplotlib
+    from scipy import stats
+
+    unique_batches = np.unique(batch)
+    colors = matplotlib.pyplot.get_cmap("tab10", len(unique_batches))
+    density = bool(probablity_distribution)
+
+    for i in unique_batches:
+        batch_data = data[batch == i, :].flatten()
+        color = colors(np.where(unique_batches == i)[0][0])
+        ax.hist(batch_data, bins=80, density=density, alpha=0.5, label=str(i), color=color)
+        if draw_PDF:
+            mu, std = np.mean(batch_data), np.std(batch_data)
+            if np.isfinite(std) and std > 0:
+                xmin, xmax = ax.get_xlim()
+                x = np.linspace(xmin, xmax, 100)
+                p = stats.norm.pdf(x, mu, std)
+                ax.plot(x, p, color=color, linewidth=2)
+
+
+@rep_plot_wrapper
+def Z_Score_Raw_Residual_Plot(raw_data, residual_data, batch, probablity_distribution=False, draw_PDF=True):
+    """Plot side-by-side histograms for raw and covariate-residual robust z-scores."""
+    if not isinstance(raw_data, np.ndarray):
+        raise ValueError("raw_data must be a NumPy array.")
+    if raw_data.ndim != 2:
+        raise ValueError("raw_data must be a 2D array (samples x features).")
+    if not isinstance(batch, np.ndarray):
+        if isinstance(batch, list):
+            batch = np.array(batch)
+        else:
+            raise ValueError("batch must be a NumPy array or a list.")
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), squeeze=False)
+    ax_raw, ax_resid = axes.ravel()
+
+    _plot_zscore_hist_on_axis(
+        ax=ax_raw,
+        data=raw_data,
+        batch=batch,
+        probablity_distribution=probablity_distribution,
+        draw_PDF=draw_PDF,
+    )
+    ax_raw.set_title("Raw data")
+    ax_raw.set_xlabel("Robust z-score")
+    ax_raw.set_ylabel("Frequency" if not probablity_distribution else "Density")
+    ax_raw.set_xlim([-8, 8])
+    ax_raw.invert_xaxis()
+    ax_raw.legend(title="Batch")
+
+    if residual_data is None:
+        ax_resid.set_title("Covariate-residual data (unavailable)")
+        ax_resid.set_axis_off()
+    else:
+        residual_data = np.asarray(residual_data)
+        if residual_data.ndim != 2:
+            raise ValueError("residual_data must be a 2D array (samples x features).")
+        _plot_zscore_hist_on_axis(
+            ax=ax_resid,
+            data=residual_data,
+            batch=batch,
+            probablity_distribution=probablity_distribution,
+            draw_PDF=draw_PDF,
+        )
+        ax_resid.set_title("Covariate-residual data")
+        ax_resid.set_xlabel("Robust z-score")
+        ax_resid.set_ylabel("Frequency" if not probablity_distribution else "Density")
+        ax_resid.set_xlim([-8, 8])
+        ax_resid.invert_xaxis()
+        ax_resid.legend(title="Batch")
+
+    fig.tight_layout()
+    return [("Z-score histograms (raw vs residual)", fig)]
 """----------------------------------------------------------------------------------------------------------------------------"""
 """---------------------------------------- Plotting functions for Cohens D results ----------------------------------"""
 """----------------------------------------------------------------------------------------------------------------------------"""

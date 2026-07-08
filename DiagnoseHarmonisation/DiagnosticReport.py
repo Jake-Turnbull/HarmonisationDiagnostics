@@ -1327,11 +1327,6 @@ def CrossSectionalReportMin(data,
         report.text_simple("Z-score normalization (median-centred) visualization across batches,\n" \
         "Here, we convert each feature to a median absolute deviation (MAD) and express each observation as a histogram.\n " \
         "As the normalisation is done globally, batchwise histograms that appear differently (width or location) indicate batch differences in mean and/or variance across features. ")
-        
-        zscored_data = DiagnosticFunctions.robust_z_score(data)
-        PlotDiagnosticResults.Z_Score_Plot(zscored_data, batch, rep=report)
-        report.log_text("Z-score normalization visualization added to report")
-        report.text_simple(line_break_in_text)
 
         covariates_numeric = covariates
         # if dataframe or dictionary, convert to numeric array:
@@ -1344,6 +1339,44 @@ def CrossSectionalReportMin(data,
                 covariates_numeric = covariate_to_numeric(covariates)
             else:
                 raise ValueError("Covariates must be a numpy array, pandas DataFrame, or dictionary of arrays")
+        
+        zscored_data_raw = DiagnosticFunctions.robust_z_score(data)
+        zscored_data_residual = None
+
+        if covariates_numeric is not None:
+            try:
+                covariate_names_for_residual = (
+                    covariate_names
+                    if covariate_names is not None
+                    else [f"covariate_{i+1}" for i in range(covariates_numeric.shape[1])]
+                )
+                residual_data = DiagnosticFunctions.RobustOLS(
+                    data,
+                    covariates_numeric,
+                    batch,
+                    covariate_names_for_residual,
+                    covariate_types,
+                    report=report,
+                )
+                zscored_data_residual = DiagnosticFunctions.robust_z_score(residual_data)
+            except Exception as exc:
+                logger.warning(f"Residual z-score plot generation failed: {exc}")
+                report.text_simple(
+                    "Residual z-score visualisation could not be generated; displaying raw z-score histogram only."
+                )
+        else:
+            report.text_simple(
+                "No covariates were provided, so residual z-score visualisation is not available."
+            )
+
+        PlotDiagnosticResults.Z_Score_Raw_Residual_Plot(
+            zscored_data_raw,
+            zscored_data_residual,
+            batch,
+            rep=report,
+        )
+        report.log_text("Z-score normalization visualization (raw vs residual) added to report")
+        report.text_simple(line_break_in_text)
         # ---------------------
         # Additive tests
         # ---------------------
@@ -1998,10 +2031,42 @@ def CrossSectionalReport(
         "Here, we convert each feature to a median absolute deviation (MAD) and express each observation as a histogram.\n " \
         "As the normalisation is done globally, batchwise histograms that appear differently (width or location) indicate batch differences in mean and/or variance across features. ")
 
+        zscored_data_raw = DiagnosticFunctions.robust_z_score(data)
+        zscored_data_residual = None
 
-        zscored_data = DiagnosticFunctions.robust_z_score(data)
-        PlotDiagnosticResults.Z_Score_Plot(zscored_data, batch, rep=report)
-        report.log_text("Z-score normalization visualization added to report")
+        if covariates_numeric is not None:
+            try:
+                covariate_names_for_residual = (
+                    covariate_names
+                    if covariate_names is not None
+                    else [f"covariate_{i+1}" for i in range(covariates_numeric.shape[1])]
+                )
+                residual_data = DiagnosticFunctions.RobustOLS(
+                    data,
+                    covariates_numeric,
+                    batch,
+                    covariate_names_for_residual,
+                    covariate_types,
+                    report=report,
+                )
+                zscored_data_residual = DiagnosticFunctions.robust_z_score(residual_data)
+            except Exception as exc:
+                logger.warning(f"Residual z-score plot generation failed: {exc}")
+                report.text_simple(
+                    "Residual z-score visualisation could not be generated; displaying raw z-score histogram only."
+                )
+        else:
+            report.text_simple(
+                "No covariates were provided, so residual z-score visualisation is not available."
+            )
+
+        PlotDiagnosticResults.Z_Score_Raw_Residual_Plot(
+            zscored_data_raw,
+            zscored_data_residual,
+            batch,
+            rep=report,
+        )
+        report.log_text("Z-score normalization visualization (raw vs residual) added to report")
         report.text_simple(line_break_in_text)
 
         # ---------------------
@@ -2822,7 +2887,8 @@ def CrossSectionalComparisonReport(
                 finally:
                     plt.close(fig)
 
-        _log_figures(PlotComparisonResults.plot_compare_zscore_distributions(method_results, batch_arr))
+        _log_figures(PlotComparisonResults.plot_compare_zscore_distributions(method_results, batch_arr, use_residual=False))
+        _log_figures(PlotComparisonResults.plot_compare_zscore_distributions(method_results, batch_arr, use_residual=True))
         _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results))
         _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results))
         _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results))

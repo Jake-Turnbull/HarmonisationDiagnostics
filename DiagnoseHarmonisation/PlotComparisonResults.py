@@ -77,7 +77,7 @@ def _add_top_colorbar(fig, ax, mappable, label: str | None = None):
     return cbar
 
 
-def plot_compare_zscore_distributions(results, batch):
+def plot_compare_zscore_distributions(results, batch, use_residual: bool = False):
     figs = []
     items = _method_items(results)
     if len(items) == 0:
@@ -88,10 +88,15 @@ def plot_compare_zscore_distributions(results, batch):
 
     fig, axes, _, _ = _make_method_grid(len(items))
     shared_bins = np.linspace(-5, 5, 60)
+    n_valid = 0
+    z_key = "zscore_residual" if use_residual else "zscore_raw"
+    figure_caption = "Comparison: residual z-score distributions" if use_residual else "Comparison: raw z-score distributions"
+
     for ax, (method, res) in zip(axes, items):
-        z = res.zscore_raw
+        z = getattr(res, z_key, None)
         if z is None:
-            ax.set_title(_title(f"{method} (no z-score)"))
+            missing_label = "residual" if use_residual else "raw"
+            ax.set_title(_title(f"{method} (no {missing_label} z-score)"))
             ax.axis("off")
             continue
 
@@ -108,33 +113,34 @@ def plot_compare_zscore_distributions(results, batch):
                 continue
             color = cmap(np.where(unique_batches == b)[0][0])
             ax.hist(vals, bins=shared_bins, alpha=0.45, label=str(b), color=color)
-            # Add probabulity density curve
-            # Use the mean and variance of the z-scores for this batch to plot a normal distribution curve
-            """mean = np.mean(vals)
-            std = np.std(vals)
-            x = np.linspace(-5, 5, 100)
-            pdf = (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean) / std) ** 2)
-            # Scale the pdf to match the histogram height
-            hist_height = np.histogram(vals, bins=shared_bins)[0]
-            ax.plot(x, pdf * 0.9 * hist_height.max() / pdf.max(), color=color, linewidth=1.5, alpha=0.7)
-            """
             # Use a gaussian kernel density estimate to plot a smooth curve of the distribution
             from scipy.stats import gaussian_kde
-            kde = gaussian_kde(vals)
-            x = np.linspace(-5, 5, 100)
-            # Scale the kde to match the histogram height
-            ax.plot(x, kde(x) * 0.9 * ax.get_ylim()[1], color=color, linewidth=1.5, alpha=0.7)
+            try:
+                kde = gaussian_kde(vals)
+                x = np.linspace(-5, 5, 100)
+                # Scale the kde to match the histogram height
+                ax.plot(x, kde(x) * 0.9 * ax.get_ylim()[1], color=color, linewidth=1.5, alpha=0.7)
+            except Exception:
+                # KDE can fail for near-constant vectors; keep the histogram only.
+                pass
             
         ax.set_xlim([-8, 8])
         ax.invert_xaxis()
-        ax.set_title(_title(method))
+        panel_suffix = "residual" if use_residual else "raw"
+        ax.set_title(_title(f"{method} ({panel_suffix})"))
         ax.set_xlabel("Robust z-score")
         ax.set_ylabel("Frequency")
         ax.legend(fontsize=7, frameon=False, title="Batch", title_fontsize=8)
+        n_valid += 1
 
     _hide_unused_axes(axes, len(items))
+
+    if n_valid == 0:
+        plt.close(fig)
+        return figs
+
     fig.tight_layout()
-    figs.append(("Comparison: Z-score distributions", fig))
+    figs.append((figure_caption, fig))
     return figs
 
 
