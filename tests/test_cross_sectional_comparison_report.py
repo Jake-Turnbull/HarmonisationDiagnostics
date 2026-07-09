@@ -50,6 +50,9 @@ def test_cross_sectional_comparison_report_generates_html(test_results_dir):
 
     report_path = Path(report.report_path)
     assert report_path.exists() and report_path.stat().st_size > 100
+    assert "biological_effects_score" in report.comparison_scorecard.columns
+    assert "weighted_covariate_pc_correlation_top3" in report.comparison_scorecard.columns
+    assert report.comparison_advice.get("best_biological") is not None
 
 
 def test_cross_sectional_comparison_report_accepts_pandas_inputs_and_saves_enriched_outputs(test_results_dir):

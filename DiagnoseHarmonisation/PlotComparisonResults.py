@@ -69,12 +69,37 @@ def _feature_labels(n_features: int):
     return labels, 45
 
 
-def _add_top_colorbar(fig, ax, mappable, label: str | None = None):
+def _add_right_colorbar(fig, ax, mappable, label: str | None = None):
     cbar = fig.colorbar(mappable, ax=ax, location="right", fraction=0.04, pad=0.01, shrink=0.5)
     if label:
         cbar.set_label(label, fontsize=4)
     cbar.ax.tick_params(labelsize=3)
     return cbar
+
+
+def _weighted_covariate_pc_correlation(pca_results, max_pcs: int = 3) -> float:
+    if not isinstance(pca_results, dict):
+        return np.nan
+    corr_dict = pca_results.get("pc_correlations", {}) or {}
+    explained = np.asarray(pca_results.get("explained_variance", []), dtype=float)
+    if explained.size == 0:
+        return np.nan
+    k = min(max_pcs, explained.shape[0])
+    weights = explained[:k]
+    weight_sum = np.nansum(weights)
+    if k == 0 or not np.isfinite(weight_sum) or weight_sum <= 0:
+        return np.nan
+    weights = weights / weight_sum
+
+    values = []
+    for name, payload in corr_dict.items():
+        if str(name).lower() == "batch":
+            continue
+        corr = np.asarray((payload or {}).get("correlation", []), dtype=float)
+        if corr.shape[0] < k:
+            continue
+        values.append(float(np.nansum(np.abs(corr[:k]) * weights)))
+    return float(np.nanmean(values)) if values else np.nan
 
 
 def plot_compare_zscore_distributions(results, batch, use_residual: bool = False):
@@ -157,6 +182,7 @@ def plot_compare_cohens_d(results):
         abs_d = np.abs(d_arr).ravel()
         if abs_d.size == 0:
             continue
+        
 
         rows.append(
             {
@@ -199,21 +225,22 @@ def plot_compare_cohens_d(results):
             if max(abs(vec)) > 0.2:
                 for thresh, color in [(0.2, "green"), (0.5, "orange"), (0.8, "red")]:
                     ax2.axhline(y=thresh, color=color, linestyle="--", linewidth=1)
-                    ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
+                    #ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
             elif max(abs(vec)) > 0.1:
                 for thresh, color in [(0.1, "green"), (0.2, "orange"), (0.5, "red")]:
                     ax2.axhline(y=thresh, color=color, linestyle="--", linewidth=1)
-                    ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
+                    #ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
             elif max(abs(vec)) > 0.05:
                 # Draw line at 1.1 times max and -1.1 max and label what the max observed value is
                 max_val = max(abs(vec))
                 ax2.axhline(y=1.1 * max_val, color="purple", linestyle="--", linewidth=1)
-                ax2.axhline(y=-1.1 * max_val, color="purple", linestyle="--", linewidth=1)
+                #ax2.axhline(y=-1.1 * max_val, color="purple", linestyle="--", linewidth=1)
                 ax2.text(0.5, 1.15 * max_val, f"Max observed |d|: {max_val:.3f}", color="purple", fontsize=6, ha="center")  
             
             y_max = np.nanmax(np.abs(vec)) if vec.size else 1.0
             y_max = max(1.0, y_max)
-            ax2.set_ylim(-y_max, y_max)
+
+            ax2.set_ylim(-0.1, y_max)
             ax2.set_title(_title(method))
             ax2.set_xlabel("Feature")
             ax2.set_ylabel("Median |d| across comparisons")
@@ -350,6 +377,122 @@ def plot_compare_lmm_icc(results):
     return figs
 
 
+def plot_compare_lmm_biological_effects(results):
+    figs = []
+    summary_rows = []
+    ols_items = []
+    lmm_items = []
+
+    for method, res in _method_items(results):
+        if res.lmm_results is None or res.lmm_results.empty:
+            continue
+
+        bio_df = PlotDiagnosticResults.summarise_lmm_biological_effects(res.lmm_results)
+        if not bio_df.empty:
+            ols_items.append((method, bio_df[["covariate", "mean_ols_partial_r2"]].copy()))
+            lmm_items.append((method, bio_df[["covariate", "mean_lmm_partial_r2"]].copy()))
+
+        r2m = pd.to_numeric(res.lmm_results.get("R2_marginal"), errors="coerce").to_numpy(dtype=float)
+        summary_rows.append(
+            {
+                "method": method,
+                "median_r2_marginal": float(np.nanmedian(r2m)) if r2m.size else np.nan,
+                "weighted_covariate_pc_correlation_top3": _weighted_covariate_pc_correlation(res.pca_results),
+            }
+        )
+
+    if summary_rows:
+        df = pd.DataFrame(summary_rows)
+        x = np.arange(len(df))
+        fig, ax = plt.subplots(figsize=(9, 4.5))
+        ax.bar(x - 0.18, df["median_r2_marginal"], width=0.36, label="Median marginal R2")
+        ax.bar(
+            x + 0.18,
+            df["weighted_covariate_pc_correlation_top3"],
+            width=0.36,
+            label="Weighted covariate-PC correlation",
+        )
+        ax.set_xticks(x)
+        ax.set_xticklabels(df["method"], rotation=20, ha="right")
+        ax.set_ylabel("Value")
+        ax.set_title("Biological preservation summary")
+        ax.legend(frameon=False)
+        fig.tight_layout()
+        figs.append(("Comparison: biological preservation summary", fig))
+
+    for caption, items, value_col, title in [
+        ("Comparison: covariate variance from OLS", ols_items, "mean_ols_partial_r2", "OLS partial R2"),
+        (
+            "Comparison: covariate variance with batch random effect",
+            lmm_items,
+            "mean_lmm_partial_r2",
+            "Batch-adjusted partial R2",
+        ),
+    ]:
+        if not items:
+            continue
+        fig_grid, axes, _, _ = _make_method_grid(len(items), square_size=5.2)
+        for ax, (method, df_cov) in zip(axes, items):
+            df_cov = df_cov.sort_values(value_col, ascending=True, na_position="last")
+            ax.barh(df_cov["covariate"].astype(str), df_cov[value_col], color="C1" if "OLS" in caption else "C2", alpha=0.85)
+            ax.set_title(_title(method))
+            ax.set_xlabel(title)
+            ax.grid(axis="x", alpha=0.2)
+        _hide_unused_axes(axes, len(items))
+        fig_grid.tight_layout()
+        figs.append((caption, fig_grid))
+
+    return figs
+
+
+def plot_compare_pca_correlation_heatmaps(results, max_pcs: int = 3):
+    figs = []
+    items = []
+
+    for method, res in _method_items(results):
+        pca_results = res.pca_results or {}
+        corr_dict = pca_results.get("pc_correlations", {}) or {}
+        explained = np.asarray(pca_results.get("explained_variance", []), dtype=float)
+        if not corr_dict or explained.size == 0:
+            continue
+
+        k = min(max_pcs, explained.shape[0])
+        row_names = list(corr_dict.keys())
+        matrix = []
+        for row_name in row_names:
+            corr = np.asarray((corr_dict[row_name] or {}).get("correlation", []), dtype=float)
+            if corr.shape[0] < k:
+                corr = np.pad(corr, (0, max(0, k - corr.shape[0])), constant_values=np.nan)
+            matrix.append(corr[:k])
+        items.append((method, np.asarray(matrix, dtype=float), row_names, explained[:k]))
+
+    if not items:
+        return figs
+
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.6, max_cols=2)
+    last_im = None
+    for ax, (method, matrix, row_names, explained) in zip(axes, items):
+        last_im = ax.imshow(matrix, vmin=-1.0, vmax=1.0, cmap="jet", aspect="auto")
+        ax.set_title(_title(method))
+        ax.set_xticks(np.arange(matrix.shape[1]))
+        ax.set_xticklabels([f"PC{i+1}\n({explained[i]:.1f}%)" for i in range(matrix.shape[1])], fontsize=7)
+        ax.set_yticks(np.arange(len(row_names)))
+        ax.set_yticklabels([str(name) for name in row_names], fontsize=7)
+        ax.set_xlabel("Principal component")
+        _add_right_colorbar(fig, ax, last_im, label="Correlation coefficient")
+
+        if matrix.shape[0] * matrix.shape[1] <= 24:
+            for (i, j), value in np.ndenumerate(matrix):
+                ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=6)
+
+    _hide_unused_axes(axes, len(items))
+
+
+    fig.subplots_adjust(left=0.10, right=0.92, bottom=0.10, top=0.92, wspace=0.40, hspace=0.40)
+    figs.append(("Comparison: PCA covariate correlation heatmaps", fig))
+    return figs
+
+
 def plot_compare_mahalanobis(results):
     figs = []
     for method, res in _method_items(results):
@@ -461,10 +604,14 @@ def plot_compare_covariance(results):
         ax.set_title(_title(method))
         ax.set_xlabel("Batch")
         ax.set_ylabel("Batch")
+        # Add numbers to each tile in the heatmap, but only if the matrix is small enough
+        if arr.shape[0] <= 10 and arr.shape[1] <= 10:
+            for (i, j), val in np.ndenumerate(arr):
+                ax.text(j, i, f"{val:.2f}", ha="center", va="center", fontsize=6, color="white" if val > vmax / 2 else "black")
 
     _hide_unused_axes(axes, len(mats))
     for ax in axes[:len(mats)]:
-        _add_top_colorbar(fig, ax, im, label="Normalized Frobenius distance")
+        _add_right_colorbar(fig, ax, im, label="Normalized Frobenius distance")
     fig.subplots_adjust(left=0.07, right=0.93, bottom=0.08, top=0.92, wspace=0.30, hspace=0.35)
     figs.append(("Comparison: covariance Frobenius", fig))
     return figs
@@ -547,7 +694,7 @@ def _plot_embedding_grid(
 
     _hide_unused_axes(axes, len(items))
     for ax in axes[:len(items)]:
-        _add_top_colorbar(fig, ax, sc, label=color_label)
+        _add_right_colorbar(fig, ax, sc, label=color_label)
     fig.suptitle(_title(title, width=70))
     fig.subplots_adjust(left=0.07, right=0.93, bottom=0.08, top=0.90, wspace=0.30, hspace=0.35)
     figs.append((title, fig))

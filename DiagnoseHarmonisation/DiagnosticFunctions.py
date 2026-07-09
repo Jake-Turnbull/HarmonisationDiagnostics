@@ -143,6 +143,62 @@ def _standardize_numeric_covariates(
     return out
 
 
+def _summarise_fixed_effect_ols(
+    y_vec: pd.DataFrame,
+    X: pd.DataFrame,
+    *,
+    lmm_r2_marginal: float = np.nan,
+) -> Dict[str, Any]:
+    """Fit an OLS fixed-effects model and summarise per-term effect sizes."""
+    ols_res = sm.OLS(y_vec, X).fit()
+
+    fitted = np.dot(X.values, ols_res.params.values)
+    var_fixed = float(np.nanvar(fitted, ddof=0))
+    full_r2 = float(ols_res.rsquared)
+
+    design_info = getattr(X, "design_info", None)
+    term_slices = getattr(design_info, "term_name_slices", None) or {}
+    if not term_slices:
+        term_slices = {
+            col: slice(i, i + 1)
+            for i, col in enumerate(X.columns)
+            if col != "Intercept"
+        }
+
+    abs_betas: Dict[str, float] = {}
+    partial_r2: Dict[str, float] = {}
+    lmm_partial_r2: Dict[str, float] = {}
+
+    for term_name, term_slice in term_slices.items():
+        if term_name == "Intercept":
+            continue
+
+        cols = list(X.columns[term_slice])
+        params = pd.to_numeric(ols_res.params.reindex(cols), errors="coerce").to_numpy(dtype=float)
+        abs_betas[term_name] = float(np.nanmean(np.abs(params))) if params.size else np.nan
+
+        reduced_cols = [col for col in X.columns if col not in cols]
+        reduced_X = X[reduced_cols]
+        reduced_r2 = float(sm.OLS(y_vec, reduced_X).fit().rsquared)
+        delta_r2 = max(0.0, full_r2 - reduced_r2)
+        partial_r2[term_name] = delta_r2
+
+        if np.isfinite(lmm_r2_marginal) and full_r2 > 0:
+            lmm_partial_r2[term_name] = delta_r2 * (lmm_r2_marginal / full_r2)
+        else:
+            lmm_partial_r2[term_name] = np.nan
+
+    return {
+        "ols": ols_res,
+        "var_fixed": var_fixed,
+        "full_r2": full_r2,
+        "fixed_betas": {name: ols_res.params[name] for name in X.columns},
+        "abs_betas": abs_betas,
+        "partial_r2": partial_r2,
+        "lmm_partial_r2": lmm_partial_r2,
+    }
+
+
 def _fit_ols_fixed_only(df: pd.DataFrame, formula_fixed: str) -> Dict[str, Any]:
     """
     Fit a fixed-effects-only model and return fallback stats.
@@ -151,10 +207,8 @@ def _fit_ols_fixed_only(df: pd.DataFrame, formula_fixed: str) -> Dict[str, Any]:
     import patsy
 
     y_vec, X = patsy.dmatrices(formula_fixed, df, return_type="dataframe")
-    ols_res = sm.OLS(y_vec, X).fit()
-
-    fitted = np.dot(X.values, ols_res.params.values)
-    var_fixed = float(np.nanvar(fitted, ddof=0))
+    ols_summary = _summarise_fixed_effect_ols(y_vec, X)
+    ols_res = ols_summary["ols"]
 
     return {
         "success": False,
@@ -163,10 +217,11 @@ def _fit_ols_fixed_only(df: pd.DataFrame, formula_fixed: str) -> Dict[str, Any]:
         "optimizer_used": None,
         "notes": ["fallback_ols_used"],
         "stats": {
-            "var_fixed": var_fixed,
+            "var_fixed": ols_summary["var_fixed"],
             "var_batch": 0.0,
             "var_resid": float(ols_res.mse_resid),
-            "R2_ols_fixed": float(ols_res.rsquared),
+            "R2_ols_fixed": ols_summary["full_r2"],
+            "R2_ols_batch": np.nan,
             "R2_marginal": np.nan,
             "R2_conditional": np.nan,
             "ICC": 0.0,
@@ -174,6 +229,10 @@ def _fit_ols_fixed_only(df: pd.DataFrame, formula_fixed: str) -> Dict[str, Any]:
             "LR_stat": np.nan,
             "pval_LRT_random": np.nan,
             "pval_LRT_random_mixture": np.nan,
+            "ols_fixed_betas": ols_summary["fixed_betas"],
+            "ols_abs_betas": ols_summary["abs_betas"],
+            "ols_partial_r2": ols_summary["partial_r2"],
+            "lmm_partial_r2": ols_summary["lmm_partial_r2"],
         },
         "warning_types": [],
         "warning_messages": [],
@@ -319,10 +378,12 @@ def fit_lmm_safe(
             try:
                 import patsy
                 y_vec, X_fixed = patsy.dmatrices(formula_fixed, df_fit, return_type="dataframe")
-                ols_fixed = sm.OLS(y_vec, X_fixed).fit()
-                # Return the betas for the fixed effects from the OLS model, do this using covariate names to ensure correct mapping even if patsy changes order or adds intercept
-                ols_betas = {name: ols_fixed.params[name] for name in X_fixed.columns}
-                ols_fixed_betas = {name: ols_fixed.params[name] for name in X_fixed.columns}
+                ols_summary = _summarise_fixed_effect_ols(y_vec, X_fixed, lmm_r2_marginal=R2_marginal)
+                ols_fixed = ols_summary["ols"]
+                ols_betas = ols_summary["fixed_betas"]
+                ols_abs_betas = ols_summary["abs_betas"]
+                ols_partial_r2 = ols_summary["partial_r2"]
+                lmm_partial_r2 = ols_summary["lmm_partial_r2"]
                 # add batch coefficients
                 y_b, X_b = patsy.dmatrices(f"y ~ C({group_col})", df_fit, return_type="dataframe")
                 # extract reference batch (the one not present in dummy columns)
@@ -335,6 +396,7 @@ def fit_lmm_safe(
                 reference_batch = list(all_batches - dummy_batches)[0] if len(all_batches - dummy_batches) == 1 else None
 
                 ols_batch = sm.OLS(y_b, X_b).fit()
+                R2_ols_batch = float(ols_batch.rsquared)
                 ols_batch_betas = {
                     name: ols_batch.params[name]
                     for name in X_b.columns
@@ -360,11 +422,15 @@ def fit_lmm_safe(
                 "R2_marginal": R2_marginal,
                 "R2_conditional": R2_conditional,
                 "delta_R2": delta_R2,
+                "R2_ols_batch": R2_ols_batch if 'R2_ols_batch' in locals() else np.nan,
                 "ICC": ICC,
                 "LR_stat": LR_stat,
                 "pval_LRT_random": pval_LRT,
                 "pval_LRT_random_mixture": pval_LRT_mixture,
                 "ols_fixed_betas": ols_betas if 'ols_betas' in locals() else None,
+                "ols_abs_betas": ols_abs_betas if 'ols_abs_betas' in locals() else None,
+                "ols_partial_r2": ols_partial_r2 if 'ols_partial_r2' in locals() else None,
+                "lmm_partial_r2": lmm_partial_r2 if 'lmm_partial_r2' in locals() else None,
                 "ols_batch_betas": ols_batch_betas if 'ols_batch_betas' in locals() else None,
                 "reference_batch": reference_batch if 'reference_batch' in locals() else None,
             }
@@ -515,6 +581,7 @@ def Run_LMM_cross_sectional(
             "R2_marginal": stats.get("R2_marginal", np.nan),
             "R2_conditional": stats.get("R2_conditional", np.nan),
             "delta_R2": stats.get("delta_R2", np.nan),
+            "R2_ols_batch": stats.get("R2_ols_batch", np.nan),
             "ICC": stats.get("ICC", np.nan),
             "LR_stat": stats.get("LR_stat", np.nan),
             "pval_LRT_random": stats.get("pval_LRT_random", np.nan),
@@ -526,6 +593,15 @@ def Run_LMM_cross_sectional(
         ols_fixed_betas = stats.get("ols_fixed_betas", {}) or {}
         for cov_name, beta in ols_fixed_betas.items():
             row[f"ols_fixed_beta_{cov_name}"] = beta if np.isfinite(beta) else np.nan
+        ols_abs_betas = stats.get("ols_abs_betas", {}) or {}
+        for cov_name, beta in ols_abs_betas.items():
+            row[f"ols_abs_beta_{cov_name}"] = beta if np.isfinite(beta) else np.nan
+        ols_partial_r2 = stats.get("ols_partial_r2", {}) or {}
+        for cov_name, value in ols_partial_r2.items():
+            row[f"ols_partial_r2_{cov_name}"] = value if np.isfinite(value) else np.nan
+        lmm_partial_r2 = stats.get("lmm_partial_r2", {}) or {}
+        for cov_name, value in lmm_partial_r2.items():
+            row[f"lmm_partial_r2_{cov_name}"] = value if np.isfinite(value) else np.nan
         # Repeat the same for batch betas, ensuring we handle missing values gracefully
         ols_batch_betas = stats.get("ols_batch_betas", {}) or {}
         for batch_name, beta in ols_batch_betas.items():

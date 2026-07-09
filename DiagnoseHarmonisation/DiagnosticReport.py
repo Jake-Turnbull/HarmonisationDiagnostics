@@ -14,6 +14,40 @@ from DiagnoseHarmonisation import DiagnosticFunctions
 from DiagnoseHarmonisation import PlotDiagnosticResults
 from DiagnoseHarmonisation.LoggingTool import StatsReporter
 
+
+def _extract_weighted_covariate_pc_correlation(
+    pca_results: dict[str, Any] | None,
+    max_pcs: int = 3,
+) -> float:
+    """summarise covariate-PC alignment weighted by explained variance."""
+    if not isinstance(pca_results, dict):
+        return np.nan
+
+    corr_dict = pca_results.get("pc_correlations", {}) or {}
+    explained = np.asarray(pca_results.get("explained_variance", []), dtype=float)
+    if explained.size == 0:
+        return np.nan
+
+    k = min(max_pcs, explained.shape[0])
+    weights = explained[:k]
+    weight_sum = np.nansum(weights)
+    if k == 0 or not np.isfinite(weight_sum) or weight_sum <= 0:
+        return np.nan
+    weights = weights / weight_sum
+
+    weighted_scores = []
+    for variable_name, value in corr_dict.items():
+        if str(variable_name).lower() == "batch":
+            continue
+        corr = np.asarray((value or {}).get("correlation", []), dtype=float)
+        if corr.shape[0] < k:
+            continue
+        weighted_scores.append(float(np.nansum(np.abs(corr[:k]) * weights)))
+
+    if not weighted_scores:
+        return np.nan
+    return float(np.nanmean(weighted_scores))
+
 # Helper function 
 def covariate_to_numeric(covariates) -> np.ndarray | None:
     """
@@ -450,6 +484,7 @@ def extract_summary_metrics(result: CrossSectionalDiagnosticResult) -> dict[str,
         "median_abs_cohens_d": np.nan,
         "prop_large_abs_cohens_d": np.nan,
         "max_mahalanobis": np.nan,
+        "median_r2_marginal": np.nan,
         "median_icc": np.nan,
         "prop_high_icc": np.nan,
         "median_delta_r2": np.nan,
@@ -458,6 +493,7 @@ def extract_summary_metrics(result: CrossSectionalDiagnosticResult) -> dict[str,
         "prop_significant_ks": np.nan,
         "max_frobenius_normalized": np.nan,
         "max_abs_batch_pc_correlation": np.nan,
+        "weighted_covariate_pc_correlation_top3": np.nan,
     }
 
     if result.cohens_d is not None:
@@ -473,6 +509,10 @@ def extract_summary_metrics(result: CrossSectionalDiagnosticResult) -> dict[str,
             metrics["max_mahalanobis"] = float(np.nanmax(vals))
 
     if result.lmm_results is not None and not result.lmm_results.empty:
+        r2_marginal = pd.to_numeric(result.lmm_results.get("R2_marginal"), errors="coerce").to_numpy(dtype=float)
+        if r2_marginal.size:
+            metrics["median_r2_marginal"] = float(np.nanmedian(r2_marginal))
+
         icc = pd.to_numeric(result.lmm_results.get("ICC"), errors="coerce").to_numpy(dtype=float)
         if icc.size:
             metrics["median_icc"] = float(np.nanmedian(icc))
@@ -531,6 +571,7 @@ def extract_summary_metrics(result: CrossSectionalDiagnosticResult) -> dict[str,
             arr = np.asarray(batch_corr, dtype=float)
             if arr.size:
                 metrics["max_abs_batch_pc_correlation"] = float(np.nanmax(np.abs(arr)))
+        metrics["weighted_covariate_pc_correlation_top3"] = _extract_weighted_covariate_pc_correlation(result.pca_results)
 
     return metrics
 
@@ -542,9 +583,9 @@ def summarise_method_performance(
     """Turn per-method diagnostics into a comparable scorecard.
 
     The summary combines the extracted metrics into category-level scores for
-    additive, multiplicative, linear-modelling, distributional, and PCA
-    behaviour. Optional scoring configuration can reweight the metrics or mark
-    specific metrics as higher-is-better.
+    additive, multiplicative, linear-modelling, distributional, PCA, and
+    biological-preservation behaviour. Optional scoring configuration can
+    reweight the metrics or mark specific metrics as higher-is-better.
     """
 
     default_weights = {
@@ -556,6 +597,8 @@ def summarise_method_performance(
         "prop_significant_ks": 0.10,
         "max_frobenius_normalized": 0.10,
         "max_abs_batch_pc_correlation": 0.05,
+        "median_r2_marginal": 0.10,
+        "weighted_covariate_pc_correlation_top3": 0.05,
     }
 
     metric_categories = {
@@ -564,11 +607,16 @@ def summarise_method_performance(
         "linear_modeling": ["median_icc", "prop_high_icc", "median_delta_r2"],
         "distributional": ["prop_significant_ks", "max_frobenius_normalized"],
         "principal_component_analysis": ["max_abs_batch_pc_correlation"],
+        "biological_effects": ["median_r2_marginal", "weighted_covariate_pc_correlation_top3"],
     }
 
     cfg = scoring_config or {}
     weights = cfg.get("weights", default_weights)
-    higher_is_better = set(cfg.get("higher_is_better", []))
+    higher_is_better = {
+        "median_r2_marginal",
+        "weighted_covariate_pc_correlation_top3",
+        *cfg.get("higher_is_better", []),
+    }
 
     rows = []
     for method_name, method_result in results.items():
@@ -615,15 +663,26 @@ def summarise_method_performance(
     for column_name, values in category_scores.items():
         summary_df[column_name] = values
 
-    weighted_scores = []
+    batch_removal_scores = []
+    overall_scores = []
     for _, row in summary_df.iterrows():
-        category_values = [row.get(f"{category}_score") for category in metric_categories]
-        category_values = [float(value) for value in category_values if pd.notna(value)]
-        weighted_scores.append(float(np.mean(category_values)) if category_values else np.nan)
+        batch_categories = [
+            row.get("additive_score"),
+            row.get("multiplicative_score"),
+            row.get("linear_modeling_score"),
+            row.get("distributional_score"),
+            row.get("principal_component_analysis_score"),
+        ]
+        batch_categories = [float(value) for value in batch_categories if pd.notna(value)]
+        batch_removal_scores.append(float(np.mean(batch_categories)) if batch_categories else np.nan)
 
-    summary_df["batch_removal_score"] = weighted_scores
-    summary_df["covariate_preservation_score"] = summary_df["linear_modeling_score"]
-    summary_df["overall_score"] = summary_df["batch_removal_score"]
+        all_categories = [row.get(f"{category}_score") for category in metric_categories]
+        all_categories = [float(value) for value in all_categories if pd.notna(value)]
+        overall_scores.append(float(np.mean(all_categories)) if all_categories else np.nan)
+
+    summary_df["batch_removal_score"] = batch_removal_scores
+    summary_df["covariate_preservation_score"] = summary_df["biological_effects_score"]
+    summary_df["overall_score"] = overall_scores
     summary_df["overall_rank"] = summary_df["overall_score"].rank(method="dense", ascending=False)
 
     summary_df = summary_df.sort_values(["overall_rank", "overall_score"], ascending=[True, False]).reset_index(drop=True)
@@ -641,27 +700,34 @@ def generate_comparison_advice(summary_df: pd.DataFrame) -> dict[str, Any]:
     if summary_df is None or summary_df.empty:
         return {
             "best_overall": None,
+            "best_biological": None,
             "best_by_metric": {},
             "summary_text": "No methods were successfully scored.",
         }
 
     best_overall = str(summary_df.sort_values("overall_score", ascending=False).iloc[0]["method"])
+    best_biological = None
+    if "biological_effects_score" in summary_df.columns:
+        bio_vals = pd.to_numeric(summary_df["biological_effects_score"], errors="coerce")
+        if bio_vals.notna().any():
+            best_biological = str(summary_df.loc[bio_vals.idxmax(), "method"])
 
     metric_map = {
-        "mean_shift": "median_abs_cohens_d",
-        "variance_alignment": "median_abs_log_variance_ratio",
-        "batch_random_effect": "median_icc",
-        "distribution_similarity": "prop_significant_ks",
-        "covariance_alignment": "max_frobenius_normalized",
-        "pc_batch_association": "max_abs_batch_pc_correlation",
+        "mean_shift": ("median_abs_cohens_d", False),
+        "variance_alignment": ("median_abs_log_variance_ratio", False),
+        "batch_random_effect": ("median_icc", False),
+        "distribution_similarity": ("prop_significant_ks", False),
+        "covariance_alignment": ("max_frobenius_normalized", False),
+        "pc_batch_association": ("max_abs_batch_pc_correlation", False),
+        "biological_effects": ("biological_effects_score", True),
     }
 
     best_by_metric = {}
-    for label, metric in metric_map.items():
+    for label, (metric, higher_is_better) in metric_map.items():
         if metric in summary_df.columns:
             metric_vals = pd.to_numeric(summary_df[metric], errors="coerce")
             if metric_vals.notna().any():
-                best_idx = metric_vals.idxmin()
+                best_idx = metric_vals.idxmax() if higher_is_better else metric_vals.idxmin()
                 best_by_metric[label] = str(summary_df.loc[best_idx, "method"])
             else:
                 best_by_metric[label] = "No valid result"
@@ -679,6 +745,7 @@ def generate_comparison_advice(summary_df: pd.DataFrame) -> dict[str, Any]:
 
     return {
         "best_overall": best_overall,
+        "best_biological": best_biological,
         "best_by_metric": best_by_metric,
         "summary_text": summary_text,
     }
@@ -2233,7 +2300,7 @@ def CrossSectionalReport(
                 lmm_results_df,
                 feature_order="original",
                 include_delta_r2=True,
-                include_status_summary=True,
+                include_status_summary=False,
             )
 
             for caption, fig in lmm_figs:
@@ -2856,6 +2923,7 @@ def CrossSectionalComparisonReport(
                 "linear modelling": ["method", "median_icc", "prop_high_icc", "median_delta_r2", "linear_modeling_score"],
                 "distributional": ["method", "prop_significant_ks", "max_frobenius_normalized", "distributional_score"],
                 "principal component analysis": ["method", "max_abs_batch_pc_correlation", "principal_component_analysis_score"],
+                "biological effects": ["method", "median_r2_marginal", "weighted_covariate_pc_correlation_top3", "biological_effects_score"],
             }
 
             report.text_simple("Method scorecard by diagnostic category (higher is better within each block):")
@@ -2870,12 +2938,14 @@ def CrossSectionalComparisonReport(
             report.text_simple("Interpretation guide:")
             report.text_simple(
                 "Additive metrics reward smaller absolute mean-shift and distance effects; multiplicative metrics reward stable variance structure; \n"\
-                "linear-modelling metrics reward better covariate preservation; distributional metrics reward closer overall distributions; \n"\
-                "and PCA metrics reward weaker batch-aligned structure in the principal components."
+                "linear-modelling metrics reward weaker residual batch random effects; distributional metrics reward closer overall distributions; \n"\
+                "PCA metrics reward weaker batch-aligned structure in the principal components; and biological metrics reward stronger preserved covariate structure."
             )
 
         report.log_section("comparison_advice", "Best method summary")
         report.text_simple(f"Best overall method: {advice.get('best_overall')}")
+        if advice.get("best_biological") is not None:
+            report.text_simple(f"Strongest preserved biological effects: {advice.get('best_biological')}")
         for diag_name, method_name in advice.get("best_by_metric", {}).items():
             report.text_simple(f"Best {diag_name}: {method_name}")
         report.text_simple(advice.get("summary_text", ""))
@@ -2892,10 +2962,12 @@ def CrossSectionalComparisonReport(
         _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results))
         _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results))
         _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results))
         _log_figures(PlotComparisonResults.plot_compare_mahalanobis(method_results))
         _log_figures(PlotComparisonResults.plot_compare_ks(method_results))
         _log_figures(PlotComparisonResults.plot_compare_covariance(method_results))
         _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr))
+        _log_figures(PlotComparisonResults.plot_compare_pca_correlation_heatmaps(method_results))
         _log_figures(
             PlotComparisonResults.plot_compare_pca_embeddings(
                 method_results,

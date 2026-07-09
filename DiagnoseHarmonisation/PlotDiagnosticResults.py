@@ -20,6 +20,121 @@ def _feature_tick_policy(labels: list[str]) -> tuple[list[str], int]:
         return ["" for _ in labels], 0
     return labels, 45
 
+
+def summarise_lmm_biological_effects(results_df) -> pd.DataFrame:
+    """summarise per-covariate beta magnitude and variance contribution columns."""
+    import pandas as pd
+
+    if not isinstance(results_df, pd.DataFrame) or results_df.empty:
+        return pd.DataFrame(columns=["covariate", "mean_abs_beta", "mean_ols_partial_r2", "mean_lmm_partial_r2"])
+
+    prefixes = {
+        "mean_abs_beta": "ols_abs_beta_",
+        "mean_ols_partial_r2": "ols_partial_r2_",
+        "mean_lmm_partial_r2": "lmm_partial_r2_",
+    }
+
+    covariates = set()
+    for prefix in prefixes.values():
+        covariates.update(col[len(prefix):] for col in results_df.columns if col.startswith(prefix))
+
+    rows = []
+    for covariate in sorted(covariates):
+        row = {"covariate": covariate}
+        has_value = False
+        for output_name, prefix in prefixes.items():
+            col = f"{prefix}{covariate}"
+            if col in results_df.columns:
+                values = pd.to_numeric(results_df[col], errors="coerce").to_numpy(dtype=float)
+                row[output_name] = float(np.nanmean(values)) if np.isfinite(values).any() else np.nan
+                has_value = has_value or np.isfinite(values).any()
+            else:
+                row[output_name] = np.nan
+        if has_value:
+            rows.append(row)
+
+    # Add a dedicated batch row so all new biology summary plots explicitly
+    # show residual batch effects alongside covariates.
+    batch_row = {
+        "covariate": "batch",
+        "mean_abs_beta": np.nan,
+        "mean_ols_partial_r2": np.nan,
+        "mean_lmm_partial_r2": np.nan,
+    }
+
+    batch_beta_cols = [c for c in results_df.columns if c.startswith("ols_batch_beta_")]
+    if batch_beta_cols:
+        # Being passed as a numpy array in some called, write check only apply if pan
+        batch_beta_values = pd.to_numeric(
+            np.asarray(results_df[batch_beta_cols], dtype=float).ravel(),
+            errors="coerce",
+        )
+        if np.isfinite(batch_beta_values).any():
+            batch_row["mean_abs_beta"] = float(np.nanmean(np.abs(batch_beta_values)))
+
+    if "R2_ols_batch" in results_df.columns:
+        r2_batch = pd.to_numeric(results_df["R2_ols_batch"], errors="coerce").to_numpy(dtype=float)
+        if np.isfinite(r2_batch).any():
+            batch_row["mean_ols_partial_r2"] = float(np.nanmean(r2_batch))
+
+    if "delta_R2" in results_df.columns:
+        delta = pd.to_numeric(results_df["delta_R2"], errors="coerce").to_numpy(dtype=float)
+        if np.isfinite(delta).any():
+            batch_row["mean_lmm_partial_r2"] = float(np.nanmean(delta))
+
+    if any(np.isfinite(batch_row[key]) for key in ("mean_abs_beta", "mean_ols_partial_r2", "mean_lmm_partial_r2")):
+        rows.append(batch_row)
+
+    return pd.DataFrame(rows)
+
+
+def plot_lmm_biological_effects(
+    results_df,
+    title_prefix: str = "LMM covariate effects",
+) -> list[tuple[str, mfig.Figure]]:
+    """Plot covariate-level beta magnitude and explained variance summaries."""
+    summary_df = summarise_lmm_biological_effects(results_df)
+    if summary_df.empty:
+        return []
+
+    plot_df = summary_df.sort_values(
+        ["mean_lmm_partial_r2", "mean_ols_partial_r2", "mean_abs_beta"],
+        ascending=False,
+        na_position="last",
+    ).reset_index(drop=True)
+
+    y = np.arange(len(plot_df))
+    fig, axes = plt.subplots(1, 3, figsize=(16, max(4.5, 0.6 * len(plot_df) + 1.5)), squeeze=False)
+    ax_beta, ax_ols, ax_lmm = axes.ravel()
+
+    ax_beta.barh(y, plot_df["mean_abs_beta"], color="C0", alpha=0.85)
+    ax_beta.set_title("Mean |beta|")
+    ax_beta.set_xlabel("Coefficient magnitude")
+    ax_beta.set_yticks(y)
+    ax_beta.set_yticklabels(plot_df["covariate"].astype(str).tolist())
+    ax_beta.invert_yaxis()
+
+    ax_ols.barh(y, plot_df["mean_ols_partial_r2"], color="C1", alpha=0.85)
+    ax_ols.set_title("OLS partial R2")
+    ax_ols.set_xlabel("Mean explained variance")
+    ax_ols.set_yticks(y)
+    ax_ols.set_yticklabels([])
+    ax_ols.invert_yaxis()
+
+    ax_lmm.barh(y, plot_df["mean_lmm_partial_r2"], color="C2", alpha=0.85)
+    ax_lmm.set_title("Batch-adjusted partial R2")
+    ax_lmm.set_xlabel("Mean explained variance")
+    ax_lmm.set_yticks(y)
+    ax_lmm.set_yticklabels([])
+    ax_lmm.invert_yaxis()
+
+    for ax in (ax_beta, ax_ols, ax_lmm):
+        ax.grid(axis="x", alpha=0.2)
+
+    fig.suptitle(title_prefix)
+    fig.tight_layout()
+    return [(f"{title_prefix}: covariate beta and variance summary", fig)]
+
 def LMM_Diagnostics_Plot(
     results_df,
     feature_order="original",
@@ -35,7 +150,7 @@ def LMM_Diagnostics_Plot(
         feature_order (str): 'original' to preserve input order, 'sorted_icc' to sort by ICC.
         max_labels (int): Maximum number of x-axis labels to show before thinning them.
         include_delta_r2 (bool): If True, add a delta_R2 plot.
-        include_status_summary (bool): If True, add a status/notes summary plot.
+        include_status_summary (bool): Retained for backward compatibility.
 
     Returns:
         list[tuple[str, matplotlib.figure.Figure]]: Caption and figure pairs for
@@ -167,20 +282,7 @@ def LMM_Diagnostics_Plot(
 
         figs.append(("Delta R² per feature", fig4))
 
-    # -------------------------------------------------
-    # 5) Status / notes summary
-    # -------------------------------------------------
-    if include_status_summary and "status" in df.columns:
-        fig5, ax5 = plt.subplots(figsize=(10, 4))
-        status_counts = df["status"].fillna("unknown").value_counts()
-
-        ax5.bar(status_counts.index.astype(str), status_counts.values, alpha=0.85)
-        ax5.set_title("LMM fit status counts")
-        ax5.set_xlabel("Status")
-        ax5.set_ylabel("Count")
-        ax5.tick_params(axis="x", rotation=30)
-
-        figs.append(("LMM fit status counts", fig5))
+    figs.extend(plot_lmm_biological_effects(df, title_prefix="LMM covariate effects"))
 
     return figs
 
@@ -4718,7 +4820,7 @@ def plot_age_percentile_chart(
     age_col : str
         Age variable to use on the x-axis.
     value_col : str
-        Outcome / feature to summarize on the y-axis.
+        Outcome / feature to summarise on the y-axis.
     batch_col : str or None
         Optional batch column for point coloring.
     percentiles : tuple[int]
