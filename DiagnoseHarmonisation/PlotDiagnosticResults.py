@@ -478,7 +478,7 @@ def _plot_zscore_hist_on_axis(ax, data, batch, probablity_distribution=False, dr
 
 
 @rep_plot_wrapper
-def Z_Score_Raw_Residual_Plot(raw_data, residual_data, batch, probablity_distribution=False, draw_PDF=True):
+def Z_Score_Raw_Residual_Plot(raw_data, residual_data, batch, probablity_distribution=True, draw_PDF=True):
     """Plot side-by-side histograms for raw and covariate-residual robust z-scores."""
     if not isinstance(raw_data, np.ndarray):
         raise ValueError("raw_data must be a NumPy array.")

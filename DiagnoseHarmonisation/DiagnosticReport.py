@@ -1222,7 +1222,8 @@ def CrossSectionalReportMin(data,
                              show: bool = False,
                              timestamped_reports: bool = True,
                              covariate_types: list | None = None,
-                             ratio_type: str = "rest"
+                             ratio_type: str = "rest",
+                             probability_distribution: bool = False,
                              ) -> StatsReporter:
     """
     Create a minimal cross-sectional diagnostic report for quick checks.
@@ -1440,6 +1441,7 @@ def CrossSectionalReportMin(data,
             zscored_data_raw,
             zscored_data_residual,
             batch,
+            probablity_distribution=probability_distribution,
             rep=report,
         )
         report.log_text("Z-score normalization visualization (raw vs residual) added to report")
@@ -1770,7 +1772,8 @@ def CrossSectionalReport(
     ratio_type: str = "rest",
     UMAP_embedding = True, # whether to include UMAP embedding visualizations in the report
     UMAP_tuning = 'auto', # can also be batch or none (for default umap with no tuning)
-    Random_state = None # random state for reproducibility of UMAP embeddings
+    Random_state = None, # random state for reproducibility of UMAP embeddings
+    probability_distribution: bool = True,
 ) -> StatsReporter:
     """
     Create a full cross-sectional diagnostic report for batch effects.
@@ -2131,6 +2134,7 @@ def CrossSectionalReport(
             zscored_data_raw,
             zscored_data_residual,
             batch,
+            probablity_distribution=probability_distribution,
             rep=report,
         )
         report.log_text("Z-score normalization visualization (raw vs residual) added to report")
@@ -2705,6 +2709,7 @@ def CrossSectionalComparisonReport(
     UMAP_tuning: str = "auto",
     plot_covariate_embeddings: bool = True,
     allow_many_covariate_embeddings: bool = False,
+    probability_distribution: bool = True,
 ) -> StatsReporter:
     """
     Create a comparative diagnostic report for multiple harmonisation methods.
@@ -2957,8 +2962,22 @@ def CrossSectionalComparisonReport(
                 finally:
                     plt.close(fig)
 
-        _log_figures(PlotComparisonResults.plot_compare_zscore_distributions(method_results, batch_arr, use_residual=False))
-        _log_figures(PlotComparisonResults.plot_compare_zscore_distributions(method_results, batch_arr, use_residual=True))
+        _log_figures(
+            PlotComparisonResults.plot_compare_zscore_distributions(
+                method_results,
+                batch_arr,
+                use_residual=False,
+                probability_distribution=probability_distribution,
+            )
+        )
+        _log_figures(
+            PlotComparisonResults.plot_compare_zscore_distributions(
+                method_results,
+                batch_arr,
+                use_residual=True,
+                probability_distribution=probability_distribution,
+            )
+        )
         _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results))
         _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results))
         _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results))
@@ -2973,6 +2992,7 @@ def CrossSectionalComparisonReport(
                 method_results,
                 batch_arr,
                 covariates=covariates_numeric,
+                covariate_names=covariate_names,
                 plot_covariate_embeddings=plot_covariate_embeddings,
                 allow_many_covariates=allow_many_covariate_embeddings,
             )
@@ -2983,6 +3003,7 @@ def CrossSectionalComparisonReport(
                     method_results,
                     batch_arr,
                     covariates=covariates_numeric,
+                    covariate_names=covariate_names,
                     plot_covariate_embeddings=plot_covariate_embeddings,
                     allow_many_covariates=allow_many_covariate_embeddings,
                 )

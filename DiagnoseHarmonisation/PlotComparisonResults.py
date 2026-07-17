@@ -102,7 +102,12 @@ def _weighted_covariate_pc_correlation(pca_results, max_pcs: int = 3) -> float:
     return float(np.nanmean(values)) if values else np.nan
 
 
-def plot_compare_zscore_distributions(results, batch, use_residual: bool = False):
+def plot_compare_zscore_distributions(
+    results,
+    batch,
+    use_residual: bool = False,
+    probability_distribution: bool = True,
+):
     figs = []
     items = _method_items(results)
     if len(items) == 0:
@@ -113,9 +118,11 @@ def plot_compare_zscore_distributions(results, batch, use_residual: bool = False
 
     fig, axes, _, _ = _make_method_grid(len(items))
     shared_bins = np.linspace(-5, 5, 60)
+    bin_width = float(shared_bins[1] - shared_bins[0])
     n_valid = 0
     z_key = "zscore_residual" if use_residual else "zscore_raw"
     figure_caption = "Comparison: residual z-score distributions" if use_residual else "Comparison: raw z-score distributions"
+    density_mode = bool(probability_distribution)
 
     for ax, (method, res) in zip(axes, items):
         z = getattr(res, z_key, None)
@@ -137,14 +144,18 @@ def plot_compare_zscore_distributions(results, batch, use_residual: bool = False
             if vals.size == 0:
                 continue
             color = cmap(np.where(unique_batches == b)[0][0])
-            ax.hist(vals, bins=shared_bins, alpha=0.45, label=str(b), color=color)
+            histogram_kwargs = {"bins": shared_bins, "alpha": 0.45, "label": str(b), "color": color}
+            if density_mode:
+                weights = np.ones(vals.shape[0], dtype=float) / float(vals.shape[0])
+                histogram_kwargs["weights"] = weights
+            ax.hist(vals, **histogram_kwargs)
             # Use a gaussian kernel density estimate to plot a smooth curve of the distribution
             from scipy.stats import gaussian_kde
             try:
                 kde = gaussian_kde(vals)
                 x = np.linspace(-5, 5, 100)
-                # Scale the kde to match the histogram height
-                ax.plot(x, kde(x) * 0.9 * ax.get_ylim()[1], color=color, linewidth=1.5, alpha=0.7)
+                scale = bin_width if density_mode else float(vals.size) * bin_width
+                ax.plot(x, kde(x) * scale, color=color, linewidth=1.5, alpha=0.7)
             except Exception:
                 # KDE can fail for near-constant vectors; keep the histogram only.
                 pass
@@ -154,7 +165,7 @@ def plot_compare_zscore_distributions(results, batch, use_residual: bool = False
         panel_suffix = "residual" if use_residual else "raw"
         ax.set_title(_title(f"{method} ({panel_suffix})"))
         ax.set_xlabel("Robust z-score")
-        ax.set_ylabel("Frequency")
+        ax.set_ylabel("Proportion within batch" if density_mode else "Frequency")
         ax.legend(fontsize=7, frameon=False, title="Batch", title_fontsize=8)
         n_valid += 1
 
@@ -705,6 +716,7 @@ def plot_compare_pca_embeddings(
     results,
     batch,
     covariates=None,
+    covariate_names=None,
     plot_covariate_embeddings: bool = True,
     allow_many_covariates: bool = False,
 ):
@@ -752,13 +764,17 @@ def plot_compare_pca_embeddings(
         series = pd.Series(col)
         n_unique = series.nunique(dropna=True)
         is_categorical = n_unique <= 12
+        if covariate_names is not None and i < len(covariate_names):
+            cov_name = covariate_names[i]
+        else:
+            cov_name = f"covariate_{i+1}"
         figs.extend(
             _plot_embedding_grid(
                 embeddings,
                 color_values=col,
-                title=f"Comparison: PCA embeddings coloured by covariate {i+1}",
+                title=f"Comparison: PCA embeddings coloured by {cov_name}",
                 is_categorical=is_categorical,
-                color_label=f"covariate_{i+1}",
+                color_label=cov_name,
             )
         )
     return figs
@@ -768,6 +784,7 @@ def Plot_compare_UMAP_embeddings(
     results,
     batch,
     covariates=None,
+    covariate_names=None,
     n_neighbours=10,
     min_dist=0.1,
     random_state=None,
@@ -830,13 +847,17 @@ def Plot_compare_UMAP_embeddings(
         series = pd.Series(col)
         n_unique = series.nunique(dropna=True)
         is_categorical = n_unique <= 12
+        if covariate_names is not None and i < len(covariate_names):
+            cov_name = covariate_names[i]
+        else:
+            cov_name = f"covariate_{i+1}"
         figs.extend(
             _plot_embedding_grid(
                 embeddings,
                 color_values=col,
-                title=f"Comparison: UMAP embeddings coloured by covariate {i+1}",
+                title=f"Comparison: UMAP embeddings coloured by {cov_name}",
                 is_categorical=is_categorical,
-                color_label=f"covariate_{i+1}",
+                color_label=cov_name,
             )
         )
 

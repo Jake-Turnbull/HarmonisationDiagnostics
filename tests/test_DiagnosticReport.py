@@ -333,7 +333,29 @@ def test_full_report_runs_without_covariates(test_results_dir, monkeypatch):
     report_path = test_results_dir / "full_no_covariates" / "Full_No_Covariates.html"
     assert report_path.exists() and report_path.stat().st_size > 100
 
+def test_full_report_unbalanced_samples():
+    n_samples = 1000
+    n_features = 10
+    rng = np.random.default_rng(456)
+    data = rng.normal(size=(n_samples, n_features))
+    batch = np.array(["A"] * 800 + ["B"] * 200)
+    data[:200] += 2.0  # Introduce a batch effect for batch A
+    test_results_dir = Path("TestResults")
+    from DiagnoseHarmonisation import DiagnosticReport as Dr
+    test_results_dir.mkdir(parents=True, exist_ok=True)
 
+    Dr.CrossSectionalReport(
+        data=data,
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        save_dir=str(test_results_dir / "full_unbalanced_samples_single_dataset"),
+        report_name="Full_Unbalanced_Samples",
+        show=False,
+        save_data=False,
+        timestamped_reports=False,
+        UMAP_embedding=False,
+    )
 
 
 import os
