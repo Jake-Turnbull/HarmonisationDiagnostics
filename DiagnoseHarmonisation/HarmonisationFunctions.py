@@ -2054,152 +2054,429 @@ import numpy as np
 import pandas as pd
 import warnings
 from statsmodels.formula.api import mixedlm
-#--------------------------------------------------------------------------------------
-def lme_harmonisation(data, batch, mod, variable_names):
-    """
-    Fits a per feature linear mixed model to harmonize data across batches while adjusting for covariates. This function is an alternative to ComBat that uses mixed effects modeling to estimate and remove batch effects.
+from typing import Optional, Any, List, Tuple, Dict
 
-    Args:
-        data (pd.DataFrame or np.array): The data matrix to be harmonized, with shape (n_samples, n_features).
-        batch (pd.Series or np.array): A vector of batch labels for each sample, with length n_samples.
-        mod (pd.DataFrame or np.array): A design matrix of covariates to adjust for, with shape (n_samples, n_covariates).
-        variable_names (list of str): A list of column names corresponding to the covariates in `mod`, used for formula construction.
-    Returns:
-        np.array: A harmonized data matrix of the same shape as the input `data`, with batch effects removed according to the fitted mixed models.
-    
-    Note:
-        This function fits a separate linear mixed model for each feature (column) in the data matrix, with the batch variable as a random effect and the covariates as fixed effects. The residuals from these models are returned as the harmonized data.
 
-    """
-    # ----------------------------
-    # Normalize inputs & keep labels
-    # ----------------------------
-    data_was_df = isinstance(data, pd.DataFrame)
-    batch_was_series = isinstance(batch, (pd.Series, pd.Index))
-    mod_was_df = isinstance(mod, pd.DataFrame)
+"""Linear-model harmonisation with fixed and random batch effects.
 
-    # keep labels to restore later
-    data_index = data.index if data_was_df else None
-    data_columns = data.columns if data_was_df else None
+Dependencies: numpy, pandas, patsy, scipy, statsmodels.
+"""
+import warnings
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
-    # Convert inputs to numpy arrays of expected orientation:
-    # internal working shape for `data_np` is (n_samples, n_features)
-    if data_was_df:
-        data_np = data.values.astype(float)
+import numpy as np
+import pandas as pd
+import patsy
+import statsmodels.api as sm
+from scipy.stats import chi2
+from statsmodels.regression.mixed_linear_model import MixedLM
+
+_VALID_TYPES = {"binary", "categorical", "continuous"}
+
+
+def _as_data_frame(data: Any, feature_names: Optional[Sequence[str]] = None) -> pd.DataFrame:
+    if isinstance(data, pd.DataFrame):
+        out = data.copy()
+        if feature_names is not None:
+            if len(feature_names) != out.shape[1]:
+                raise ValueError("feature_names length must equal the number of data columns.")
+            out.columns = list(map(str, feature_names))
     else:
-        data_np = np.asarray(data, dtype=float)
+        arr = np.asarray(data)
+        if arr.ndim != 2:
+            raise ValueError("data must be a 2D array-like object (samples x features).")
+        names = list(map(str, feature_names)) if feature_names is not None else [f"feature_{i+1}" for i in range(arr.shape[1])]
+        if len(names) != arr.shape[1]:
+            raise ValueError("feature_names length must equal the number of data columns.")
+        out = pd.DataFrame(arr, columns=names)
+    return out.apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
 
-    # batch -> 1D array of length n_samples
-    if batch_was_series:
-        batch_np = np.asarray(batch.values)
-    else:
-        batch_np = np.asarray(batch).ravel()
-
-    # mod -> (n_samples, n_covariates) or None
-    if mod is None:
-        mod_np = None
-    else:
-        if mod_was_df:
-            mod_np = mod.values.astype(float)
+def _coerce_covariates(
+    covariates: Optional[Any], covariate_names: Optional[Sequence[str]] = None
+) -> pd.DataFrame:
+    if covariates is None:
+        return pd.DataFrame()
+    if isinstance(covariates, pd.DataFrame):
+        out = covariates.copy().reset_index(drop=True)
+        if covariate_names is not None:
+            if len(covariate_names) != out.shape[1]:
+                raise ValueError("covariate_names length mismatch.")
+            out.columns = list(map(str, covariate_names))
         else:
-            mod_np = np.asarray(mod, dtype=float)
-        # if 1D, make column vector
-        if mod_np.ndim == 1:
-            mod_np = mod_np.reshape(-1, 1)
+            out.columns = list(map(str, out.columns))
+        return out
+    arr = np.asarray(covariates)
+    if arr.ndim == 1:
+        arr = arr[:, None]
+    if arr.ndim != 2:
+        raise ValueError("covariates must be None, 1D, or 2D array-like.")
+    names = list(map(str, covariate_names)) if covariate_names is not None else [f"cov{i+1}" for i in range(arr.shape[1])]
+    if len(names) != arr.shape[1]:
+        raise ValueError("covariate_names length mismatch.")
+    return pd.DataFrame(arr, columns=names)
 
-    # Basic validation
-    if data_np.ndim != 2:
-        raise ValueError("Data must be a 2D array (samples x features).")
-    n_samples, n_features = data_np.shape
+def _infer_covariate_type(series: pd.Series, unique_fraction_threshold: float = 0.30) -> str:
+    """Infer binary/categorical/continuous using values, dtype and uniqueness.
 
-    # Check batch is numeric, if not convert to categorical codes
-    if not np.issubdtype(batch_np.dtype, np.number):
-        batch_cat = pd.Categorical(batch_np)
-        batch_np = batch_cat.codes  # integer codes for categories
+    Numeric non-integer columns are continuous. Numeric integer-like columns are
+    continuous when their unique fraction exceeds the threshold; otherwise they
+    are categorical. Two-level columns are always binary.
+    """
+    non_missing = series.dropna()
+    n = len(non_missing)
+    if n == 0:
+        return "continuous"
+    n_unique = non_missing.nunique(dropna=True)
+    if n_unique <= 2:
+        return "binary"
+    if pd.api.types.is_bool_dtype(non_missing) or isinstance(non_missing.dtype, pd.CategoricalDtype):
+        return "categorical"
+    if pd.api.types.is_numeric_dtype(non_missing):
+        numeric = pd.to_numeric(non_missing, errors="coerce").to_numpy(dtype=float)
+        integer_like = bool(np.all(np.isclose(numeric, np.round(numeric), equal_nan=True)))
+        if not integer_like:
+            return "continuous"
+        return "continuous" if (n_unique / n) > unique_fraction_threshold else "categorical"
+    return "categorical"
 
-    if batch_np.ndim != 1 or batch_np.shape[0] != n_samples:
-        print(batch_np.shape, n_samples)
-        raise ValueError("Batch must be a 1D array-like with length equal to number of samples (rows of data).")
-
-    if mod_np is not None:
-        if mod_np.ndim != 2:
-            raise ValueError("mod must be a 2D array (samples x covariates).")
-        if mod_np.shape[0] != n_samples:
-            raise ValueError("mod must have the same number of rows (samples) as data.")
-        if len(variable_names) != mod_np.shape[1]:
-            raise ValueError("variable_names length must equal number of covariates (columns of mod).")
-
-    # ----------------------------
-    # Build a base DataFrame with batch and covariates used for every per-feature fit
-    # ----------------------------
-    # We create a DataFrame with one row per sample. For each feature we will assign
-    # the response column temporarily and fit a mixed model formula on that DataFrame.
-    base_df = pd.DataFrame(index=range(n_samples))
-    base_df['batch'] = batch_np  # grouping factor (categorical)
-
-    if mod_np is not None:
-        for i, var in enumerate(variable_names):
-            base_df[var] = mod_np[:, i]
-
-    # Prepare interaction terms string for the formula: batch:cov1 + batch:cov2 + ...
-    interaction_terms = []
-    if mod_np is not None:
-        for var in variable_names:
-            interaction_terms.append(f'batch:{var}')
-    interaction_str = ' + '.join(interaction_terms) if interaction_terms else ''
-
-    # Fixed part: batch + covariates
-    fixed_parts = ['batch'] + (variable_names if variable_names else [])
-    fixed_str = ' + '.join(fixed_parts)
-
-    # full RHS for formula (skip empty pieces)
-    if interaction_str:
-        rhs = f"{fixed_str} + {interaction_str}"
+def _normalise_covariate_types(
+    cov_df: pd.DataFrame,
+    covariate_types: Optional[Union[Sequence[str], Mapping[str, str]]],
+    unique_fraction_threshold: float,
+) -> Dict[str, str]:
+    if covariate_types is None:
+        return {c: _infer_covariate_type(cov_df[c], unique_fraction_threshold) for c in cov_df.columns}
+    if isinstance(covariate_types, Mapping):
+        unknown = set(covariate_types) - set(cov_df.columns)
+        if unknown:
+            raise ValueError(f"Unknown covariates in covariate_types: {sorted(unknown)}")
+        result = {
+            c: str(covariate_types.get(c, _infer_covariate_type(cov_df[c], unique_fraction_threshold))).lower()
+            for c in cov_df.columns
+        }
     else:
-        rhs = fixed_str
+        if len(covariate_types) != cov_df.shape[1]:
+            raise ValueError("covariate_types length must match the number of covariates.")
+        result = {c: str(t).lower() for c, t in zip(cov_df.columns, covariate_types)}
+    invalid = {c: t for c, t in result.items() if t not in _VALID_TYPES}
+    if invalid:
+        raise ValueError(f"Invalid covariate types: {invalid}. Use binary, categorical, or continuous.")
+    return result
 
-    # ----------------------------
-    # Fit per-feature mixed-effects model and collect residuals
-    # ----------------------------
-    # We will fit: Y ~ <rhs> with groups=batch (random intercept).
-    # This is done separately for each feature (column) in data_np.
-    residuals = np.zeros_like(data_np, dtype=float)  # shape (n_samples, n_features)
-    warnings.filterwarnings("ignore")  # suppress fit warnings; you may remove this
+def _prepare_covariates(
+    cov_df: pd.DataFrame,
+    covariate_types: Dict[str, str],
+    standardize: bool,
+) -> Tuple[pd.DataFrame, Dict[str, Dict[str, float]]]:
+    out = cov_df.copy()
+    scaling: Dict[str, Dict[str, float]] = {}
+    for col, kind in covariate_types.items():
+        if kind == "continuous":
+            out[col] = pd.to_numeric(out[col], errors="coerce")
+            mean = float(out[col].mean())
+            sd = float(out[col].std(ddof=0))
+            scaling[col] = {"mean": mean, "std": sd}
+            if standardize:
+                out[col] = out[col] - mean if not np.isfinite(sd) or sd == 0 else (out[col] - mean) / sd
+        else:
+            out[col] = out[col].astype("category")
+    return out, scaling
 
-    for feat_idx in range(n_features):
-        # create a temporary response column name that doesn't conflict with others
-        resp_col = '_y_response'
-        base_df[resp_col] = data_np[:, feat_idx]
+def _quote(name: str) -> str:
+    return f'Q("{str(name).replace(chr(34), chr(92)+chr(34))}")'
 
-        # formula example: '_y_response ~ batch + age + sex + batch:age + batch:sex'
-        formula = f'Q("{resp_col}") ~ {rhs}'
+def _term(name: str, kind: str) -> str:
+    q = _quote(name)
+    return f"C({q})" if kind in {"binary", "categorical"} else q
 
-        # Fit mixed model with random intercept for batch
+def _build_formula(
+    covariate_types: Dict[str, str],
+    include_batch_fixed: bool,
+    interactions: Optional[Sequence[Tuple[str, str]]],
+) -> str:
+    terms = [_term(c, t) for c, t in covariate_types.items()]
+    if include_batch_fixed:
+        terms.append('C(Q("__batch__"))')
+    if interactions:
+        for left, right in interactions:
+            if left not in covariate_types or right not in covariate_types:
+                raise ValueError(f"Interaction ({left}, {right}) references an unknown covariate.")
+            terms.append(f"{_term(left, covariate_types[left])}:{_term(right, covariate_types[right])}")
+    return "y ~ " + (" + ".join(terms) if terms else "1")
+
+def _batch_fixed_contribution(result: Any, design: pd.DataFrame) -> np.ndarray:
+    cols = [c for c in design.columns if 'C(Q("__batch__"))' in c]
+    if not cols:
+        return np.zeros(design.shape[0], dtype=float)
+    return design[cols].to_numpy() @ result.params.reindex(cols).fillna(0.0).to_numpy()
+
+def _random_intercept_contribution(result: Any, groups: pd.Series) -> np.ndarray:
+    values = np.zeros(len(groups), dtype=float)
+    for i, group in enumerate(groups):
+        re = result.random_effects.get(group)
+        if re is None:
+            re = result.random_effects.get(str(group))
+        if re is not None:
+            values[i] = float(np.asarray(re).ravel()[0])
+    return values
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return np.nan
+
+
+def linearmodelling_harmonisation(
+    data: Any,
+    batch: Any,
+    covariates: Optional[Any] = None,
+    covariate_names: Optional[Sequence[str]] = None,
+    covariate_types: Optional[Union[Sequence[str], Mapping[str, str]]] = None,
+    *,
+    feature_names: Optional[Sequence[str]] = None,
+    model_type: str = "auto",
+    batch_as_random: bool = False,
+    subject_col: Optional[Any] = None,
+    interactions: Optional[Sequence[Tuple[str, str]]] = None,
+    residuals: str = "Batch_only",
+    standardize_continuous: bool = True,
+    unique_fraction_threshold: float = 0.30,
+    missing: str = "drop",
+    reml: bool = False,
+    optimizers: Iterable[str] = ("lbfgs", "bfgs", "powell"),
+    maxiter: int = 400,
+    min_group_n: int = 3,
+    return_models: bool = False,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """
+    Use linear models to estimate and remove batch effects from data, optionally adjusting for covariates (which are preserved by default).
+
+    Parameters
+    ----------
+    data : array-like, shape (n_samples, n_features)
+        The data to be harmonised (samples x features).
+    batch : array-like, shape (n_samples,)
+        Batch labels for each sample.
+    covariates : array-like, shape (n_samples, n_covariates), optional
+        Covariate values for each sample. Can be None if no covariates are used
+    covariate_names : sequence of str, optional
+        Names for the covariates. If not provided, defaults to "cov1", "cov2", etc.
+    covariate_types : sequence or mapping, optional
+        Covariate types, either as a sequence (in order) or a mapping from name to type. Types can be "binary", "categorical", or "continuous". If not provided, inferred from data
+    feature_names : sequence of str, optional
+        Names for the features. If not provided, defaults to "feature_1", "feature_2", etc.
+    model_type : str, default 'auto'
+        Type of model to fit. Options are:
+        - 'auto': mixedlm when batch_as_random or subject_col is supplied, otherwise OLS.
+        - 'ols': batch is a fixed categorical effect.
+        - 'mixedlm': batch is a random intercept unless subject_col is supplied, in which case subject is the random intercept and batch is fixed.
+    batch_as_random : bool, default False
+        If True, treat batch as a random effect in mixedlm. Ignored if model_type is 'ols'.
+    subject_col : array-like, shape (n_samples,), optional
+        Subject labels for each sample. If provided, subjects are treated as random intercepts in mixedlm, and batch is treated as a fixed effect.
+    interactions : sequence of (str, str), optional
+        Pairs of covariate names to include as interaction terms in the model.
+    residuals : str, default 'Batch_only'
+        Which residuals to return. Options are:
+        - 'Batch_only': returns y minus only the estimated batch effect.
+        - 'Full': returns ordinary model residuals (y - fitted).
+
+    Model selection:
+      * model_type='ols': batch is a fixed categorical effect.
+      * model_type='mixedlm': batch is a random intercept unless subject_col is
+        supplied, in which case subject is the random intercept and batch is fixed.
+      * model_type='auto': mixedlm when batch_as_random or subject_col is supplied,
+        otherwise OLS.
+    """
+    data_df = _as_data_frame(data, feature_names)
+    n, _ = data_df.shape
+    batch_s = pd.Series(np.asarray(batch), name="__batch__").reset_index(drop=True)
+    if len(batch_s) != n:
+        raise ValueError("Length of batch must match the number of rows in data.")
+
+    cov_df = _coerce_covariates(covariates, covariate_names)
+    if not cov_df.empty and len(cov_df) != n:
+        raise ValueError("Covariates must have the same number of rows as data.")
+    inferred_types = _normalise_covariate_types(cov_df, covariate_types, unique_fraction_threshold)
+    prepared_cov, scaling = _prepare_covariates(cov_df, inferred_types, standardize_continuous)
+
+    model_type = model_type.lower()
+    if model_type == "auto":
+        model_type = "mixedlm" if batch_as_random or subject_col is not None else "ols"
+    if model_type not in {"ols", "mixedlm"}:
+        raise ValueError("model_type must be 'auto', 'ols', or 'mixedlm'.")
+    residual_mode = residuals.lower()
+    if residual_mode not in {"batch_only", "full"}:
+        raise ValueError("residuals must be 'Batch_only' or 'Full'.")
+    if missing not in {"drop", "raise"}:
+        raise ValueError("missing must be 'drop' or 'raise'.")
+
+    subject_s = None
+    if subject_col is not None:
+        subject_s = pd.Series(np.asarray(subject_col), name="__subject__").reset_index(drop=True)
+        if len(subject_s) != n:
+            raise ValueError("subject_col must have the same number of rows as data.")
+
+    include_batch_fixed = model_type == "ols" or (model_type == "mixedlm" and subject_s is not None)
+    formula = _build_formula(inferred_types, include_batch_fixed, interactions)
+
+    residual_df = pd.DataFrame(np.nan, index=data_df.index, columns=data_df.columns, dtype=float)
+    batch_effect_df = residual_df.copy()
+    fitted_df = residual_df.copy()
+    coefficient_rows: List[Dict[str, Any]] = []
+    statistic_rows: List[Dict[str, Any]] = []
+    warnings_rows: List[Dict[str, Any]] = []
+    models: Dict[str, Any] = {}
+
+    for j, feature in enumerate(data_df.columns):
+        frame = pd.concat([data_df[[feature]].rename(columns={feature: "y"}), batch_s, prepared_cov], axis=1)
+        if subject_s is not None:
+            frame = pd.concat([frame, subject_s], axis=1)
+        valid = ~frame.isna().any(axis=1)
+        if missing == "raise" and not valid.all():
+            raise ValueError(f"Missing values found while fitting feature {feature!r}.")
+        fit_df = frame.loc[valid].copy()
+        base_stats: Dict[str, Any] = {
+            "Feature": feature,
+            "n_total": n,
+            "n_used": len(fit_df),
+            "n_missing": int(n - len(fit_df)),
+            "status": "failed",
+            "method": model_type.upper(),
+        }
+        if len(fit_df) < 3 or fit_df["y"].nunique(dropna=True) < 2:
+            base_stats["status"] = "skipped_insufficient_data"
+            statistic_rows.append(base_stats)
+            continue
+
         try:
-            model = mixedlm(formula, base_df, groups=base_df['batch'])
-            # try default fit; if convergence issues occur, fallback handled below
-            result = model.fit()
-        except Exception:
-            # fallback fit with different options if default fails (method and reml off)
-            model = mixedlm(formula, base_df, groups=base_df['batch'])
-            result = model.fit(method='lbfgs', reml=False, maxiter=2000, disp=False)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                y_mat, X = patsy.dmatrices(formula, fit_df, return_type="dataframe")
+                if model_type == "ols":
+                    result = sm.OLS(y_mat.iloc[:, 0], X).fit()
+                    fitted = np.asarray(result.fittedvalues, dtype=float)
+                    batch_effect = _batch_fixed_contribution(result, X)
+                    method_used = "OLS"
+                    var_random = 0.0
+                    converged = True
+                    optimizer_used = None
+                else:
+                    group_name = "__subject__" if subject_s is not None else "__batch__"
+                    counts = fit_df[group_name].value_counts(dropna=False)
+                    if len(counts) < 2 or counts.min() < min_group_n:
+                        raise ValueError(f"MixedLM requires at least two groups and min_group_n={min_group_n}.")
+                    mixed_model = MixedLM(y_mat.iloc[:, 0], X, groups=fit_df[group_name], exog_re=np.ones((len(fit_df), 1)))
+                    result = None
+                    optimizer_used = None
+                    last_error: Optional[Exception] = None
+                    for optimizer in optimizers:
+                        try:
+                            candidate = mixed_model.fit(reml=reml, method=optimizer, maxiter=maxiter, disp=False)
+                            if bool(getattr(candidate, "converged", True)):
+                                result = candidate
+                                optimizer_used = optimizer
+                                break
+                        except Exception as exc:
+                            last_error = exc
+                    if result is None:
+                        raise RuntimeError("All MixedLM optimizers failed.") from last_error
+                    fitted = np.asarray(result.fittedvalues, dtype=float)
+                    if subject_s is None:
+                        batch_effect = _random_intercept_contribution(result, fit_df["__batch__"])
+                    else:
+                        batch_effect = _batch_fixed_contribution(result, X)
+                    method_used = "MixedLM"
+                    var_random = _safe_float(np.asarray(result.cov_re).ravel()[0])
+                    converged = bool(getattr(result, "converged", True))
 
-        # result.resid is length n_samples
-        residuals[:, feat_idx] = result.resid.values
+            y_values = fit_df["y"].to_numpy(dtype=float)
+            corrected = y_values - batch_effect if residual_mode == "batch_only" else y_values - fitted
+            residual_df.loc[valid, feature] = corrected
+            batch_effect_df.loc[valid, feature] = batch_effect
+            fitted_df.loc[valid, feature] = fitted
 
-        # drop temporary response column (next iteration will overwrite)
-        base_df.drop(columns=[resp_col], inplace=True)
+            params = result.params if model_type == "ols" else result.fe_params
+            bse = result.bse if model_type == "ols" else result.bse_fe
+            pvalues = result.pvalues.reindex(params.index)
+            for term_name, beta in params.items():
+                coefficient_rows.append({
+                    "Feature": feature,
+                    "Term": term_name,
+                    "Beta": _safe_float(beta),
+                    "SE": _safe_float(bse.get(term_name, np.nan)),
+                    "p_value": _safe_float(pvalues.get(term_name, np.nan)),
+                    "Effect_type": "batch" if "__batch__" in term_name else ("intercept" if term_name == "Intercept" else "covariate"),
+                })
 
-    # ----------------------------
-    # Restore output type & labels to match input
-    # ----------------------------
-    if data_was_df:
-        # preserve original index and column names
-        residuals_df = pd.DataFrame(residuals, index=data_index if data_index is not None else range(n_samples),
-                                    columns=data_columns if data_columns is not None else range(n_features))
-        return residuals_df
-    else:
-        return residuals
+            resid = y_values - fitted
+            ss_res = float(np.sum(resid ** 2))
+            ss_tot = float(np.sum((y_values - y_values.mean()) ** 2))
+            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
+            var_resid = _safe_float(result.mse_resid if model_type == "ols" else result.scale)
+            icc = var_random / (var_random + var_resid) if model_type == "mixedlm" and np.isfinite(var_random + var_resid) and (var_random + var_resid) > 0 else 0.0
+            base_stats.update({
+                "status": "ok",
+                "method": method_used,
+                "converged": converged,
+                "optimizer": optimizer_used,
+                "df_model": _safe_float(getattr(result, "df_model", len(params) - 1)),
+                "df_resid": _safe_float(getattr(result, "df_resid", len(fit_df) - len(params))),
+                "log_likelihood": _safe_float(getattr(result, "llf", np.nan)),
+                "AIC": _safe_float(getattr(result, "aic", np.nan)),
+                "BIC": _safe_float(getattr(result, "bic", np.nan)),
+                "R2": r2,
+                "adjusted_R2": _safe_float(getattr(result, "rsquared_adj", np.nan)),
+                "RMSE": float(np.sqrt(np.mean(resid ** 2))),
+                "residual_variance": var_resid,
+                "random_intercept_variance": var_random,
+                "ICC": icc,
+                "batch_effect_variance": float(np.var(batch_effect, ddof=0)),
+            })
+            if return_models:
+                models[feature] = result
+            for w in caught:
+                warnings_rows.append({"Feature": feature, "Warning_type": type(w.message).__name__, "Message": str(w.message)})
+        except Exception as exc:
+            base_stats.update({"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
+            if verbose:
+                print(f"[{j+1}/{data_df.shape[1]}] {feature}: failed: {exc}")
+        statistic_rows.append(base_stats)
+        if verbose and base_stats["status"] == "ok":
+            print(f"[{j+1}/{data_df.shape[1]}] {feature}: {base_stats['method']}")
+
+    stats_df = pd.DataFrame(statistic_rows).set_index("Feature", drop=False)
+    coefficients_df = pd.DataFrame(coefficient_rows)
+    warnings_df = pd.DataFrame(warnings_rows)
+    methods = sorted(stats_df.loc[stats_df["status"] == "ok", "method"].dropna().unique().tolist()) if not stats_df.empty else []
+    method_label = methods[0] if len(methods) == 1 else ("Mixed" if methods else model_type.upper())
+
+    result_dict: Dict[str, Any] = {
+        "Residuals": residual_df,
+        "Method": method_label,
+        "Predicted_effect": coefficients_df,
+        "model_fit": {
+            "formula": formula,
+            "model_type_requested": model_type,
+            "residual_mode": residuals,
+            "n_features_succeeded": int((stats_df["status"] == "ok").sum()) if not stats_df.empty else 0,
+            "n_features_failed": int((stats_df["status"] != "ok").sum()) if not stats_df.empty else 0,
+        },
+        "batch": batch_s.rename("batch"),
+        "Covariates": cov_df,
+        "Covariate_types": pd.Series(inferred_types, name="type"),
+        "Covariate_scaling": pd.DataFrame(scaling).T,
+        "Model statistics": stats_df,
+        "Batch_effect": batch_effect_df,
+        "Fitted_values": fitted_df,
+        "Warnings": warnings_df,
+        "Design_formula": formula,
+    }
+    if return_models:
+        result_dict["Models"] = models
+    return result_dict
 
 # Define LME_IQM harmonisation functions
 def lme_iqm_harmonise(
