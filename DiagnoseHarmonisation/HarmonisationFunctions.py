@@ -901,6 +901,7 @@ def combat_modular(
     GammaCorrection: bool = True,
     covbat_mode: bool = False,
     return_priors: bool = True,
+    CovariateRemovalMatrix: Optional[np.ndarray] = None,
     **kwargs,
 ):
     """
@@ -911,16 +912,25 @@ def combat_modular(
     original `combat` function to preserve exact baseline behaviour. Experimental
     modular paths (GAM mean models, local priors) will be implemented here
     incrementally.
-    
-        Parameters (additional options):
-            - `mean_model`: 'ols' (default) or 'gam' to fit flexible spline-based covariate effects.
-            - `prior_mode`: 'global' (default) or 'local' to enable feature-wise local priors.
-            - `prior_weight_methods`: sequence of weight method names (see `_construct_local_priors`).
-            - `prior_weight_opts`: dict of options passed to `_construct_local_priors` (method weights, spatial coords, directional params).
 
-        Returns:
-            - Always returns a dict with keys `bayesdata`, `B_hat`, `priors`, and
-              `design_diagnostics`.
+    Args: 
+        data (np.array or pd.DataFrame): The data matrix to be harmonized, with shape (n_features, n_samples).
+        batch (np.array or pd.Series): The batch labels for each sample, with shape (n_samples,).
+        mod (np.array or pd.DataFrame, optional): The design matrix for covariates, with shape (n_samples, n_covariates).
+        mean_model (str): The mean model to use ('ols' or 'gam').
+        gam_opts (dict, optional): Options for GAM mean model (if used).
+        prior_mode (str): The prior mode to use ('global' or 'local').
+        prior_weight_methods (list of str, optional): Methods for weighting priors (if used).
+        prior_weight_opts (dict, optional): Options for prior weighting (if used).
+        parametric (bool): Whether to use parametric adjustments.
+        DeltaCorrection (bool): Whether to apply delta (scale) correction.
+        UseEB (bool): Whether to use empirical Bayes adjustments.
+        ReferenceBatch (str or int, optional): The reference batch to use (if any).
+        RegressCovariates (bool): Whether to regress out covariates.
+        GammaCorrection (bool): Whether to apply gamma (mean) correction.
+        covbat_mode (bool): Whether to apply CovBat adjustment.
+        return_priors (bool): Whether to return prior estimates and metadata.
+        CovariateRemovalMatrix (np.array, optional): Optional binary matrix used to dictate what covariate effects to remove from the data. 1 will remove covariate effect, 0 will preserve.
     """
     if not return_priors:
         warnings.warn(
@@ -1213,7 +1223,7 @@ def combat_modular(
 
     # Reconstruct final harmonized data (add covariate effects back if required)
     stand_mean_with_cov = stand_mean
-    bayesdata = _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, stand_mean_with_cov, Cov_effects, DeltaCorrection=DeltaCorrection, GammaCorrection=GammaCorrection, RegressCovariates=RegressCovariates)
+    bayesdata = _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, stand_mean_with_cov, Cov_effects, DeltaCorrection=DeltaCorrection, GammaCorrection=GammaCorrection, RegressCovariates=RegressCovariates,covariate_removal_matrix=CovariateRemovalMatrix,mean_model=mean_model)
 
     if dat_transposed:
         bayesdata = bayesdata.T
@@ -1532,7 +1542,7 @@ def _eb_shrinkage(s_data, gamma_hat, delta_hat, gamma_bar, t2, a_prior, b_prior,
 
     return gamma_star, delta_star, eb_hist
 #--------------------------------------------------------------------------------------
-def _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, stand_mean, Cov_effects, DeltaCorrection=True, GammaCorrection=True, RegressCovariates=False,covbat_mode=False):
+def _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, stand_mean, Cov_effects, DeltaCorrection=True, GammaCorrection=True, RegressCovariates=False,covbat_mode=False,covariate_removal_matrix=None,mean_model=None):
     """Apply batch corrections and inverse-standardize to reconstruct harmonized data."""
     bayesdata = s_data.copy()
     n_batch = gamma_star.shape[0]
@@ -1566,7 +1576,9 @@ def _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, sta
         )
         bayesdata = _run_covbat_for_combat_modular(bayesdata, batch)
 
-    
+    if covariate_removal_matrix is not None and RegressCovariates and mean_model == "ols":
+        # Multiply the Cov_effects by the covariate removal matrix to remove specified covariate effects
+        Cov_effects = covariate_removal_matrix @ Cov_effects
     
     if RegressCovariates:
         bayesdata = (bayesdata * (np.sqrt(var_pooled)[:, None])) + (stand_mean - Cov_effects)

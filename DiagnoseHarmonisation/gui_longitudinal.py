@@ -473,7 +473,7 @@ class LongitudinalGuiApp:
 
         # Covariate key columns if separate file is used
         self.sep_cov_frame = ttk.LabelFrame(
-            outer, text="Separate covariates file — alignment columns", padding=12
+            outer, text="Separate covariates file — alignment columns (These are only required when a separate covariates file is used.)", padding=12
         )
         self.sep_cov_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         self.sep_cov_frame.columnconfigure(1, weight=1)
@@ -491,15 +491,9 @@ class LongitudinalGuiApp:
         )
         self.cov_timepoint_combo.grid(row=0, column=3, sticky="ew", padx=(8, 0), pady=5)
 
-        ttk.Label(
-            self.sep_cov_frame,
-            text="These are only required when a separate covariates file is used.",
-            style="Hint.TLabel",
-        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
-
         # Actions
         actions_frame = ttk.Frame(outer)
-        actions_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(2, 10))
+        actions_frame.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(2, 10))
 
         self.run_button = ttk.Button(
             actions_frame,

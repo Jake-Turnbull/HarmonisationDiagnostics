@@ -171,3 +171,42 @@ def test_combat_modular_gam_path_reports_design_encoding() -> None:
     assert diag["mean_model"] == "gam"
     assert np.asarray(out["bayesdata"]).shape == (n_features, n_samples)
     assert diag["encoding"].get("age") in {"spline", "numeric_linear_nonspline", "numeric_fallback"}
+
+
+def test_combat_modular_covariate_removal_matrix() -> None:
+    np.random.seed(42)
+    n_features = 5
+    n_samples = 100
+
+    data = pd.DataFrame(np.random.randn(n_features, n_samples))
+    batch = pd.Series(["A"] * (n_samples // 2) + ["B"] * (n_samples // 2))
+    mod = pd.DataFrame({"age": np.linspace(20.0, 70.0, n_samples)})
+    # Add age, sex and headsize as covariates
+    mod["sex"] = [1, 0] * (n_samples // 2)  # 1 for male, 0 for female
+    mod["headsize"] = np.random.randn(n_samples)
+    
+    # Add effects to the data based on covariates
+    data += mod["age"].values * 0.1  # Add age effect
+    data += (mod["sex"].map({0: 1, 1: -1}).values) * 0.2  # Add sex effect
+    data += mod["headsize"].values * 0.3  # Add headsize effect
+
+    # Create a covariate removal matrix that removes headsize effect for all features:
+    covariate_removal_matrix = np.array([[0, 0, 1]])  # Keep age and sex, remove headsize
+
+
+    out = hf.combat_modular(
+        data=data,
+        batch=batch,
+        mod=mod,
+        mean_model="ols",
+        prior_mode="global",
+        RegressCovariates=True,
+        CovariateRemovalMatrix=covariate_removal_matrix,
+    )
+
+    bayesdata = out["bayesdata"]
+    correlations = np.corrcoef(bayesdata.T, mod["headsize"], rowvar=False)
+    original_correlations = np.corrcoef(data.T, mod["headsize"], rowvar=False)
+    
+
+    assert all(abs(np.mean(correlations)) < abs(np.mean(original_correlations))), "Headsize effect was not removed as expected."

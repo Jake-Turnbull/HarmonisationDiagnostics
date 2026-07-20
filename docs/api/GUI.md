@@ -13,7 +13,7 @@
 From the package:
 
 ```bash
-harmdiag gui
+DHarm gui
 ```
 
 ```bash

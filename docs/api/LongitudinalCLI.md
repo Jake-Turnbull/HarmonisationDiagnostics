@@ -17,7 +17,7 @@ python -m DiagnoseHarmonisation.longitudinal_cli --help
 Alternatively:
 
 ```bash
-harmdiag-longitudinal --help
+DHarm-longitudinal --help
 ```
 
 This module contains argument parsing and runner functions tailored to longitudinal and test-retest analyses.

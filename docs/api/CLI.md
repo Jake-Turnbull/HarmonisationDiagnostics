@@ -16,7 +16,7 @@ Run the main CLI from the package:
 python -m DiagnoseHarmonisation.cli --help
 ```
 
-This module exposes the high-level entrypoints used by the project-level `harmdiag` console script and includes helpers for parsing arguments and launching the cross-sectional workflow.
+This module exposes the high-level entrypoints used by the project-level `DHarm` console script and includes helpers for parsing arguments and launching the cross-sectional workflow.
 
 ## Common flags
 

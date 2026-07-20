@@ -99,7 +99,7 @@ def inspect_inputs_from_cli(
 
 def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
-        prog="harmdiag-longitudinal",
+        prog="DHarm-longitudinal",
         description="Strict Harmonisation Diagnostics CLI for longitudinal reports.",
     )
 

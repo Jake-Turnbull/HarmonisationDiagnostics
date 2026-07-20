@@ -2,8 +2,8 @@
 
 While the ideal way we would recommend using this package is within a python script, we also offer two command-line entry points for the cross-sectional report:
 
-- `harmdiag gui` launches a desktop GUI with file pickers, dropdowns, and checkboxes.
-- `harmdiag run` keeps the scripted terminal workflow for users who want to pass paths and options directly.
+- `DHarm gui` launches a desktop GUI with file pickers, dropdowns, and checkboxes.
+- `DHarm run` keeps the scripted terminal workflow for users who want to pass paths and options directly.
 
 After installing the package and ensuring it is on your Python path, users can choose either mode depending on their workflow.
 
@@ -11,7 +11,7 @@ After installing the package and ensuring it is on your Python path, users can c
 
 Run:
 
-    harmdiag gui
+  DHarm gui
 
 This opens a Tkinter-based desktop window where you can:
 
@@ -30,9 +30,9 @@ If no covariates are selected, the run continues and emits a warning that LMM di
 
 ## Scripted CLI Options
 
-The options for `harmdiag run` are shown below:
+The options for `DHarm run` are shown below:
 
-    "harmdiag",  description="Harmonisation Diagnostics CLI for scripted runs and the desktop cross-sectional GUI."
+  "DHarm",  description="Harmonisation Diagnostics CLI for scripted runs and the desktop cross-sectional GUI."
   
 
     "run", help="Run the diagnostics pipeline from data and covariates CSVs"
@@ -60,12 +60,12 @@ While the ideal way we would recommend using this package is within a python scr
 
 ## Scripted CLI Options
 
-The options for `harmdiag-longitudinal run` are shown below:
+The options for `DHarm-longitudinal run` are shown below:
 
 ```
-harmdiag-longitudinal run --help
+DHarm-longitudinal run --help
 
-usage: harmdiag-longitudinal run [-h] --data DATA --subject-id-col SUBJECT_ID_COL --timepoint-col
+usage: DHarm-longitudinal run [-h] --data DATA --subject-id-col SUBJECT_ID_COL --timepoint-col
                                  TIMEPOINT_COL --batch-col BATCH_COL
                                  (--feature-cols FEATURE_COLS | --features-file FEATURES_FILE)
                                  [--covariates COVARIATES] [--cov-subject-id-col COV_SUBJECT_ID_COL]

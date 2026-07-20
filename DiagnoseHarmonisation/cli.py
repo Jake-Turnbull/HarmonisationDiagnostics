@@ -3,9 +3,9 @@
 Command-line wrapper for Harmonisation Diagnostics.
 
 Usage examples:
-  harmdiag run --data data.csv --covariates cov.csv --batch-col 3
-  harmdiag run --data data.csv --covariates cov.csv --outdir ./reports
-  harmdiag gui
+    DHarm run --data data.csv --covariates cov.csv --batch-col 3
+    DHarm run --data data.csv --covariates cov.csv --outdir ./reports
+    DHarm gui
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ def launch_gui() -> None:
 
 def main(argv: Optional[Sequence[str]] = None):
     parser = argparse.ArgumentParser(
-        prog="harmdiag",
+        prog="DHarm",
         description="Harmonisation Diagnostics CLI for scripted runs and the desktop cross-sectional GUI.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -102,7 +102,7 @@ def main(argv: Optional[Sequence[str]] = None):
         help="1-based covariates column number where batch is located. If omitted, tries to auto-detect by header.",
     )
     run_parser.add_argument(
-        "--data-id-col",
+        "--subject-id-col",
         default=None,
         help="Data subject ID column name (defaults to first column).",
     )

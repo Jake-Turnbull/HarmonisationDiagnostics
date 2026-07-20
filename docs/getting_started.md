@@ -23,7 +23,7 @@ Or alternatively clone locally:
 
 If you would prefer not to type file paths and column names manually, you can launch the cross-sectional desktop GUI:
 
-    harmdiag gui
+    DHarm gui
 
 This opens a window for selecting the data file, covariates file, output directory, batch column, subject ID columns, and covariates to include in the report.
 
@@ -80,11 +80,11 @@ This comparison report checks that every dataset shares the same shape and then 
 
 You can also generate the same cross-sectional report without writing Python by either:
 
-    harmdiag gui
+    DHarm gui
 
 or:
 
-    harmdiag run --data data.csv --covariates covariates.csv
+    DHarm run --data data.csv --covariates covariates.csv
 
 ## 4. Generate a Longitudinal Diagnostic Report
 
@@ -105,7 +105,7 @@ This will produce a detailed HTML file containing a full analysis of batch and c
 You can also generate the same longitudinal data report without writing Python (in bash cell) by:
 
 ```
-harmdiag-longitudinal run \
+DHarm-longitudinal run \
   --data idps_with_batch_included.csv \
   --subject-id-col subjectid_column_name \
   --timepoint-col timepoint_column_name \

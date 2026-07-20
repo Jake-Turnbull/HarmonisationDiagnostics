@@ -11,7 +11,7 @@
 ## Launching
 
 ```bash
-harmdiag-longitudinal gui
+DHarm-longitudinal gui
 ```
 
 ```bash
