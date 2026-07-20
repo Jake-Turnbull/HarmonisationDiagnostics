@@ -592,7 +592,7 @@ def combat(data, batch, mod=[], parametric=True,
 
         # If combat_for_covbat accepts numpy arrays, call directly:
         
-        scores_com = combat(scores, batch, mod=None, parametric=True,UseEB=False)
+        scores_com = combat(scores, batch, mod=None, parametric=True,UseEB=True)
         
             # If it expects a pandas DataFrame, convert temporarily:
         import pandas as pd
