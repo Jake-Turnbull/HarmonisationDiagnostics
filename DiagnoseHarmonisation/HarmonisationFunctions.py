@@ -565,7 +565,7 @@ def combat(data, batch, mod=[], parametric=True,
 
         # Check for NaN or infinite values in comdata_std
         if np.isnan(comdata_std).any() or np.isinf(comdata_std).any():
-            raise warnings.Warning("Standardized data contains NaN or infinite values. Check input data for issues.")
+            print(f"Warning: Standardized data contains NaN or infinite values. Check input data for issues.")
         
         # Create NaN mask to identify rows with NaN values
         nan_mask = np.isnan(comdata_std).any(axis=1)
