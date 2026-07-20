@@ -563,6 +563,17 @@ def combat(data, batch, mod=[], parametric=True,
         scaler = StandardScaler()
         comdata_std = scaler.fit_transform(comdata)  # (n_samples, n_features)
 
+        # Check for NaN or infinite values in comdata_std
+        if np.isnan(comdata_std).any() or np.isinf(comdata_std).any():
+            raise warnings.Warning("Standardized data contains NaN or infinite values. Check input data for issues.")
+        
+        # Create NaN mask to identify rows with NaN values
+        nan_mask = np.isnan(comdata_std).any(axis=1)
+        if np.any(nan_mask):
+            print(f"Warning: {np.sum(nan_mask)} samples contain NaN values after standardization. These samples will be excluded from PCA.")
+            #  Set NaN rows to zero or handle them appropriately (e.g., imputation)
+            comdata_std[nan_mask, :] = 0  # or use imputation strategies
+
         pca = PCA()
         pca.fit(comdata_std)
         pc_comp = pca.components_                    # (n_components, n_features)
