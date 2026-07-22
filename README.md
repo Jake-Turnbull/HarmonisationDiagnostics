@@ -171,4 +171,4 @@ To run the simulator, run **streamlit run simulator.py** in the terminal.
 
 # Acknowledgement
 
-This study was supported by Rosetrees Trust, NIHR Oxford Health Biomedical Research Centre (NIHR203316), and Oxford University Centre for Integrative Neuroimaging (OxCIN). The views expressed are those of the author(s) and not necessarily those of the NIHR or the Department of Health and Social Care. The Centre for Integrative Neuroimaging was supported by core funding from the Wellcome Trust (203139/Z/16/Z and 203139/A/16/Z). We would also like to thank OxCIN's Harmonisation Working Group for their valuable inputs and feedback.
+This study is supported by Rosetrees Trust, NIHR Oxford Health Biomedical Research Centre (NIHR203316), and Oxford University Centre for Integrative Neuroimaging (OxCIN). The views expressed are those of the author(s) and not necessarily those of the NIHR or the Department of Health and Social Care. The Centre for Integrative Neuroimaging was supported by core funding from the Wellcome Trust (203139/Z/16/Z and 203139/A/16/Z). We would also like to thank OxCIN's Harmonisation Working Group for their valuable inputs and feedback.
