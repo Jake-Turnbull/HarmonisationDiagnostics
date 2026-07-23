@@ -53,3 +53,10 @@ For cross-sectional workflows, the package now supports both a scripted command-
 The cross-sectional report layer now includes a multi-method comparison workflow that can evaluate multiple harmonised datasets side by side, with category-based scoring and dedicated comparison plots.
 
 For longitudinal workflows, the package now supports a scripted command-line interface through `DHarm-longitudinal`
+
+---
+## Acknowledgement
+
+This work was supported by the Rosetrees Trust and the NIHR Oxford Health Biomedical Research Centre (NIHR203316). The views expressed are those of the author(s) and not necessarily those of the NIHR or the Department of Health and Social Care. The Centre for Integrative Neuroimaging was supported by core funding from the Wellcome Trust (203139/Z/16/Z and 203139/A/16/Z).
+We are grateful to the members of the OxCIN’s (Oxford University Centre for Integrative Neuroimaging) Harmonisation Working Group for the helpful discussions and feedback on the tool. 
+
