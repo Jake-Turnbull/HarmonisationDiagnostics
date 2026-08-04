@@ -1038,7 +1038,9 @@ def PC_corr_plot(
             sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", xticklabels=combined_names, yticklabels=combined_names, ax=ax)
         else: # Use just numbers if too many variables to avoid clutter:
             x_ticks = [f"{name}\n({i+1})" for i, name in enumerate(combined_names)]
-            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", xticklabels=x_ticks, yticklabels=x_ticks, ax=ax)       
+            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", xticklabels=x_ticks, yticklabels=x_ticks, ax=ax)
+            # Add the score into each cell for clarity
+            
         ax.set_title("Correlation Matrix of PCs, Batch, and Covariates")
         figs.append(("PCA correlation matrix", fig))
     
@@ -1804,7 +1806,7 @@ def plot_covariance_frobenius(
     )
 
     # --- Heatmap of normalized pairwise differences ---
-    im = ax1.imshow(pairwise_norm, interpolation="nearest", aspect="auto")
+    im = ax1.imshow(pairwise_norm, interpolation="nearest", aspect="auto",colormap="viridis")
 
     # Add value to each cell
     for i in range(G):
@@ -1954,11 +1956,12 @@ def mahalanobis_distance_plot(results: dict,
     ax_raw.set_xticks(range(n))
     ax_raw.set_yticks(range(n))
     ax_raw.set_xticklabels(batches, rotation=45, ha="right")
-    ax_raw.set_yticklabels(batches)
+    ax_raw.set_yticklabels(batches, rotation=45, ha="right")
     ax_raw.set_xlabel("Batch")
     ax_raw.set_ylabel("Batch")
     if annotate:
         annotate_heatmap(ax_raw,M_raw)
+
 
     if has_resid:
         ax_resid = fig.add_subplot(gs[0, 1])
@@ -1967,17 +1970,16 @@ def mahalanobis_distance_plot(results: dict,
         ax_resid.set_xticks(range(n))
         ax_resid.set_yticks(range(n))
         ax_resid.set_xticklabels(batches, rotation=45, ha="right")
-        ax_resid.set_yticklabels(batches)
+        ax_resid.set_yticklabels(batches, rotation=45, ha="right")
         ax_resid.set_xlabel("Batch")
-        ax_resid.set_ylabel("Batch")
         if annotate:
             annotate_heatmap(ax_resid,M_resid)
 
         # One colorbar shared by both heatmaps
         cbar = fig.colorbar(im_resid, ax=ax_raw, fraction=0.046, pad=0.2,orientation="horizontal",location="top")
+        cbar.set_label("Mahalanobis distance")
         cbar = fig.colorbar(im_resid, ax=ax_resid, fraction=0.046, pad=0.2,orientation="horizontal",location="top")
 
-        cbar.set_label("Mahalanobis distance")
     else:
         # Single colorbar for the single heatmap
         cbar = fig.colorbar(im_raw, ax=ax_raw, fraction=0.046, pad=0.04)

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from matplotlib.lines import Line2D
 
 from DiagnoseHarmonisation import PlotDiagnosticResults
 
@@ -40,9 +41,9 @@ def _title(text: str, width: int = 34) -> str:
     return textwrap.fill(str(text), width=width)
 
 
-def _batch_palette(batch: np.ndarray) -> tuple[np.ndarray, Any]:
+def _batch_palette(batch: np.ndarray, cmap_name: str = "tab10") -> tuple[np.ndarray, Any]:
     unique_batches = np.unique(batch)
-    cmap = plt.get_cmap("tab10", len(unique_batches))
+    cmap = plt.get_cmap(cmap_name, len(unique_batches))
     return unique_batches, cmap
 
 
@@ -102,11 +103,106 @@ def _weighted_covariate_pc_correlation(pca_results, max_pcs: int = 3) -> float:
     return float(np.nanmean(values)) if values else np.nan
 
 
+def _safe_pearson_corr(x: np.ndarray, y: np.ndarray) -> float:
+    x_arr = np.asarray(x, dtype=float).ravel()
+    y_arr = np.asarray(y, dtype=float).ravel()
+    mask = np.isfinite(x_arr) & np.isfinite(y_arr)
+    if mask.sum() < 2:
+        return np.nan
+    x_arr = x_arr[mask]
+    y_arr = y_arr[mask]
+    if np.nanstd(x_arr) == 0 or np.nanstd(y_arr) == 0:
+        return np.nan
+    return float(np.corrcoef(x_arr, y_arr)[0, 1])
+
+
+def _numeric_embedding_values(values, is_categorical: bool) -> np.ndarray:
+    series = pd.Series(values)
+    if is_categorical or not pd.api.types.is_numeric_dtype(series):
+        cats = series.astype("category")
+        codes = cats.cat.codes.to_numpy(dtype=float)
+        codes[codes < 0] = np.nan
+        return codes
+    return pd.to_numeric(series, errors="coerce").to_numpy(dtype=float)
+
+
+def _embedding_corr_text(x_label: str, y_label: str, embedding: np.ndarray, values: np.ndarray) -> str:
+    r_x = _safe_pearson_corr(values, embedding[:, 0])
+    r_y = _safe_pearson_corr(values, embedding[:, 1])
+    return f"r({x_label})={r_x:.2f}\nr({y_label})={r_y:.2f}"
+
+
+def _add_embedding_corr_label(ax, x_label: str, y_label: str, embedding: np.ndarray, values: np.ndarray):
+    ax.text(
+        0.03,
+        0.97,
+        _embedding_corr_text(x_label, y_label, embedding, values),
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        fontsize=6,
+        bbox={"facecolor": "white", "alpha": 0.75, "edgecolor": "none", "pad": 1.0},
+    )
+
+
+def _draw_effect_size_guides(ax, values: np.ndarray):
+    max_abs = float(np.nanmax(np.abs(values))) if values.size else np.nan
+    if not np.isfinite(max_abs):
+        return
+
+    thresholds = [0.2, 0.5, 0.8]
+    if max_abs <= thresholds[0]:
+        ax.axhline(max_abs, color="purple", linestyle="--", linewidth=1)
+        ax.text(
+            0.98,
+            max_abs,
+            f"max |d|={max_abs:.2f}",
+            color="purple",
+            fontsize=6,
+            ha="right",
+            va="bottom",
+            transform=ax.get_yaxis_transform(),
+        )
+        return
+
+    active_thresholds = [thr for thr in thresholds if thr <= max_abs]
+    if not active_thresholds:
+        active_thresholds = [max_abs]
+
+    for idx, thr in enumerate(active_thresholds):
+        color = ["green", "orange", "red"][min(idx, 2)]
+        ax.axhline(thr, color=color, linestyle="--", linewidth=1)
+        ax.text(
+            0.98,
+            thr,
+            f"{thr:.1f}",
+            color=color,
+            fontsize=6,
+            ha="right",
+            va="bottom",
+            transform=ax.get_yaxis_transform(),
+        )
+
+    if max_abs < thresholds[-1]:
+        ax.axhline(max_abs, color="purple", linestyle="--", linewidth=1)
+        ax.text(
+            0.98,
+            max_abs,
+            f"max |d|={max_abs:.2f}",
+            color="purple",
+            fontsize=6,
+            ha="right",
+            va="bottom",
+            transform=ax.get_yaxis_transform(),
+        )
+
+
 def plot_compare_zscore_distributions(
     results,
     batch,
     use_residual: bool = False,
     probability_distribution: bool = True,
+    base_cmap: str = "tab10",
 ):
     figs = []
     items = _method_items(results)
@@ -114,7 +210,7 @@ def plot_compare_zscore_distributions(
         return figs
 
     batch_arr = np.asarray(batch)
-    unique_batches, cmap = _batch_palette(batch_arr)
+    unique_batches, cmap = _batch_palette(batch_arr, base_cmap)
 
     fig, axes, _, _ = _make_method_grid(len(items))
     shared_bins = np.linspace(-5, 5, 60)
@@ -193,8 +289,6 @@ def plot_compare_cohens_d(results):
         abs_d = np.abs(d_arr).ravel()
         if abs_d.size == 0:
             continue
-        
-
         rows.append(
             {
                 "method": method,
@@ -229,24 +323,8 @@ def plot_compare_cohens_d(results):
         for ax2, (method, vec) in zip(axes, featurewise):
             vec = np.asarray(vec, dtype=float)
             x2 = np.arange(vec.size)
-            ax2.plot(x2, vec, "b-", linewidth=1)
-            ax2.plot(x2, vec, "r.", markersize=2)
-            # Check the max values of x2, if x2 is too small, avoid plotting the horizontal lines to prevent clutter
-
-            if max(abs(vec)) > 0.2:
-                for thresh, color in [(0.2, "green"), (0.5, "orange"), (0.8, "red")]:
-                    ax2.axhline(y=thresh, color=color, linestyle="--", linewidth=1)
-                    #ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
-            elif max(abs(vec)) > 0.1:
-                for thresh, color in [(0.1, "green"), (0.2, "orange"), (0.5, "red")]:
-                    ax2.axhline(y=thresh, color=color, linestyle="--", linewidth=1)
-                    #ax2.axhline(y=-thresh, color=color, linestyle="--", linewidth=1)
-            elif max(abs(vec)) > 0.05:
-                # Draw line at 1.1 times max and -1.1 max and label what the max observed value is
-                max_val = max(abs(vec))
-                ax2.axhline(y=1.1 * max_val, color="purple", linestyle="--", linewidth=1)
-                #ax2.axhline(y=-1.1 * max_val, color="purple", linestyle="--", linewidth=1)
-                ax2.text(0.5, 1.15 * max_val, f"Max observed |d|: {max_val:.3f}", color="purple", fontsize=6, ha="center")  
+            ax2.scatter(x2, vec, color="C0", s=12)
+            _draw_effect_size_guides(ax2, vec)
             
             y_max = np.nanmax(np.abs(vec)) if vec.size else 1.0
             y_max = max(1.0, y_max)
@@ -355,7 +433,24 @@ def plot_compare_lmm_icc(results):
         fig_icc, axes, _, _ = _make_method_grid(len(icc_items))
         for ax, (method, icc) in zip(axes, icc_items):
             x = np.arange(len(icc))
-            ax.bar(x, icc, alpha=0.8)
+            df_method = next((res.lmm_results for m, res in _method_items(results) if m == method), None)
+            if isinstance(df_method, pd.DataFrame):
+                if "pval_LRT_random_mixture" in df_method:
+                    pvals = pd.to_numeric(df_method["pval_LRT_random_mixture"], errors="coerce").to_numpy(dtype=float)
+                else:
+                    pvals = np.full_like(icc, np.nan, dtype=float)
+                if not np.isfinite(pvals).any():
+                    if "pval_LRT_random" in df_method:
+                        pvals = pd.to_numeric(df_method["pval_LRT_random"], errors="coerce").to_numpy(dtype=float)
+                    else:
+                        pvals = np.full_like(icc, np.nan, dtype=float)
+            else:
+                pvals = np.full_like(icc, np.nan, dtype=float)
+            sig_mask = np.isfinite(pvals) & (pvals < 0.05)
+            colors = np.where(sig_mask, "C2", "C3")
+            ax.scatter(x, icc, c=colors, s=22, zorder=3)
+            ax.axhline(0.5, color="black", linestyle="--", linewidth=1, alpha=0.5)
+            ax.text(0.98, 0.5, "ICC=0.5", transform=ax.get_yaxis_transform(), ha="right", va="bottom", fontsize=6, color="black")
             ax.set_title(_title(method))
             ax.set_xlabel("Feature")
             ax.set_ylabel("ICC")
@@ -363,6 +458,15 @@ def plot_compare_lmm_icc(results):
             labels, rotation = _feature_labels(len(icc))
             ax.set_xticks(x)
             ax.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
+            ax.legend(
+                handles=[
+                    Line2D([0], [0], marker="o", color="w", markerfacecolor="C2", markersize=5, label="p < 0.05"),
+                    Line2D([0], [0], marker="o", color="w", markerfacecolor="C3", markersize=5, label="p >= 0.05"),
+                ],
+                frameon=False,
+                fontsize=6,
+                loc="best",
+            )
         _hide_unused_axes(axes, len(icc_items))
         fig_icc.tight_layout()
         figs.append(("Comparison: LMM ICC per feature", fig_icc))
@@ -456,18 +560,53 @@ def plot_compare_lmm_biological_effects(results):
     return figs
 
 
-def plot_compare_pca_correlation_heatmaps(results, max_pcs: int = 3):
+def plot_compare_pca_correlation_heatmaps(
+    results,
+    max_pcs: int = 3,
+    batch=None,
+    covariates=None,
+    covariate_names=None,
+):
     figs = []
     items = []
+    batch_arr = np.asarray(batch) if batch is not None else None
+    cov_matrix = _safe_covariate_matrix(covariates)
+    if covariate_names is not None:
+        cov_name_list = [str(name) for name in covariate_names]
+    elif isinstance(covariates, pd.DataFrame):
+        cov_name_list = [str(name) for name in covariates.columns]
+    elif cov_matrix is not None:
+        cov_name_list = [f"covariate_{i+1}" for i in range(cov_matrix.shape[1])]
+    else:
+        cov_name_list = []
+    if cov_matrix is not None and len(cov_name_list) < cov_matrix.shape[1]:
+        cov_name_list = cov_name_list + [f"covariate_{i+1}" for i in range(len(cov_name_list), cov_matrix.shape[1])]
 
     for method, res in _method_items(results):
         pca_results = res.pca_results or {}
         corr_dict = pca_results.get("pc_correlations", {}) or {}
         explained = np.asarray(pca_results.get("explained_variance", []), dtype=float)
-        if not corr_dict or explained.size == 0:
+        scores = np.asarray(pca_results.get("scores", []), dtype=float)
+        if explained.size == 0 or scores.ndim != 2:
             continue
 
-        k = min(max_pcs, explained.shape[0])
+        k = min(max_pcs, explained.shape[0], scores.shape[1])
+        if batch_arr is not None and batch_arr.shape[0] == scores.shape[0]:
+            batch_codes = pd.factorize(batch_arr)[0].astype(float)
+            batch_codes[batch_codes < 0] = np.nan
+            matrices = [scores[:, :k], batch_codes.reshape(-1, 1)]
+            labels = [f"PC{i+1}" for i in range(k)] + ["batch"]
+            if cov_matrix is not None and cov_matrix.shape[0] == scores.shape[0] and cov_matrix.shape[1] > 0:
+                matrices.append(cov_matrix.astype(float))
+                labels.extend(cov_name_list[: cov_matrix.shape[1]])
+            combined = np.column_stack(matrices)
+            corr_df = pd.DataFrame(combined, columns=labels).corr()
+            items.append((method, corr_df.to_numpy(dtype=float), labels, labels, explained[:k]))
+            continue
+
+        if not corr_dict:
+            continue
+
         row_names = list(corr_dict.keys())
         matrix = []
         for row_name in row_names:
@@ -475,21 +614,33 @@ def plot_compare_pca_correlation_heatmaps(results, max_pcs: int = 3):
             if corr.shape[0] < k:
                 corr = np.pad(corr, (0, max(0, k - corr.shape[0])), constant_values=np.nan)
             matrix.append(corr[:k])
-        items.append((method, np.asarray(matrix, dtype=float), row_names, explained[:k]))
+        items.append((method, np.asarray(matrix, dtype=float), row_names, [f"PC{i+1}" for i in range(k)], explained[:k]))
 
     if not items:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.6, max_cols=2)
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.8, max_cols=2)
     last_im = None
-    for ax, (method, matrix, row_names, explained) in zip(axes, items):
-        last_im = ax.imshow(matrix, vmin=-1.0, vmax=1.0, cmap="jet", aspect="auto")
+    for ax, (method, matrix, row_names, col_names, explained) in zip(axes, items):
+        last_im = ax.imshow(matrix, vmin=-1.0, vmax=1.0, cmap="coolwarm", aspect="auto")
+        # Add the score to each cell
+        for (i, j), value in np.ndenumerate(matrix):
+            ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=6)
         ax.set_title(_title(method))
         ax.set_xticks(np.arange(matrix.shape[1]))
-        ax.set_xticklabels([f"PC{i+1}\n({explained[i]:.1f}%)" for i in range(matrix.shape[1])], fontsize=7)
+        if len(col_names) == matrix.shape[1]:
+            ax.set_xticklabels(
+                col_names,
+                fontsize=7,
+                rotation=45 if len(col_names) > 8 else 0,
+                ha="right" if len(col_names) > 8 else "center",
+            )
+        else:
+            ax.set_xticklabels([f"PC{i+1}\n({explained[i]:.1f}%)" for i in range(matrix.shape[1])], fontsize=7)
         ax.set_yticks(np.arange(len(row_names)))
         ax.set_yticklabels([str(name) for name in row_names], fontsize=7)
-        ax.set_xlabel("Principal component")
+        ax.set_xlabel("PCs, batch, and covariates")
+        ax.set_ylabel("PCs, batch, and covariates")
         _add_right_colorbar(fig, ax, last_im, label="Correlation coefficient")
 
         if matrix.shape[0] * matrix.shape[1] <= 24:
@@ -497,8 +648,6 @@ def plot_compare_pca_correlation_heatmaps(results, max_pcs: int = 3):
                 ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=6)
 
     _hide_unused_axes(axes, len(items))
-
-
     fig.subplots_adjust(left=0.10, right=0.92, bottom=0.10, top=0.92, wspace=0.40, hspace=0.40)
     figs.append(("Comparison: PCA covariate correlation heatmaps", fig))
     return figs
@@ -570,9 +719,11 @@ def plot_compare_ks(results):
             min_p = np.asarray(min_p, dtype=float)
             x2 = np.arange(min_p.size)
             y = -np.log10(np.clip(min_p, 1e-300, 1.0))
-            ax2.plot(x2, y, "b-", linewidth=1)
-            ax2.plot(x2, y, "r.", markersize=2)
-            ax2.axhline(-np.log10(0.05), color="red", linestyle=":", linewidth=1)
+            colors = np.where(y >= -np.log10(0.05), "C2", "C3")
+            ax2.scatter(x2, y, c=colors, s=14, zorder=3)
+            sig_line = -np.log10(0.05)
+            ax2.axhline(sig_line, color="black", linestyle="--", linewidth=2.0)
+            ax2.text(0.98, sig_line, "p = 0.05", transform=ax2.get_yaxis_transform(), ha="right", va="bottom", fontsize=6, color="black")
             ax2.set_title(_title(method))
             ax2.set_xlabel("Feature")
             ax2.set_ylabel("-log10(min adjusted p)")
@@ -671,6 +822,7 @@ def _plot_embedding_grid(
     title: str,
     is_categorical: bool,
     color_label: str,
+    base_cmap: str = "tab10",
 ):
     figs = []
     items = list(embedding_by_method.items())
@@ -678,34 +830,39 @@ def _plot_embedding_grid(
         return figs
 
     fig, axes, _, _ = _make_method_grid(len(items))
+    mappables: list[Any] = []
 
     for ax, (method, emb) in zip(axes, items):
         emb = np.asarray(emb, dtype=float)
         if emb.ndim != 2 or emb.shape[1] < 2:
             ax.set_title(_title(f"{method} (embedding unavailable)"))
             ax.axis("off")
+            mappables.append(None)
             continue
+        values = _numeric_embedding_values(color_values, is_categorical)
         if is_categorical:
-            cats = pd.Series(color_values).astype("category")
-            codes = cats.cat.codes.to_numpy()
-            sc = ax.scatter(
-                emb[:, 0],
-                emb[:, 1],
-                c=codes,
-                cmap=cm.get_cmap("tab10", max(2, len(cats.cat.categories))),
-                s=8,
-                alpha=0.7,
-            )
+            series = pd.Series(color_values).astype("category")
+            categories = list(series.cat.categories)
+            codes = series.cat.codes.to_numpy(dtype=int)
+            cmap = plt.get_cmap(base_cmap, max(2, len(categories)))
+            for idx, category in enumerate(categories):
+                mask = codes == idx
+                ax.scatter(emb[mask, 0], emb[mask, 1], s=8, alpha=0.7, color=cmap(idx), label=str(category))
+            if len(categories) > 0:
+                ax.legend(fontsize=6, frameon=False, loc="best")
+            mappables.append(None)
         else:
-            vals = pd.to_numeric(pd.Series(color_values), errors="coerce").to_numpy(dtype=float)
-            sc = ax.scatter(emb[:, 0], emb[:, 1], c=vals, cmap="viridis", s=8, alpha=0.7)
+            sc = ax.scatter(emb[:, 0], emb[:, 1], c=values, cmap="viridis", s=8, alpha=0.7)
+            mappables.append(sc)
         ax.set_title(_title(method))
         ax.set_xlabel("Dim 1")
         ax.set_ylabel("Dim 2")
+        _add_embedding_corr_label(ax, "Dim 1", "Dim 2", emb, values)
 
     _hide_unused_axes(axes, len(items))
-    for ax in axes[:len(items)]:
-        _add_right_colorbar(fig, ax, sc, label=color_label)
+    for ax, mappable in zip(axes[:len(items)], mappables):
+        if mappable is not None:
+            _add_right_colorbar(fig, ax, mappable, label=color_label)
     fig.suptitle(_title(title, width=70))
     fig.subplots_adjust(left=0.07, right=0.93, bottom=0.08, top=0.90, wspace=0.30, hspace=0.35)
     figs.append((title, fig))
@@ -719,6 +876,7 @@ def plot_compare_pca_embeddings(
     covariate_names=None,
     plot_covariate_embeddings: bool = True,
     allow_many_covariates: bool = False,
+    base_cmap: str = "tab10",
 ):
     figs = []
     items = [(m, r) for m, r in _method_items(results) if isinstance(r.pca_results, dict) and "scores" in r.pca_results]
@@ -728,7 +886,7 @@ def plot_compare_pca_embeddings(
     fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8)
 
     batch_arr = np.asarray(batch)
-    unique_batches = np.unique(batch_arr)
+    unique_batches, batch_cmap = _batch_palette(batch_arr, base_cmap)
     embeddings = {}
     for ax, (method, res) in zip(axes, items):
         score = np.asarray(res.pca_results["scores"], dtype=float)
@@ -739,15 +897,14 @@ def plot_compare_pca_embeddings(
         embeddings[method] = score[:, :2]
         for b in unique_batches:
             idx = batch_arr == b
-            ax.scatter(score[idx, 0], score[idx, 1], s=8, alpha=0.6, label=str(b))
+            color = batch_cmap(np.where(unique_batches == b)[0][0])
+            ax.scatter(score[idx, 0], score[idx, 1], s=8, alpha=0.6, label=str(b), color=color)
         ax.set_title(_title(method))
         ax.set_xlabel("PC1")
         ax.set_ylabel("PC2")
+        ax.legend(fontsize=6, frameon=False, loc="best")
 
     _hide_unused_axes(axes, len(items))
-    handles, labels = axes[0].get_legend_handles_labels()
-    if handles:
-        fig.legend(handles, labels, loc="upper right", frameon=False)
     fig.subplots_adjust(left=0.07, right=0.93, bottom=0.08, top=0.92, wspace=0.30, hspace=0.35)
     figs.append(("Comparison: PCA embeddings", fig))
 
@@ -775,6 +932,7 @@ def plot_compare_pca_embeddings(
                 title=f"Comparison: PCA embeddings coloured by {cov_name}",
                 is_categorical=is_categorical,
                 color_label=cov_name,
+                base_cmap=base_cmap,
             )
         )
     return figs
@@ -790,6 +948,7 @@ def Plot_compare_UMAP_embeddings(
     random_state=None,
     plot_covariate_embeddings: bool = True,
     allow_many_covariates: bool = False,
+    base_cmap: str = "tab10",
 ):
     figs = []
     try:
@@ -804,7 +963,7 @@ def Plot_compare_UMAP_embeddings(
     fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8)
 
     batch_arr = np.asarray(batch)
-    unique_batches = np.unique(batch_arr)
+    unique_batches, batch_cmap = _batch_palette(batch_arr, base_cmap)
     embeddings = {}
 
     for ax, (method, res) in zip(axes, items):
@@ -822,15 +981,14 @@ def Plot_compare_UMAP_embeddings(
         embeddings[method] = emb
         for b in unique_batches:
             idx = batch_arr == b
-            ax.scatter(emb[idx, 0], emb[idx, 1], s=8, alpha=0.6, label=str(b))
+            color = batch_cmap(np.where(unique_batches == b)[0][0])
+            ax.scatter(emb[idx, 0], emb[idx, 1], s=8, alpha=0.6, label=str(b), color=color)
         ax.set_title(_title(method))
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
+        ax.legend(fontsize=6, frameon=False, loc="best")
 
     _hide_unused_axes(axes, len(items))
-    handles, labels = axes[0].get_legend_handles_labels()
-    if handles:
-        fig.legend(handles, labels, loc="upper right", frameon=False)
     fig.subplots_adjust(left=0.07, right=0.93, bottom=0.08, top=0.92, wspace=0.30, hspace=0.35)
     figs.append(("Comparison: UMAP embeddings", fig))
 
@@ -858,6 +1016,7 @@ def Plot_compare_UMAP_embeddings(
                 title=f"Comparison: UMAP embeddings coloured by {cov_name}",
                 is_categorical=is_categorical,
                 color_label=cov_name,
+                base_cmap=base_cmap,
             )
         )
 

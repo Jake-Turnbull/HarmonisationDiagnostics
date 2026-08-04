@@ -2710,6 +2710,7 @@ def CrossSectionalComparisonReport(
     plot_covariate_embeddings: bool = True,
     allow_many_covariate_embeddings: bool = False,
     probability_distribution: bool = True,
+    base_cmap: str = "tab10",
 ) -> StatsReporter:
     """
     Create a comparative diagnostic report for multiple harmonisation methods.
@@ -2968,6 +2969,7 @@ def CrossSectionalComparisonReport(
                 batch_arr,
                 use_residual=False,
                 probability_distribution=probability_distribution,
+                base_cmap=base_cmap,
             )
         )
         _log_figures(
@@ -2976,6 +2978,7 @@ def CrossSectionalComparisonReport(
                 batch_arr,
                 use_residual=True,
                 probability_distribution=probability_distribution,
+                base_cmap=base_cmap,
             )
         )
         _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results))
@@ -2986,7 +2989,14 @@ def CrossSectionalComparisonReport(
         _log_figures(PlotComparisonResults.plot_compare_ks(method_results))
         _log_figures(PlotComparisonResults.plot_compare_covariance(method_results))
         _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr))
-        _log_figures(PlotComparisonResults.plot_compare_pca_correlation_heatmaps(method_results))
+        _log_figures(
+            PlotComparisonResults.plot_compare_pca_correlation_heatmaps(
+                method_results,
+                batch=batch_arr,
+                covariates=covariates_numeric,
+                covariate_names=covariate_names,
+            )
+        )
         _log_figures(
             PlotComparisonResults.plot_compare_pca_embeddings(
                 method_results,
@@ -2995,6 +3005,7 @@ def CrossSectionalComparisonReport(
                 covariate_names=covariate_names,
                 plot_covariate_embeddings=plot_covariate_embeddings,
                 allow_many_covariates=allow_many_covariate_embeddings,
+                base_cmap=base_cmap,
             )
         )
         if UMAP_embedding:
@@ -3006,6 +3017,7 @@ def CrossSectionalComparisonReport(
                     covariate_names=covariate_names,
                     plot_covariate_embeddings=plot_covariate_embeddings,
                     allow_many_covariates=allow_many_covariate_embeddings,
+                    base_cmap=base_cmap,
                 )
             )
         _log_figures(PlotComparisonResults.plot_method_scorecard(summary_df))

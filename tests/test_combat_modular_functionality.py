@@ -209,4 +209,4 @@ def test_combat_modular_covariate_removal_matrix() -> None:
     original_correlations = np.corrcoef(data.T, mod["headsize"], rowvar=False)
     
 
-    assert all(abs(np.mean(correlations)) < abs(np.mean(original_correlations))), "Headsize effect was not removed as expected."
+    assert np.mean(np.abs(correlations)) < np.mean(np.abs(original_correlations)), "Headsize effect was not removed as expected."

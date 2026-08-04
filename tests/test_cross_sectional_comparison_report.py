@@ -46,7 +46,7 @@ def test_cross_sectional_comparison_report_generates_html(test_results_dir):
         show=False,
         timestamped_reports=False,
         ratio_type="rest",
-        UMAP_embedding=False,
+        UMAP_embedding=True,
         plot_covariate_embeddings=False,
         allow_many_covariate_embeddings=False,
         probability_distribution=False,

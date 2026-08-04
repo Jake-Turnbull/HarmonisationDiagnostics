@@ -7,6 +7,7 @@
 *.o
 *.so
 
+
 # Packages #
 ############
 # it's better to unpack these files and commit the raw source
@@ -53,6 +54,8 @@ history/
 ########
 .DS_Store
 *DS_Store?
+/.DS_Store
+tests/.DS_Store
 ._*
 .AppleDouble/
 .LSOverride
@@ -66,6 +69,8 @@ htmlcov/
 */__pycache__/
 tests/__pycache__/
 */tests/__pycache__/
+test/__pycache__/*
+*.pyc
 
 # OS generated files #
 ######################
