@@ -72,8 +72,7 @@ def _feature_labels(n_features: int):
 
 def _add_right_colorbar(fig, ax, mappable, label: str | None = None):
     cbar = fig.colorbar(mappable, ax=ax, location="right", fraction=0.04, pad=0.01, shrink=0.5)
-    if label:
-        cbar.set_label(label, fontsize=4)
+
     cbar.ax.tick_params(labelsize=3)
     return cbar
 
@@ -718,7 +717,7 @@ def plot_compare_ks(results):
             min_p = np.asarray(min_p, dtype=float)
             x2 = np.arange(min_p.size)
             y = -np.log10(np.clip(min_p, 1e-300, 1.0))
-            colors = np.where(y >= -np.log10(0.05), "C2", "C3")
+            colors = np.where(y >= -np.log10(0.05), "C3", "C2") # Swap colours, green when not significant, red when significant
             ax2.scatter(x2, y, c=colors, s=14, zorder=3)
             sig_line = -np.log10(0.05)
             ax2.axhline(sig_line, color="black", linestyle="--", linewidth=2.0)
