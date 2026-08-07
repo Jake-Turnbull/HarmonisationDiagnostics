@@ -1806,7 +1806,7 @@ def plot_covariance_frobenius(
     )
 
     # --- Heatmap of normalized pairwise differences ---
-    im = ax1.imshow(pairwise_norm, interpolation="nearest", aspect="auto",colormap="viridis")
+    im = ax1.imshow(pairwise_norm, interpolation="nearest", aspect="auto", cmap="viridis")
 
     # Add value to each cell
     for i in range(G):
