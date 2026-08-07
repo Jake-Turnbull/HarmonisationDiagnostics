@@ -855,6 +855,8 @@ def _plot_embedding_grid(
         ax.set_title(_title(method))
         ax.set_xlabel("Dim 1")
         ax.set_ylabel("Dim 2")
+        # Ensure readability in X and Y ticks for when values are large in magnitude
+        ax.ticklabel_format(axis="both", style="sci", scilimits=(-2, 2))
         _add_embedding_corr_label(ax, "Dim 1", "Dim 2", emb, values)
 
     _hide_unused_axes(axes, len(items))
