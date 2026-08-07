@@ -640,7 +640,6 @@ def plot_compare_pca_correlation_heatmaps(
         ax.set_yticks(np.arange(len(row_names)))
         ax.set_yticklabels([str(name) for name in row_names], fontsize=7)
         ax.set_xlabel("PCs, batch, and covariates")
-        ax.set_ylabel("PCs, batch, and covariates")
         _add_right_colorbar(fig, ax, last_im, label="Correlation coefficient")
 
         if matrix.shape[0] * matrix.shape[1] <= 24:
