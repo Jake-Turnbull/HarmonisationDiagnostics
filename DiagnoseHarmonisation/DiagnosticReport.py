@@ -4049,3 +4049,821 @@ def LongitudinalReport(data, batch,
         if created_local_report:
             # call __exit__ on the context-managed report (no exception info)
             report_ctx.__exit__(None, None, None)  # type: ignore
+
+
+@dataclass
+class LongitudinalDiagnosticResult:
+    """Container for one method's longitudinal diagnostics in comparison mode."""
+
+    method_name: str
+    data: np.ndarray
+    subject_order: pd.DataFrame | None = None
+    within_subject_variability: pd.DataFrame | None = None
+    additive_effects: pd.DataFrame | None = None
+    mixed_effects: pd.DataFrame | None = None
+    multiplicative_effects: pd.DataFrame | None = None
+    multivariate_batch_difference: pd.DataFrame | None = None
+    summary_metrics: dict[str, float] | None = None
+    errors: list[str] | None = None
+
+
+def _normalize_longitudinal_vector(values, n_samples: int, label: str) -> np.ndarray:
+    if isinstance(values, pd.Series):
+        arr = values.to_numpy()
+    elif isinstance(values, pd.DataFrame):
+        if values.shape[1] != 1:
+            raise ValueError(f"{label} DataFrame must have exactly one column.")
+        arr = values.iloc[:, 0].to_numpy()
+    else:
+        arr = np.asarray(values)
+
+    if arr.ndim != 1:
+        raise ValueError(f"{label} must be a 1D vector of length n_samples.")
+    if arr.shape[0] != n_samples:
+        raise ValueError(
+            f"{label} length mismatch: expected {n_samples}, got {arr.shape[0]}."
+        )
+    return arr
+
+
+def _normalize_longitudinal_covariates(
+    covariates,
+    n_samples: int,
+    covariate_names=None,
+) -> tuple[dict[str, list] | None, list[str]]:
+    """Normalize covariates to dict[name -> sequence] used by longitudinal models."""
+    if covariates is None:
+        return None, []
+
+    if isinstance(covariates, dict):
+        names = [str(k) for k in covariates.keys()]
+        vals = []
+        for name in names:
+            vec = np.asarray(covariates[name]).ravel()
+            if vec.shape[0] != n_samples:
+                raise ValueError(
+                    f"covariate '{name}' length mismatch: expected {n_samples}, got {vec.shape[0]}."
+                )
+            vals.append(vec)
+        matrix = np.column_stack(vals) if vals else np.empty((n_samples, 0))
+    elif isinstance(covariates, pd.DataFrame):
+        if covariates.shape[0] != n_samples:
+            raise ValueError(
+                f"covariates row mismatch: expected {n_samples}, got {covariates.shape[0]}."
+            )
+        matrix = covariates.to_numpy()
+        names = [str(col) for col in covariates.columns]
+    else:
+        matrix = np.asarray(covariates)
+        if matrix.ndim == 1:
+            matrix = matrix.reshape(-1, 1)
+        if matrix.ndim != 2:
+            raise ValueError("covariates must be 1D or 2D array-like.")
+        if matrix.shape[0] != n_samples:
+            raise ValueError(
+                f"covariates row mismatch: expected {n_samples}, got {matrix.shape[0]}."
+            )
+        if covariate_names is not None:
+            if len(covariate_names) != matrix.shape[1]:
+                raise ValueError(
+                    "covariate_names length mismatch: "
+                    f"expected {matrix.shape[1]}, got {len(covariate_names)}."
+                )
+            names = [str(x) for x in covariate_names]
+        else:
+            names = [f"covariate_{i+1}" for i in range(matrix.shape[1])]
+
+    if covariate_names is not None:
+        if len(covariate_names) != matrix.shape[1]:
+            raise ValueError(
+                "covariate_names length mismatch: "
+                f"expected {matrix.shape[1]}, got {len(covariate_names)}."
+            )
+        names = [str(x) for x in covariate_names]
+
+    out = {
+        str(names[i]): pd.Series(matrix[:, i]).tolist()
+        for i in range(matrix.shape[1])
+    }
+    return out, [str(n) for n in names]
+
+
+def validate_longitudinal_comparison_datasets(
+    datasets: dict[str, np.ndarray],
+    batch,
+    subject_ids,
+    timepoints,
+    covariates=None,
+    covariate_names=None,
+    feature_names=None,
+) -> dict[str, np.ndarray]:
+    """Validate and normalize inputs for longitudinal comparison reporting."""
+    if not isinstance(datasets, dict) or len(datasets) == 0:
+        raise ValueError("datasets must be a non-empty dictionary mapping method name to data array.")
+
+    normalized: dict[str, np.ndarray] = {}
+    seen_names = set()
+    expected_shape = None
+    inferred_feature_names = None
+
+    for method_name, data in datasets.items():
+        if not isinstance(method_name, str) or method_name.strip() == "":
+            raise ValueError("Each dataset key must be a non-empty method name string.")
+        clean_name = method_name.strip()
+        if clean_name in seen_names:
+            raise ValueError(f"Duplicate method name detected after stripping whitespace: {clean_name}")
+        seen_names.add(clean_name)
+
+        arr, inferred_names = _normalize_data_matrix(data, feature_names=None)
+        if arr.shape[0] == 0 or arr.shape[1] == 0:
+            raise ValueError(f"Dataset '{clean_name}' must be non-empty. Got shape {arr.shape}.")
+
+        if inferred_names is not None:
+            if inferred_feature_names is None:
+                inferred_feature_names = inferred_names
+            elif inferred_feature_names != inferred_names:
+                raise ValueError(
+                    "All DataFrame datasets must use identical feature columns and order. "
+                    f"Mismatch found for '{clean_name}'."
+                )
+
+        if expected_shape is None:
+            expected_shape = arr.shape
+        elif arr.shape != expected_shape:
+            raise ValueError(
+                f"All datasets must have identical shape. Expected {expected_shape}, got {arr.shape} for '{clean_name}'."
+            )
+
+        normalized[clean_name] = arr
+
+    n_samples, n_features = expected_shape
+    _normalize_batch_vector(batch, n_samples)
+    _normalize_longitudinal_vector(subject_ids, n_samples, "subject_ids")
+    _normalize_longitudinal_vector(timepoints, n_samples, "timepoints")
+    _normalize_longitudinal_covariates(covariates, n_samples, covariate_names=covariate_names)
+
+    if feature_names is None and inferred_feature_names is not None:
+        feature_names = inferred_feature_names
+
+    if feature_names is not None and len(feature_names) != n_features:
+        raise ValueError(
+            f"feature_names length mismatch: expected {n_features}, got {len(feature_names)}."
+        )
+
+    return normalized
+
+
+def _extract_longitudinal_summary_metrics(
+    result: LongitudinalDiagnosticResult,
+) -> dict[str, float]:
+    metrics = {
+        "median_spearman_rho": np.nan,
+        "prop_significant_spearman": np.nan,
+        "median_within_subject_variability": np.nan,
+        "median_icc": np.nan,
+        "prop_high_icc": np.nan,
+        "mean_n_is_batchSig": np.nan,
+        "prop_additive_significant": np.nan,
+        "prop_multiplicative_significant": np.nan,
+        "mean_mahalanobis_distance": np.nan,
+        "biological_signal_score": np.nan,
+    }
+
+    if isinstance(result.subject_order, pd.DataFrame) and not result.subject_order.empty:
+        rho = pd.to_numeric(result.subject_order.get("SpearmanRho"), errors="coerce").to_numpy(dtype=float)
+        pvals = pd.to_numeric(result.subject_order.get("pValue"), errors="coerce").to_numpy(dtype=float)
+        if rho.size:
+            metrics["median_spearman_rho"] = float(np.nanmedian(rho))
+        if pvals.size:
+            metrics["prop_significant_spearman"] = float(np.nanmean(pvals < 0.05))
+
+    if isinstance(result.within_subject_variability, pd.DataFrame) and not result.within_subject_variability.empty:
+        excluded = {"subject", "n_obs", "metric_type"}
+        value_cols = [c for c in result.within_subject_variability.columns if c not in excluded]
+        if value_cols:
+            vals = pd.to_numeric(
+                result.within_subject_variability[value_cols].stack(),
+                errors="coerce",
+            ).to_numpy(dtype=float)
+            if vals.size:
+                metrics["median_within_subject_variability"] = float(np.nanmedian(vals))
+
+    if isinstance(result.mixed_effects, pd.DataFrame) and not result.mixed_effects.empty:
+        icc = pd.to_numeric(result.mixed_effects.get("ICC"), errors="coerce").to_numpy(dtype=float)
+        if icc.size:
+            metrics["median_icc"] = float(np.nanmedian(icc))
+            metrics["prop_high_icc"] = float(np.nanmean(icc >= 0.6))
+
+        n_sig = pd.to_numeric(result.mixed_effects.get("n_is_batchSig"), errors="coerce").to_numpy(dtype=float)
+        if n_sig.size:
+            metrics["mean_n_is_batchSig"] = float(np.nanmean(n_sig))
+
+        pval_cols = [c for c in result.mixed_effects.columns if str(c).endswith("_pval")]
+        if pval_cols:
+            pvals = pd.to_numeric(result.mixed_effects[pval_cols].stack(), errors="coerce").to_numpy(dtype=float)
+            if pvals.size:
+                metrics["biological_signal_score"] = float(np.nanmean(pvals < 0.05))
+
+    if isinstance(result.additive_effects, pd.DataFrame) and not result.additive_effects.empty:
+        pvals = pd.to_numeric(result.additive_effects.get("p-value"), errors="coerce").to_numpy(dtype=float)
+        if pvals.size:
+            metrics["prop_additive_significant"] = float(np.nanmean(pvals < 0.05))
+
+    if isinstance(result.multiplicative_effects, pd.DataFrame) and not result.multiplicative_effects.empty:
+        pvals = pd.to_numeric(result.multiplicative_effects.get("p-value"), errors="coerce").to_numpy(dtype=float)
+        if pvals.size:
+            metrics["prop_multiplicative_significant"] = float(np.nanmean(pvals < 0.05))
+
+    if isinstance(result.multivariate_batch_difference, pd.DataFrame) and not result.multivariate_batch_difference.empty:
+        md_df = result.multivariate_batch_difference.copy()
+        if "batch" in md_df.columns:
+            md_df = md_df[md_df["batch"].astype(str) != "average_batch"]
+        mdv = pd.to_numeric(md_df.get("mdval"), errors="coerce").to_numpy(dtype=float)
+        if mdv.size:
+            metrics["mean_mahalanobis_distance"] = float(np.nanmean(mdv))
+
+    return metrics
+
+
+def _run_single_longitudinal_method_diagnostics(
+    method_name: str,
+    data: np.ndarray,
+    batch: np.ndarray,
+    subject_ids: np.ndarray,
+    timepoints: np.ndarray,
+    covariates: dict[str, list] | None,
+    feature_names: list[str],
+) -> LongitudinalDiagnosticResult:
+    """Run the longitudinal diagnostics in the same order as LongitudinalReport."""
+    from DiagnoseHarmonisation import DiagnosticFunctionsLong
+
+    result = LongitudinalDiagnosticResult(method_name=method_name, data=data, errors=[])
+
+    try:
+        result.subject_order = DiagnosticFunctionsLong.SubjectOrder_long(
+            idp_matrix=data,
+            subjects=subject_ids,
+            timepoints=timepoints,
+            idp_names=feature_names,
+            nPerm=100,
+            seed=42,
+        )
+    except Exception as exc:
+        result.errors.append(f"SubjectOrder_long failed: {exc}")
+
+    try:
+        result.within_subject_variability = DiagnosticFunctionsLong.WithinSubjVar_long(
+            idp_matrix=data,
+            subjects=subject_ids,
+            timepoints=timepoints,
+            idp_names=feature_names,
+        )
+    except Exception as exc:
+        result.errors.append(f"WithinSubjVar_long failed: {exc}")
+
+    try:
+        result.additive_effects, _ = DiagnosticFunctionsLong.AdditiveEffect_long(
+            idp_matrix=data,
+            subjects=subject_ids,
+            timepoints=timepoints,
+            batch_name=batch,
+            idp_names=feature_names,
+            covariates=covariates,
+            do_zscore=True,
+            reml=False,
+            verbose=False,
+        )
+    except Exception as exc:
+        result.errors.append(f"AdditiveEffect_long failed: {exc}")
+
+    try:
+        result.mixed_effects, _ = DiagnosticFunctionsLong.MixedEffects_long(
+            idp_matrix=data,
+            subjects=subject_ids,
+            timepoints=timepoints,
+            batches=batch,
+            idp_names=feature_names,
+            covariates=covariates,
+            p_corr=1,
+            reml=True,
+        )
+    except Exception as exc:
+        result.errors.append(f"MixedEffects_long failed: {exc}")
+
+    try:
+        result.multiplicative_effects, _ = DiagnosticFunctionsLong.MultiplicativeEffect_long(
+            idp_matrix=data,
+            subjects=subject_ids,
+            timepoints=timepoints,
+            batch_name=batch,
+            idp_names=feature_names,
+            covariates=covariates,
+            do_zscore=True,
+            reml=False,
+            verbose=False,
+        )
+    except Exception as exc:
+        result.errors.append(f"MultiplicativeEffect_long failed: {exc}")
+
+    try:
+        result.multivariate_batch_difference = DiagnosticFunctionsLong.MultiVariateBatchDifference_long(
+            idp_matrix=data,
+            batch=batch,
+            idp_names=feature_names,
+        )
+    except Exception as exc:
+        result.errors.append(f"MultiVariateBatchDifference_long failed: {exc}")
+
+    result.summary_metrics = _extract_longitudinal_summary_metrics(result)
+    return result
+
+
+def summarise_longitudinal_method_performance(
+    results: dict[str, LongitudinalDiagnosticResult],
+    scoring_config: dict | None = None,
+) -> pd.DataFrame:
+    """Create a subject-priority longitudinal method scorecard."""
+    rows = []
+    for method_name, method_result in results.items():
+        metrics = method_result.summary_metrics or _extract_longitudinal_summary_metrics(method_result)
+        rows.append({"method": method_name, **metrics})
+
+    if len(rows) == 0:
+        return pd.DataFrame()
+
+    summary_df = pd.DataFrame(rows)
+
+    default_weights = {
+        "median_spearman_rho": 0.22,
+        "prop_significant_spearman": 0.08,
+        "median_within_subject_variability": 0.13,
+        "median_icc": 0.22,
+        "prop_high_icc": 0.10,
+        "mean_n_is_batchSig": 0.08,
+        "prop_additive_significant": 0.06,
+        "prop_multiplicative_significant": 0.05,
+        "mean_mahalanobis_distance": 0.04,
+        "biological_signal_score": 0.02,
+    }
+
+    cfg = scoring_config or {}
+    weights = cfg.get("weights", default_weights)
+    higher_is_better = {
+        "median_spearman_rho",
+        "prop_significant_spearman",
+        "median_icc",
+        "prop_high_icc",
+        "biological_signal_score",
+        *cfg.get("higher_is_better", []),
+    }
+
+    for metric in weights:
+        if metric not in summary_df.columns:
+            continue
+        vals = pd.to_numeric(summary_df[metric], errors="coerce").to_numpy(dtype=float)
+        score = np.full(vals.shape, np.nan, dtype=float)
+        good = np.isfinite(vals)
+        if np.any(good):
+            vmin = float(np.nanmin(vals[good]))
+            vmax = float(np.nanmax(vals[good]))
+            if np.isclose(vmax, vmin):
+                score[good] = 1.0
+            elif metric in higher_is_better:
+                score[good] = (vals[good] - vmin) / (vmax - vmin)
+            else:
+                score[good] = (vmax - vals[good]) / (vmax - vmin)
+        summary_df[f"score_{metric}"] = score
+
+    subject_metrics = [
+        "score_median_spearman_rho",
+        "score_prop_significant_spearman",
+        "score_median_within_subject_variability",
+        "score_median_icc",
+        "score_prop_high_icc",
+    ]
+    batch_metrics = [
+        "score_mean_n_is_batchSig",
+        "score_prop_additive_significant",
+        "score_prop_multiplicative_significant",
+        "score_mean_mahalanobis_distance",
+    ]
+    biological_metrics = ["score_biological_signal_score"]
+
+    def _mean_score(cols: list[str]) -> np.ndarray:
+        valid_cols = [c for c in cols if c in summary_df.columns]
+        if not valid_cols:
+            return np.full((len(summary_df),), np.nan, dtype=float)
+        return summary_df[valid_cols].mean(axis=1, skipna=True).to_numpy(dtype=float)
+
+    summary_df["subject_stability_score"] = _mean_score(subject_metrics)
+    summary_df["batch_removal_score"] = _mean_score(batch_metrics)
+    summary_df["biological_preservation_score"] = _mean_score(biological_metrics)
+
+    summary_df["overall_score"] = (
+        0.55 * summary_df["subject_stability_score"]
+        + 0.30 * summary_df["batch_removal_score"]
+        + 0.15 * summary_df["biological_preservation_score"]
+    )
+    summary_df["overall_rank"] = summary_df["overall_score"].rank(method="dense", ascending=False)
+
+    summary_df = summary_df.sort_values(["overall_rank", "overall_score"], ascending=[True, False]).reset_index(drop=True)
+    return summary_df
+
+
+def generate_longitudinal_comparison_advice(summary_df: pd.DataFrame) -> dict[str, Any]:
+    """Generate a compact recommendation summary from longitudinal scorecard."""
+    if summary_df is None or summary_df.empty:
+        return {
+            "best_overall": None,
+            "best_subject_stability": None,
+            "best_batch_removal": None,
+            "best_biological": None,
+            "best_by_metric": {},
+            "summary_text": "No valid longitudinal comparison metrics were available.",
+        }
+
+    def _best(col: str, higher: bool = True) -> str | None:
+        if col not in summary_df.columns:
+            return None
+        vals = pd.to_numeric(summary_df[col], errors="coerce")
+        if vals.notna().sum() == 0:
+            return None
+        idx = vals.idxmax() if higher else vals.idxmin()
+        return str(summary_df.loc[idx, "method"])
+
+    best_overall = _best("overall_score", higher=True)
+    best_subject = _best("subject_stability_score", higher=True)
+    best_batch = _best("batch_removal_score", higher=True)
+    best_bio = _best("biological_preservation_score", higher=True)
+
+    metric_map = {
+        "subject_order": ("median_spearman_rho", True),
+        "within_subject_variability": ("median_within_subject_variability", False),
+        "icc": ("median_icc", True),
+        "pairwise_batch_residual": ("mean_n_is_batchSig", False),
+        "additive_batch_residual": ("prop_additive_significant", False),
+        "multiplicative_batch_residual": ("prop_multiplicative_significant", False),
+        "multivariate_batch_residual": ("mean_mahalanobis_distance", False),
+        "biological_signal": ("biological_signal_score", True),
+    }
+
+    best_by_metric = {}
+    for label, (metric, higher) in metric_map.items():
+        winner = _best(metric, higher=higher)
+        best_by_metric[label] = winner if winner is not None else "Not computed"
+
+    unique_winners = {
+        v for v in best_by_metric.values()
+        if isinstance(v, str) and v != "Not computed"
+    }
+    if len(unique_winners) > 1:
+        summary_text = (
+            f"Best overall method is {best_overall}. Longitudinal diagnostics show trade-offs "
+            "across subject stability, batch removal, and biological preservation."
+        )
+    else:
+        summary_text = (
+            f"Best overall method is {best_overall}, with broadly consistent wins "
+            "across the evaluated longitudinal metrics."
+        )
+
+    return {
+        "best_overall": best_overall,
+        "best_subject_stability": best_subject,
+        "best_batch_removal": best_batch,
+        "best_biological": best_bio,
+        "best_by_metric": best_by_metric,
+        "summary_text": summary_text,
+    }
+
+
+def _save_longitudinal_comparison_results(
+    result: LongitudinalDiagnosticResult,
+    save_dir: Path,
+    report_date: str,
+    report_name: str | None,
+    save_data_name: str | None = None,
+) -> dict[str, str]:
+    """Save per-method longitudinal comparison outputs as CSV files."""
+    from DiagnoseHarmonisation.SaveDiagnosticResults import save_test_results
+
+    prefix = _sanitize_name(result.method_name)
+    if save_data_name:
+        prefix = f"{_sanitize_name(save_data_name)}_{prefix}"
+
+    saved_paths: dict[str, str] = {}
+
+    if isinstance(result.subject_order, pd.DataFrame):
+        saved_paths["subject_order"] = save_test_results(
+            result.subject_order,
+            test_name=f"{prefix}_Long_SubjectOrder",
+            save_root=save_dir,
+            report_date=report_date,
+            report_name=report_name,
+        )
+
+    if isinstance(result.within_subject_variability, pd.DataFrame):
+        saved_paths["within_subject_variability"] = save_test_results(
+            result.within_subject_variability,
+            test_name=f"{prefix}_Long_WithinSubjVar",
+            save_root=save_dir,
+            report_date=report_date,
+            report_name=report_name,
+        )
+
+    if isinstance(result.additive_effects, pd.DataFrame):
+        saved_paths["additive_effects"] = save_test_results(
+            result.additive_effects,
+            test_name=f"{prefix}_Long_Additive",
+            save_root=save_dir,
+            report_date=report_date,
+            report_name=report_name,
+        )
+
+    if isinstance(result.mixed_effects, pd.DataFrame):
+        saved_paths["mixed_effects"] = save_test_results(
+            result.mixed_effects,
+            test_name=f"{prefix}_Long_MixedEffects",
+            save_root=save_dir,
+            report_date=report_date,
+            report_name=report_name,
+        )
+
+    if isinstance(result.multiplicative_effects, pd.DataFrame):
+        saved_paths["multiplicative_effects"] = save_test_results(
+            result.multiplicative_effects,
+            test_name=f"{prefix}_Long_Multiplicative",
+            save_root=save_dir,
+            report_date=report_date,
+            report_name=report_name,
+        )
+
+    if isinstance(result.multivariate_batch_difference, pd.DataFrame):
+        saved_paths["multivariate_batch_difference"] = save_test_results(
+            result.multivariate_batch_difference,
+            test_name=f"{prefix}_Long_MultivariateBatchDifference",
+            save_root=save_dir,
+            report_date=report_date,
+            report_name=report_name,
+        )
+
+    if isinstance(result.summary_metrics, dict):
+        saved_paths["summary_metrics"] = save_test_results(
+            pd.DataFrame([result.summary_metrics]),
+            test_name=f"{prefix}_Long_SummaryMetrics",
+            save_root=save_dir,
+            report_date=report_date,
+            report_name=report_name,
+        )
+
+    return saved_paths
+
+
+def _plot_longitudinal_comparison_scorecard(summary_df: pd.DataFrame):
+    figs = []
+    if summary_df is None or summary_df.empty:
+        return figs
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(summary_df["method"], summary_df["overall_score"], color="C0")
+    ax.set_ylabel("Overall score")
+    ax.set_title("Longitudinal method scorecard")
+    ax.tick_params(axis="x", rotation=20)
+    fig.tight_layout()
+    figs.append(("Longitudinal comparison: method scorecard", fig))
+    return figs
+
+
+def LongitudinalComparisonReport(
+    datasets: dict[str, np.ndarray],
+    batch,
+    subject_ids,
+    timepoints,
+    covariates=None,
+    covariate_names=None,
+    features=None,
+    save_data: bool = True,
+    save_data_name: str | None = None,
+    save_dir: str | os.PathLike | None = None,
+    report_name: str | None = None,
+    include_raw: bool = True,
+    raw_name: str = "Raw",
+    scoring_config: dict | None = None,
+    rep=None,
+    SaveArtifacts: bool = False,
+    show: bool = False,
+    timestamped_reports: bool = True,
+) -> StatsReporter:
+    """Run and compare longitudinal diagnostics across multiple methods."""
+    if not isinstance(datasets, dict) or len(datasets) == 0:
+        raise ValueError("datasets must be a non-empty dictionary mapping method name to data array.")
+
+    first_dataset = next(iter(datasets.values()))
+    first_matrix, inferred_feature_names = _normalize_data_matrix(first_dataset, feature_names=features)
+    if features is None and inferred_feature_names is not None:
+        features = inferred_feature_names
+
+    normalized_datasets = validate_longitudinal_comparison_datasets(
+        datasets=datasets,
+        batch=batch,
+        subject_ids=subject_ids,
+        timepoints=timepoints,
+        covariates=covariates,
+        covariate_names=covariate_names,
+        feature_names=features,
+    )
+
+    if not include_raw and raw_name in normalized_datasets:
+        normalized_datasets = {k: v for k, v in normalized_datasets.items() if k != raw_name}
+        if len(normalized_datasets) == 0:
+            raise ValueError("No datasets remain after excluding raw dataset. Provide at least one method dataset.")
+
+    n_samples = first_matrix.shape[0]
+    batch_arr = _normalize_batch_vector(batch, n_samples).astype(str)
+    subject_arr = _normalize_longitudinal_vector(subject_ids, n_samples, "subject_ids").astype(str)
+    timepoint_arr = _normalize_longitudinal_vector(timepoints, n_samples, "timepoints").astype(str)
+    covariates_dict, covariate_names_norm = _normalize_longitudinal_covariates(
+        covariates,
+        n_samples,
+        covariate_names=covariate_names,
+    )
+
+    if features is None:
+        features = [f"idp_{i+1}" for i in range(first_matrix.shape[1])]
+    features = [str(f) for f in features]
+
+    if save_dir is None:
+        save_dir = Path.cwd()
+    else:
+        save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    if report_name is None:
+        base_name = "LongitudinalComparisonReport.html"
+    else:
+        base_name = report_name if report_name.endswith(".html") else report_name + ".html"
+
+    if timestamped_reports:
+        stem, ext = base_name.rsplit(".", 1)
+        timestamp_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        base_name = f"{stem}_{timestamp_str}.html"
+
+    def _configure_report(report_obj):
+        report_obj.save_dir = save_dir
+        report_obj.report_name = base_name
+        rp = report_obj.write_report()
+        report_obj.log_text(
+            "initialised HTML report at: \n"
+            f"{rp}"
+        )
+        print(f"Report will be saved to: {rp}")
+        return report_obj
+
+    created_local_report = False
+    if rep is None:
+        created_local_report = True
+        report_ctx = StatsReporter(save_artifacts=SaveArtifacts, save_dir=None)
+    else:
+        report_ctx = rep
+
+    if created_local_report:
+        ctx = report_ctx.__enter__()  # type: ignore
+        report = ctx
+    else:
+        report = report_ctx
+
+    try:
+        logger = report.logger
+        _configure_report(report)
+        report.make_title("Longitudinal comparison of harmonisation methods")
+        report.set_report_title("Longitudinal comparison of harmonisation methods")
+
+        report.log_section("Preamble", "Report preamble and overview")
+        report.text_simple(
+            "This report compares multiple harmonisation methods using longitudinal diagnostics "
+            "in the same execution order as the longitudinal single-method report."
+        )
+        report.text_simple(
+            "Ranking prioritises subject stability, followed by residual batch effects and biological preservation."
+        )
+
+        report.log_section("comparison_overview", "Multi-method longitudinal comparison overview")
+        batch_counts = dict(zip(*np.unique(batch_arr, return_counts=True)))
+        overview_lines = [
+            f"Validated methods: {', '.join(normalized_datasets.keys())}",
+            f"Total samples: {n_samples}",
+            f"Features: {len(features)}",
+            f"Unique subjects: {len(np.unique(subject_arr))}",
+            f"Unique timepoints: {len(np.unique(timepoint_arr))}",
+            f"Samples in each batch: {batch_counts}",
+            f"Covariates: {', '.join(covariate_names_norm) if covariate_names_norm else 'None'}",
+            f"Missing data per method: {', '.join(f'{name}={int(np.isnan(data).sum())}' for name, data in normalized_datasets.items())}",
+        ]
+        report.text_simple("Comparison dataset characteristics:")
+        report.text_simple("\n".join(overview_lines))
+
+        method_results: dict[str, LongitudinalDiagnosticResult] = {}
+        saved_paths: dict[str, dict[str, str]] = {}
+        report_date = datetime.now().date().isoformat()
+        line_break_in_text = "-" * 150
+
+        for method_name, data in normalized_datasets.items():
+            report.log_section(_sanitize_name(method_name), f"Diagnostics for {method_name}")
+            logger.info(f"Running longitudinal diagnostics for method: {method_name}")
+
+            method_result = _run_single_longitudinal_method_diagnostics(
+                method_name=method_name,
+                data=data,
+                batch=batch_arr,
+                subject_ids=subject_arr,
+                timepoints=timepoint_arr,
+                covariates=covariates_dict,
+                feature_names=features,
+            )
+            method_results[method_name] = method_result
+
+            if method_result.errors:
+                report.text_simple(f"Warnings for {method_name}:")
+                for err in method_result.errors:
+                    report.text_simple(f"- {err}")
+
+            metrics = method_result.summary_metrics or {}
+            report.text_simple(f"Summary metrics for {method_name}:")
+            report.text_simple("\n".join([f"- {k}: {v}" for k, v in metrics.items()]))
+
+            if save_data:
+                saved_paths[method_name] = _save_longitudinal_comparison_results(
+                    result=method_result,
+                    save_dir=save_dir,
+                    report_date=report_date,
+                    report_name=report_name,
+                    save_data_name=save_data_name,
+                )
+
+            report.text_simple(line_break_in_text)
+
+        summary_df = summarise_longitudinal_method_performance(method_results, scoring_config=scoring_config)
+        advice = generate_longitudinal_comparison_advice(summary_df)
+
+        report.log_section("scorecard", "Longitudinal method scorecard")
+        if summary_df.empty:
+            report.text_simple("No methods could be scored.")
+        else:
+            show_cols = [
+                "method",
+                "subject_stability_score",
+                "batch_removal_score",
+                "biological_preservation_score",
+                "overall_score",
+                "overall_rank",
+            ]
+            report.text_simple("Longitudinal scorecard summary:")
+            report.text_simple(summary_df[show_cols].to_string(index=False))
+
+        report.log_section("comparison_advice", "Best method summary")
+        report.text_simple(f"Best overall method: {advice.get('best_overall')}")
+        report.text_simple(f"Best subject stability: {advice.get('best_subject_stability')}")
+        report.text_simple(f"Best batch removal: {advice.get('best_batch_removal')}")
+        report.text_simple(f"Best biological preservation: {advice.get('best_biological')}")
+        for diag_name, method_name in advice.get("best_by_metric", {}).items():
+            report.text_simple(f"Best {diag_name}: {method_name}")
+        report.text_simple(advice.get("summary_text", ""))
+
+        def _log_figures(fig_tuples):
+            for caption, fig in fig_tuples:
+                try:
+                    report.log_plot(fig, caption=caption)
+                finally:
+                    plt.close(fig)
+
+        _log_figures(PlotComparisonResults.plot_compare_long_subject_order(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_long_within_subject_variability(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_long_additive_multiplicative(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_long_mixed_effects(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_long_biological_effects(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_long_multivariate_batch_difference(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_longitudinal_scorecard(summary_df))
+
+        if save_data and summary_df is not None and not summary_df.empty:
+            from DiagnoseHarmonisation.SaveDiagnosticResults import save_test_results
+
+            scorecard_name = _sanitize_name(save_data_name) + "_Longitudinal_Scorecard" if save_data_name else "Longitudinal_Comparison_Scorecard"
+            scorecard_path = save_test_results(
+                summary_df,
+                test_name=scorecard_name,
+                save_root=save_dir,
+                feature_names=list(summary_df.columns),
+                report_date=report_date,
+                report_name=report_name,
+            )
+            report.text_simple(f"Saved scorecard CSV: {scorecard_path}")
+
+        report.comparison_results = method_results
+        report.comparison_scorecard = summary_df
+        report.comparison_advice = advice
+        report.comparison_saved_paths = saved_paths
+        return report
+
+    finally:
+        if created_local_report:
+            report_ctx.__exit__(None, None, None)  # type: ignore

@@ -1040,3 +1040,389 @@ def plot_method_scorecard(summary_df):
     fig.tight_layout()
     figs.append(("Comparison: method scorecard", fig))
     return figs
+
+
+def _safe_log10_p(pvals: np.ndarray, eps: float = 1e-300) -> np.ndarray:
+    arr = np.asarray(pvals, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return -np.log10(np.clip(arr, eps, 1.0))
+
+
+def plot_compare_long_subject_order(results, significance: float = 0.05):
+    """Compare longitudinal subject-order consistency across methods."""
+    figs = []
+    items = _method_items(results)
+    if len(items) == 0:
+        return figs
+
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.2, max_cols=2)
+    n_valid = 0
+
+    for ax, (method, res) in zip(axes, items):
+        df = getattr(res, "subject_order", None)
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            ax.set_title(_title(f"{method} (subject order unavailable)"))
+            ax.axis("off")
+            continue
+
+        tmp = df.copy()
+        tmp["SpearmanRho"] = pd.to_numeric(tmp.get("SpearmanRho"), errors="coerce")
+        tmp["pValue"] = pd.to_numeric(tmp.get("pValue"), errors="coerce")
+        agg = (
+            tmp.groupby(["TimeA", "TimeB"], as_index=False)
+            .agg(
+                median_rho=("SpearmanRho", "median"),
+                sig_prop=("pValue", lambda x: float(np.nanmean(np.asarray(x, dtype=float) < significance))),
+            )
+        )
+        if agg.empty:
+            ax.set_title(_title(f"{method} (no valid subject-order pairs)"))
+            ax.axis("off")
+            continue
+
+        time_order = list(pd.Index(pd.concat([agg["TimeA"], agg["TimeB"]], ignore_index=True)).unique())
+        mat = np.full((len(time_order), len(time_order)), np.nan, dtype=float)
+        idx = {t: i for i, t in enumerate(time_order)}
+        for _, row in agg.iterrows():
+            ia = idx.get(row["TimeA"])
+            ib = idx.get(row["TimeB"])
+            if ia is not None and ib is not None:
+                mat[ia, ib] = row["median_rho"]
+                mat[ib, ia] = row["median_rho"]
+        np.fill_diagonal(mat, 1.0)
+
+        im = ax.imshow(mat, vmin=-1.0, vmax=1.0, cmap="coolwarm", aspect="equal")
+        for i in range(mat.shape[0]):
+            for j in range(mat.shape[1]):
+                if np.isfinite(mat[i, j]):
+                    ax.text(j, i, f"{mat[i, j]:.2f}", ha="center", va="center", fontsize=6)
+
+        ax.set_xticks(np.arange(len(time_order)))
+        ax.set_yticks(np.arange(len(time_order)))
+        ax.set_xticklabels([str(t) for t in time_order], rotation=30, ha="right", fontsize=7)
+        ax.set_yticklabels([str(t) for t in time_order], fontsize=7)
+        ax.set_xlabel("Timepoint")
+        ax.set_ylabel("Timepoint")
+
+        median_all = float(np.nanmedian(tmp["SpearmanRho"])) if np.isfinite(tmp["SpearmanRho"]).any() else np.nan
+        sig_prop_all = float(np.nanmean(tmp["pValue"] < significance)) if np.isfinite(tmp["pValue"]).any() else np.nan
+        ax.set_title(_title(f"{method}\nmedian rho={median_all:.2f}, sig={sig_prop_all:.2f}"))
+        _add_right_colorbar(fig, ax, im, label="Median Spearman rho")
+        n_valid += 1
+
+    _hide_unused_axes(axes, len(items))
+    if n_valid == 0:
+        plt.close(fig)
+        return figs
+
+    fig.tight_layout()
+    figs.append(("Longitudinal comparison: subject order consistency", fig))
+    return figs
+
+
+def plot_compare_long_within_subject_variability(results):
+    """Compare within-subject variability summaries across methods."""
+    figs = []
+    items = _method_items(results)
+    if len(items) == 0:
+        return figs
+
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=2)
+    n_valid = 0
+
+    for ax, (method, res) in zip(axes, items):
+        df = getattr(res, "within_subject_variability", None)
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            ax.set_title(_title(f"{method} (within-subject variability unavailable)"))
+            ax.axis("off")
+            continue
+
+        excluded = {"subject", "n_obs", "metric_type"}
+        value_cols = [c for c in df.columns if c not in excluded]
+        if len(value_cols) == 0:
+            ax.set_title(_title(f"{method} (no IDP variability columns)"))
+            ax.axis("off")
+            continue
+
+        med = pd.to_numeric(df[value_cols].median(axis=0, skipna=True), errors="coerce")
+        med = med.dropna()
+        if med.empty:
+            ax.set_title(_title(f"{method} (no valid variability values)"))
+            ax.axis("off")
+            continue
+
+        y = np.arange(len(med))
+        ax.barh(y, med.to_numpy(dtype=float), color="C0", alpha=0.85)
+        ax.set_yticks(y)
+        labels, _ = _feature_labels(len(med))
+        if all(lbl == "" for lbl in labels):
+            ax.set_yticklabels(["" for _ in y])
+        else:
+            ax.set_yticklabels(med.index.astype(str), fontsize=6)
+        ax.set_xlabel("Median within-subject variability (%)")
+        ax.set_title(_title(method))
+        ax.grid(axis="x", alpha=0.2)
+        n_valid += 1
+
+    _hide_unused_axes(axes, len(items))
+    if n_valid == 0:
+        plt.close(fig)
+        return figs
+
+    fig.tight_layout()
+    figs.append(("Longitudinal comparison: within-subject variability", fig))
+    return figs
+
+
+def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05):
+    """Compare additive and multiplicative residual batch effects across methods."""
+    figs = []
+    items = _method_items(results)
+    if len(items) == 0:
+        return figs
+
+    def _build_effect_grid(attr: str, title: str, p_col: str = "p-value"):
+        fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=3)
+        n_valid = 0
+        for ax, (method, res) in zip(axes, items):
+            df = getattr(res, attr, None)
+            if not isinstance(df, pd.DataFrame) or df.empty or p_col not in df.columns:
+                ax.set_title(_title(f"{method} ({attr} unavailable)"))
+                ax.axis("off")
+                continue
+
+            pvals = pd.to_numeric(df[p_col], errors="coerce").to_numpy(dtype=float)
+            feature_col = "Feature" if "Feature" in df.columns else ("IDP" if "IDP" in df.columns else None)
+            if feature_col is None:
+                x_labels = [f"f{i+1}" for i in range(len(pvals))]
+            else:
+                x_labels = df[feature_col].astype(str).tolist()
+
+            y = _safe_log10_p(pvals)
+            x = np.arange(len(y))
+            colors = np.where(np.isfinite(pvals) & (pvals < p_thr), "C3", "C2")
+            ax.scatter(x, y, c=colors, s=16, zorder=3)
+            ax.axhline(-np.log10(p_thr), color="black", linestyle="--", linewidth=1)
+            ax.set_title(_title(method))
+            ax.set_xlabel("Feature")
+            ax.set_ylabel("-log10(p)")
+            labels, rotation = _feature_labels(len(x_labels))
+            ax.set_xticks(x)
+            if all(lbl == "" for lbl in labels):
+                ax.set_xticklabels(labels)
+            else:
+                ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=6)
+            ax.grid(True, alpha=0.2)
+            n_valid += 1
+
+        _hide_unused_axes(axes, len(items))
+        if n_valid == 0:
+            plt.close(fig)
+            return None
+        fig.tight_layout()
+        return (title, fig)
+
+    add_fig = _build_effect_grid("additive_effects", "Longitudinal comparison: additive batch effects")
+    if add_fig is not None:
+        figs.append(add_fig)
+
+    mul_fig = _build_effect_grid("multiplicative_effects", "Longitudinal comparison: multiplicative batch effects")
+    if mul_fig is not None:
+        figs.append(mul_fig)
+
+    return figs
+
+
+def plot_compare_long_mixed_effects(results):
+    """Compare mixed-effects outputs for pairwise batch signal and ICC."""
+    figs = []
+    items = _method_items(results)
+    if len(items) == 0:
+        return figs
+
+    # Figure 1: pairwise batch signal per feature (n_is_batchSig)
+    fig1, axes1, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=3)
+    n_valid1 = 0
+    for ax, (method, res) in zip(axes1, items):
+        df = getattr(res, "mixed_effects", None)
+        if not isinstance(df, pd.DataFrame) or df.empty or "n_is_batchSig" not in df.columns:
+            ax.set_title(_title(f"{method} (pairwise batch signal unavailable)"))
+            ax.axis("off")
+            continue
+
+        vals = pd.to_numeric(df["n_is_batchSig"], errors="coerce").to_numpy(dtype=float)
+        x = np.arange(len(vals))
+        ax.bar(x, vals, color="C1", alpha=0.85)
+        ax.set_title(_title(method))
+        ax.set_xlabel("Feature")
+        ax.set_ylabel("n significant batch pairs")
+        labels, _ = _feature_labels(len(vals))
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=6)
+        ax.grid(axis="y", alpha=0.2)
+        n_valid1 += 1
+
+    _hide_unused_axes(axes1, len(items))
+    if n_valid1 > 0:
+        fig1.tight_layout()
+        figs.append(("Longitudinal comparison: pairwise batch differences", fig1))
+    else:
+        plt.close(fig1)
+
+    # Figure 2: ICC per feature
+    fig2, axes2, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=3)
+    n_valid2 = 0
+    for ax, (method, res) in zip(axes2, items):
+        df = getattr(res, "mixed_effects", None)
+        if not isinstance(df, pd.DataFrame) or df.empty or "ICC" not in df.columns:
+            ax.set_title(_title(f"{method} (ICC unavailable)"))
+            ax.axis("off")
+            continue
+
+        icc = pd.to_numeric(df["ICC"], errors="coerce").to_numpy(dtype=float)
+        x = np.arange(len(icc))
+        ax.scatter(x, icc, c="C0", s=18, zorder=3)
+        ax.axhline(0.5, color="black", linestyle="--", linewidth=1)
+        ax.set_title(_title(method))
+        ax.set_xlabel("Feature")
+        ax.set_ylabel("ICC")
+        ax.set_ylim(bottom=0)
+        labels, _ = _feature_labels(len(icc))
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=6)
+        ax.grid(axis="y", alpha=0.2)
+        n_valid2 += 1
+
+    _hide_unused_axes(axes2, len(items))
+    if n_valid2 > 0:
+        fig2.tight_layout()
+        figs.append(("Longitudinal comparison: ICC per feature", fig2))
+    else:
+        plt.close(fig2)
+
+    return figs
+
+
+def plot_compare_long_biological_effects(results, p_thr: float = 0.05):
+    """Compare biological fixed-effect preservation across methods."""
+    figs = []
+    items = _method_items(results)
+    if len(items) == 0:
+        return figs
+
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=2)
+    n_valid = 0
+
+    for ax, (method, res) in zip(axes, items):
+        df = getattr(res, "mixed_effects", None)
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            ax.set_title(_title(f"{method} (biological effects unavailable)"))
+            ax.axis("off")
+            continue
+
+        pval_cols = [c for c in df.columns if str(c).endswith("_pval")]
+        if len(pval_cols) == 0:
+            ax.set_title(_title(f"{method} (no biological p-values)"))
+            ax.axis("off")
+            continue
+
+        cov_names = [str(c).replace("_pval", "") for c in pval_cols]
+        sig_props = []
+        for col in pval_cols:
+            pvals = pd.to_numeric(df[col], errors="coerce").to_numpy(dtype=float)
+            sig_props.append(float(np.nanmean(pvals < p_thr)) if np.isfinite(pvals).any() else np.nan)
+
+        y = np.arange(len(cov_names))
+        ax.barh(y, np.asarray(sig_props, dtype=float), color="C2", alpha=0.85)
+        ax.set_yticks(y)
+        ax.set_yticklabels(cov_names, fontsize=7)
+        ax.set_xlim(0, 1)
+        ax.set_xlabel("Proportion p < 0.05")
+        ax.set_title(_title(method))
+        ax.grid(axis="x", alpha=0.2)
+        n_valid += 1
+
+    _hide_unused_axes(axes, len(items))
+    if n_valid == 0:
+        plt.close(fig)
+        return figs
+
+    fig.tight_layout()
+    figs.append(("Longitudinal comparison: biological effect preservation", fig))
+    return figs
+
+
+def plot_compare_long_multivariate_batch_difference(results):
+    """Compare multivariate Mahalanobis batch differences across methods."""
+    figs = []
+    items = _method_items(results)
+    if len(items) == 0:
+        return figs
+
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=2)
+    n_valid = 0
+
+    for ax, (method, res) in zip(axes, items):
+        df = getattr(res, "multivariate_batch_difference", None)
+        if not isinstance(df, pd.DataFrame) or df.empty or "mdval" not in df.columns:
+            ax.set_title(_title(f"{method} (multivariate batch difference unavailable)"))
+            ax.axis("off")
+            continue
+
+        tmp = df.copy()
+        tmp["mdval"] = pd.to_numeric(tmp["mdval"], errors="coerce")
+        if "batch" in tmp.columns:
+            avg_row = tmp[tmp["batch"].astype(str) == "average_batch"]
+            site_rows = tmp[tmp["batch"].astype(str) != "average_batch"]
+            labels = site_rows["batch"].astype(str).tolist()
+            values = site_rows["mdval"].to_numpy(dtype=float)
+            avg_val = float(pd.to_numeric(avg_row["mdval"], errors="coerce").iloc[0]) if not avg_row.empty else np.nan
+        else:
+            labels = [f"batch_{i+1}" for i in range(len(tmp))]
+            values = tmp["mdval"].to_numpy(dtype=float)
+            avg_val = np.nan
+
+        y = np.arange(len(values))
+        ax.barh(y, values, color="C0", alpha=0.85)
+        ax.set_yticks(y)
+        ax.set_yticklabels(labels, fontsize=7)
+        ax.set_xlabel("Mahalanobis distance")
+        ax.set_title(_title(method))
+        ax.grid(axis="x", alpha=0.2)
+        if np.isfinite(avg_val):
+            ax.axvline(avg_val, color="black", linestyle="--", linewidth=1)
+        n_valid += 1
+
+    _hide_unused_axes(axes, len(items))
+    if n_valid == 0:
+        plt.close(fig)
+        return figs
+
+    fig.tight_layout()
+    figs.append(("Longitudinal comparison: multivariate batch difference", fig))
+    return figs
+
+
+def plot_compare_longitudinal_scorecard(summary_df: pd.DataFrame):
+    figs = []
+    if summary_df is None or summary_df.empty:
+        return figs
+    if "method" not in summary_df.columns or "overall_score" not in summary_df.columns:
+        return figs
+
+    df = summary_df.copy()
+    x = np.arange(len(df))
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    ax.bar(x - 0.22, df.get("subject_stability_score", np.nan), width=0.22, label="Subject stability")
+    ax.bar(x, df.get("batch_removal_score", np.nan), width=0.22, label="Batch removal")
+    ax.bar(x + 0.22, df.get("biological_preservation_score", np.nan), width=0.22, label="Biological preservation")
+    ax.plot(x, df["overall_score"], color="black", marker="o", linewidth=1.5, label="Overall")
+    ax.set_xticks(x)
+    ax.set_xticklabels(df["method"].astype(str), rotation=20, ha="right")
+    ax.set_ylabel("Score")
+    ax.set_title("Longitudinal method scorecard")
+    ax.legend(frameon=False, fontsize=8)
+    ax.grid(axis="y", alpha=0.2)
+    fig.tight_layout()
+    figs.append(("Longitudinal comparison: method scorecard", fig))
+    return figs
