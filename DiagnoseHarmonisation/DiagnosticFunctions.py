@@ -45,6 +45,7 @@ from pandas.api.types import CategoricalDtype
 
 """
 
+"""_______Linear model fitting functions for batch effect assessment_________"""
 
 def _coerce_covariates(
     covariates: Optional[Any],
@@ -99,6 +100,8 @@ def _prepare_base_dataframe(
     Build the base dataframe used for each feature. This is a helper function for Run_LMM_cross_sectional to prepare the data for LMM fitting.
     Returns the dataframe and the fixed-effects RHS terms.
     """
+
+    
     df_base = pd.DataFrame({group_col_name: np.asarray(batch)})
     cov_df = _coerce_covariates(covariates, covariate_names=covariate_names)
 
@@ -117,7 +120,11 @@ def _build_fixed_formula(rhs_terms: List[str]) -> str:
         return "y ~ 1"
     return "y ~ " + " + ".join(rhs_terms)
 
-
+def _build_batch_fixed_formula(rhs_terms, group_col):
+    formula_covariates = _build_fixed_formula(rhs_terms)
+    formula_covariates_batch = formula_covariates + f" + C({group_col})"
+    return formula_covariates_batch
+ 
 def _standardize_numeric_covariates(
     df: pd.DataFrame,
     group_col: str,
@@ -146,10 +153,8 @@ def _standardize_numeric_covariates(
 def _summarise_fixed_effect_ols(
     y_vec: pd.DataFrame,
     X: pd.DataFrame,
-    *,
-    lmm_r2_marginal: float = np.nan,
 ) -> Dict[str, Any]:
-    """Fit an OLS fixed-effects model and summarise per-term effect sizes."""
+    """Fit an OLS model and summarise global and per-term effect sizes."""
     ols_res = sm.OLS(y_vec, X).fit()
 
     fitted = np.dot(X.values, ols_res.params.values)
@@ -167,7 +172,6 @@ def _summarise_fixed_effect_ols(
 
     abs_betas: Dict[str, float] = {}
     partial_r2: Dict[str, float] = {}
-    lmm_partial_r2: Dict[str, float] = {}
 
     for term_name, term_slice in term_slices.items():
         if term_name == "Intercept":
@@ -183,66 +187,44 @@ def _summarise_fixed_effect_ols(
         delta_r2 = max(0.0, full_r2 - reduced_r2)
         partial_r2[term_name] = delta_r2
 
-        if np.isfinite(lmm_r2_marginal) and full_r2 > 0:
-            lmm_partial_r2[term_name] = delta_r2 * (lmm_r2_marginal / full_r2)
-        else:
-            lmm_partial_r2[term_name] = np.nan
-
     return {
         "ols": ols_res,
+        "formula_design_columns": list(X.columns),
         "var_fixed": var_fixed,
         "full_r2": full_r2,
+        "R2": full_r2,
+        "adjusted_r2": float(ols_res.rsquared_adj),
+        "R2_adjusted": float(ols_res.rsquared_adj),
+        "variance_explained": var_fixed,
         "fixed_betas": {name: ols_res.params[name] for name in X.columns},
+        "coefficients": {name: ols_res.params[name] for name in X.columns},
         "abs_betas": abs_betas,
+        "abs_coefficients": abs_betas,
         "partial_r2": partial_r2,
-        "lmm_partial_r2": lmm_partial_r2,
     }
 
 
-def _fit_ols_fixed_only(df: pd.DataFrame, formula_fixed: str) -> Dict[str, Any]:
+def _fit_ols_model(df: pd.DataFrame, formula_fixed: str) -> Dict[str, Any]:
     """
-    Fit a fixed-effects-only model and return fallback stats.
-    Thus is a helper function for fit_lmm_safe to provide a fallback when LMM fitting fails or is inappropriate.
+    Fit an arbitrary fixed-effects model and return a reusable summary.
+
+    This helper is intentionally generic and is used for:
+    - Model 1: y ~ covariates
+    - Model 2: y ~ covariates + C(batch)
+    - OLS summaries when mixed model fitting is unavailable
     """
     import patsy
 
     y_vec, X = patsy.dmatrices(formula_fixed, df, return_type="dataframe")
     ols_summary = _summarise_fixed_effect_ols(y_vec, X)
-    ols_res = ols_summary["ols"]
-
-    return {
-        "success": False,
-        "mdf": None,
-        "ols": ols_res,
-        "optimizer_used": None,
-        "notes": ["fallback_ols_used"],
-        "stats": {
-            "var_fixed": ols_summary["var_fixed"],
-            "var_batch": 0.0,
-            "var_resid": float(ols_res.mse_resid),
-            "R2_ols_fixed": ols_summary["full_r2"],
-            "R2_ols_batch": np.nan,
-            "R2_marginal": np.nan,
-            "R2_conditional": np.nan,
-            "ICC": 0.0,
-            "delta_R2": np.nan,
-            "LR_stat": np.nan,
-            "pval_LRT_random": np.nan,
-            "pval_LRT_random_mixture": np.nan,
-            "ols_fixed_betas": ols_summary["fixed_betas"],
-            "ols_abs_betas": ols_summary["abs_betas"],
-            "ols_partial_r2": ols_summary["partial_r2"],
-            "lmm_partial_r2": ols_summary["lmm_partial_r2"],
-        },
-        "warning_types": [],
-        "warning_messages": [],
-        "status": "fallback_ols",
-    }
+    ols_summary["formula"] = formula_fixed
+    return ols_summary
 
 
 def fit_lmm_safe(
     df: pd.DataFrame,
-    formula_fixed: str,
+    formula_covariates: str,
+    formula_covariates_batch: str,
     group_col: str = "batch",
     reml: bool = False,
     min_group_n: int = 10,
@@ -268,6 +250,28 @@ def fit_lmm_safe(
     warning_types: List[str] = []
     warning_messages: List[str] = []
 
+    base_stats: Dict[str, Any] = {
+        "R2_covariates": np.nan,
+        "R2_covariates_batch": np.nan,
+        "delta_R2_batch": np.nan,
+        "var_fixed": np.nan,
+        "var_batch": np.nan,
+        "var_resid": np.nan,
+        "R2_marginal_lmm": np.nan,
+        "R2_conditional_lmm": np.nan,
+        "ICC": np.nan,
+        "LR_stat": np.nan,
+        "pval_LRT_random": np.nan,
+        "pval_LRT_random_mixture": np.nan,
+        "ols_fixed_betas": None,
+        "ols_abs_betas": None,
+        "ols_partial_r2": None,
+        "batch_fixed_betas": None,
+        "batch_fixed_abs_betas": None,
+        "batch_fixed_partial_r2": np.nan,
+        "reference_batch": None,
+    }
+
     if "y" not in df.columns:
         raise ValueError("df must contain column 'y'.")
 
@@ -280,40 +284,121 @@ def fit_lmm_safe(
             "ols": None,
             "optimizer_used": None,
             "notes": notes,
-            "stats": {},
+            "stats": base_stats,
             "warning_types": warning_types,
             "warning_messages": warning_messages,
             "status": "skipped_low_variance",
         }
 
-    # 2) group size check
-    group_counts = df[group_col].value_counts(dropna=False)
-    if (group_counts < min_group_n).any():
-        notes.append("small_group_count")
-        try:
-            fallback = _fit_ols_fixed_only(df, formula_fixed)
-            fallback["notes"] = notes + fallback["notes"]
-            fallback["status"] = "fallback_ols_small_group"
-            return fallback
-        except Exception:
-            notes.append("fallback_ols_failed")
-            return {
-                "success": False,
-                "mdf": None,
-                "ols": None,
-                "optimizer_used": None,
-                "notes": notes,
-                "stats": {},
-                "warning_types": warning_types,
-                "warning_messages": warning_messages,
-                "status": "failed_small_group",
-            }
-
-    # 3) standardise numeric covariates
+    # 2) standardise numeric covariates
     df_fit = _standardize_numeric_covariates(df, group_col=group_col)
 
-    # 4) fit mixed model with optimizer sequence
-    md = mixedlm(formula_fixed, data=df_fit, groups=df_fit[group_col], re_formula="1")
+    # 3) Fit explicit fixed-effects models first
+    try:
+        ols_covariates = _fit_ols_model(df_fit, formula_covariates)
+    except Exception:
+        notes.append("ols_covariates_failed")
+        return {
+            "success": False,
+            "mdf": None,
+            "ols": None,
+            "optimizer_used": None,
+            "notes": notes,
+            "stats": base_stats,
+            "warning_types": warning_types,
+            "warning_messages": warning_messages,
+            "status": "failed_ols_covariates",
+        }
+
+    try:
+        ols_covariates_batch = _fit_ols_model(df_fit, formula_covariates_batch)
+    except Exception:
+        notes.append("ols_covariates_batch_failed")
+        stats_fail = dict(base_stats)
+        stats_fail.update(
+            {
+                "R2_covariates": ols_covariates.get("full_r2", np.nan),
+                "ols_fixed_betas": ols_covariates.get("fixed_betas"),
+                "ols_abs_betas": ols_covariates.get("abs_betas"),
+                "ols_partial_r2": ols_covariates.get("partial_r2"),
+            }
+        )
+        return {
+            "success": False,
+            "mdf": None,
+            "ols": ols_covariates.get("ols"),
+            "optimizer_used": None,
+            "notes": notes,
+            "stats": stats_fail,
+            "warning_types": warning_types,
+            "warning_messages": warning_messages,
+            "status": "failed_ols_covariates_batch",
+        }
+
+    r2_covariates = float(ols_covariates.get("full_r2", np.nan))
+    r2_covariates_batch = float(ols_covariates_batch.get("full_r2", np.nan))
+    delta_r2_batch = (
+        r2_covariates_batch - r2_covariates
+        if np.isfinite(r2_covariates_batch) and np.isfinite(r2_covariates)
+        else np.nan
+    )
+
+    batch_fixed_betas = {
+        name: value
+        for name, value in (ols_covariates_batch.get("fixed_betas") or {}).items()
+        if str(name).startswith(f"C({group_col})[T.")
+    }
+    batch_fixed_abs_betas = {
+        name: float(abs(value)) if np.isfinite(value) else np.nan
+        for name, value in batch_fixed_betas.items()
+    }
+    batch_term_name = f"C({group_col})"
+    batch_fixed_partial_r2 = (ols_covariates_batch.get("partial_r2") or {}).get(batch_term_name, np.nan)
+
+    # Infer reference batch from design matrix coding.
+    all_batches = [str(x) for x in pd.Series(df_fit[group_col]).dropna().unique().tolist()]
+    dummy_batches = {
+        str(name).split("[T.")[1].rstrip("]")
+        for name in batch_fixed_betas.keys()
+    }
+    missing_ref = [b for b in all_batches if b not in dummy_batches]
+    reference_batch = missing_ref[0] if len(missing_ref) == 1 else None
+
+    stats = dict(base_stats)
+    stats.update(
+        {
+            "R2_covariates": r2_covariates,
+            "R2_covariates_batch": r2_covariates_batch,
+            "delta_R2_batch": delta_r2_batch,
+            "ols_fixed_betas": ols_covariates.get("fixed_betas"),
+            "ols_abs_betas": ols_covariates.get("abs_betas"),
+            "ols_partial_r2": ols_covariates.get("partial_r2"),
+            "batch_fixed_betas": batch_fixed_betas,
+            "batch_fixed_abs_betas": batch_fixed_abs_betas,
+            "batch_fixed_partial_r2": batch_fixed_partial_r2,
+            "reference_batch": reference_batch,
+        }
+    )
+
+    # 4) group size check applies to mixed model only
+    group_counts = df_fit[group_col].value_counts(dropna=False)
+    if (group_counts < min_group_n).any():
+        notes.append("small_group_count")
+        notes.append("mixed_model_skipped")
+        return {
+            "success": False,
+            "mdf": None,
+            "ols": ols_covariates_batch.get("ols"),
+            "optimizer_used": None,
+            "notes": notes,
+            "stats": stats,
+            "warning_types": warning_types,
+            "warning_messages": warning_messages,
+            "status": "ols_only_small_group",
+        }
+
+    # 5) fit mixed model with optimizer sequence
+    md = mixedlm(formula_covariates_batch, data=df_fit, groups=df_fit[group_col], re_formula="1")
     last_exc = None
     chosen_optimizer = None
 
@@ -363,9 +448,8 @@ def fit_lmm_safe(
             batch_term = 0.0 if np.isnan(var_batch) else var_batch
             total_var = var_fixed + batch_term + var_resid
 
-            R2_marginal = var_fixed / total_var if np.isfinite(total_var) and total_var > 0 else np.nan
-            R2_conditional = (var_fixed + batch_term) / total_var if np.isfinite(total_var) and total_var > 0 else np.nan
-            delta_R2 = R2_conditional - R2_marginal if np.isfinite(R2_conditional) and np.isfinite(R2_marginal) else np.nan
+            R2_marginal_lmm = var_fixed / total_var if np.isfinite(total_var) and total_var > 0 else np.nan
+            R2_conditional_lmm = (var_fixed + batch_term) / total_var if np.isfinite(total_var) and total_var > 0 else np.nan
             ICC = batch_term / (batch_term + var_resid) if np.isfinite(batch_term) and np.isfinite(var_resid) and (batch_term + var_resid) > 0 else np.nan
 
             if np.isfinite(var_batch) and abs(var_batch) <= 1e-10:
@@ -376,35 +460,8 @@ def fit_lmm_safe(
             pval_LRT = np.nan
             pval_LRT_mixture = np.nan
             try:
-                import patsy
-                y_vec, X_fixed = patsy.dmatrices(formula_fixed, df_fit, return_type="dataframe")
-                ols_summary = _summarise_fixed_effect_ols(y_vec, X_fixed, lmm_r2_marginal=R2_marginal)
-                ols_fixed = ols_summary["ols"]
-                ols_betas = ols_summary["fixed_betas"]
-                ols_abs_betas = ols_summary["abs_betas"]
-                ols_partial_r2 = ols_summary["partial_r2"]
-                lmm_partial_r2 = ols_summary["lmm_partial_r2"]
-                # add batch coefficients
-                y_b, X_b = patsy.dmatrices(f"y ~ C({group_col})", df_fit, return_type="dataframe")
-                # extract reference batch (the one not present in dummy columns)
-                all_batches = set(df_fit[group_col].dropna().unique())
-                dummy_batches = {
-                    name.split("[T.")[1].rstrip("]")
-                    for name in X_b.columns
-                    if name.startswith(f"C({group_col})[T.")
-                }
-                reference_batch = list(all_batches - dummy_batches)[0] if len(all_batches - dummy_batches) == 1 else None
-
-                ols_batch = sm.OLS(y_b, X_b).fit()
-                R2_ols_batch = float(ols_batch.rsquared)
-                ols_batch_betas = {
-                    name: ols_batch.params[name]
-                    for name in X_b.columns
-                    if name != "Intercept"
-                }
-
                 llf_lmm = float(mdf.llf)
-                llf_ols = float(ols_fixed.llf)
+                llf_ols = float(ols_covariates_batch["ols"].llf)
                 LR_stat = 2.0 * (llf_lmm - llf_ols)
 
                 if np.isfinite(LR_stat) and LR_stat >= 0:
@@ -415,30 +472,24 @@ def fit_lmm_safe(
             except Exception:
                 notes.append("lrt_failed")
 
-            stats = {
-                "var_fixed": var_fixed,
-                "var_batch": var_batch,
-                "var_resid": var_resid,
-                "R2_marginal": R2_marginal,
-                "R2_conditional": R2_conditional,
-                "delta_R2": delta_R2,
-                "R2_ols_batch": R2_ols_batch if 'R2_ols_batch' in locals() else np.nan,
-                "ICC": ICC,
-                "LR_stat": LR_stat,
-                "pval_LRT_random": pval_LRT,
-                "pval_LRT_random_mixture": pval_LRT_mixture,
-                "ols_fixed_betas": ols_betas if 'ols_betas' in locals() else None,
-                "ols_abs_betas": ols_abs_betas if 'ols_abs_betas' in locals() else None,
-                "ols_partial_r2": ols_partial_r2 if 'ols_partial_r2' in locals() else None,
-                "lmm_partial_r2": lmm_partial_r2 if 'lmm_partial_r2' in locals() else None,
-                "ols_batch_betas": ols_batch_betas if 'ols_batch_betas' in locals() else None,
-                "reference_batch": reference_batch if 'reference_batch' in locals() else None,
-            }
+            stats.update(
+                {
+                    "var_fixed": var_fixed,
+                    "var_batch": var_batch,
+                    "var_resid": var_resid,
+                    "R2_marginal_lmm": R2_marginal_lmm,
+                    "R2_conditional_lmm": R2_conditional_lmm,
+                    "ICC": ICC,
+                    "LR_stat": LR_stat,
+                    "pval_LRT_random": pval_LRT,
+                    "pval_LRT_random_mixture": pval_LRT_mixture,
+                }
+            )
 
             return {
                 "success": True,
                 "mdf": mdf,
-                "ols": None,
+                "ols": ols_covariates_batch.get("ols"),
                 "optimizer_used": chosen_optimizer,
                 "notes": notes,
                 "stats": stats,
@@ -452,30 +503,21 @@ def fit_lmm_safe(
             notes.append(f"optimizer_{opt}_failed")
             continue
 
-    # 5) all LMM attempts failed -> OLS fallback
-    try:
-        fallback = _fit_ols_fixed_only(df_fit, formula_fixed)
-        fallback["notes"] = notes + ["all_lmm_optimizers_failed_fallback_ols"]
-        fallback["status"] = "fallback_ols_all_lmm_failed"
-        fallback["warning_types"] = sorted(set(warning_types))
-        fallback["warning_messages"] = list(dict.fromkeys(warning_messages))
-        fallback["optimizer_used"] = None
-        return fallback
-    except Exception:
-        notes.append("all_lmm_and_ols_failed")
-        if last_exc is not None:
-            notes.append(f"last_exception={type(last_exc).__name__}")
-        return {
-            "success": False,
-            "mdf": None,
-            "ols": None,
-            "optimizer_used": None,
-            "notes": notes,
-            "stats": {},
-            "warning_types": sorted(set(warning_types)),
-            "warning_messages": list(dict.fromkeys(warning_messages)),
-            "status": "failed",
-        }
+    # 6) all LMM attempts failed -> return OLS model outputs only
+    notes.append("all_lmm_optimizers_failed")
+    if last_exc is not None:
+        notes.append(f"last_exception={type(last_exc).__name__}")
+    return {
+        "success": False,
+        "mdf": None,
+        "ols": ols_covariates_batch.get("ols"),
+        "optimizer_used": None,
+        "notes": notes,
+        "stats": stats,
+        "warning_types": sorted(set(warning_types)),
+        "warning_messages": list(dict.fromkeys(warning_messages)),
+        "status": "ols_only_lmm_failed",
+    }
 
 
 def Run_LMM_cross_sectional(
@@ -545,7 +587,9 @@ def Run_LMM_cross_sectional(
         covariate_names=covariate_names,
         group_col_name=group_col_name,
     )
-    formula_fixed = _build_fixed_formula(rhs_terms)
+    formula_fixed_covariates = _build_fixed_formula(rhs_terms)
+    formula_fixed_covariates_batch = _build_batch_fixed_formula(rhs_terms, group_col_name)
+
 
     rows = []
     notes_counter = Counter()
@@ -556,7 +600,8 @@ def Run_LMM_cross_sectional(
 
         res = fit_lmm_safe(
             df=df,
-            formula_fixed=formula_fixed,
+            formula_covariates=formula_fixed_covariates,
+            formula_covariates_batch=formula_fixed_covariates_batch,
             group_col=group_col_name,
             reml=reml,
             min_group_n=min_group_n,
@@ -578,10 +623,11 @@ def Run_LMM_cross_sectional(
             "var_fixed": stats.get("var_fixed", np.nan),
             "var_batch": stats.get("var_batch", np.nan),
             "var_resid": stats.get("var_resid", np.nan),
-            "R2_marginal": stats.get("R2_marginal", np.nan),
-            "R2_conditional": stats.get("R2_conditional", np.nan),
-            "delta_R2": stats.get("delta_R2", np.nan),
-            "R2_ols_batch": stats.get("R2_ols_batch", np.nan),
+            "R2_covariates": stats.get("R2_covariates", np.nan),
+            "R2_covariates_batch": stats.get("R2_covariates_batch", np.nan),
+            "delta_R2_batch": stats.get("delta_R2_batch", np.nan),
+            "R2_marginal_lmm": stats.get("R2_marginal_lmm", np.nan),
+            "R2_conditional_lmm": stats.get("R2_conditional_lmm", np.nan),
             "ICC": stats.get("ICC", np.nan),
             "LR_stat": stats.get("LR_stat", np.nan),
             "pval_LRT_random": stats.get("pval_LRT_random", np.nan),
@@ -599,13 +645,13 @@ def Run_LMM_cross_sectional(
         ols_partial_r2 = stats.get("ols_partial_r2", {}) or {}
         for cov_name, value in ols_partial_r2.items():
             row[f"ols_partial_r2_{cov_name}"] = value if np.isfinite(value) else np.nan
-        lmm_partial_r2 = stats.get("lmm_partial_r2", {}) or {}
-        for cov_name, value in lmm_partial_r2.items():
-            row[f"lmm_partial_r2_{cov_name}"] = value if np.isfinite(value) else np.nan
-        # Repeat the same for batch betas, ensuring we handle missing values gracefully
-        ols_batch_betas = stats.get("ols_batch_betas", {}) or {}
-        for batch_name, beta in ols_batch_betas.items():
-            row[f"ols_batch_beta_{batch_name}"] = beta if np.isfinite(beta) else np.nan
+        batch_fixed_betas = stats.get("batch_fixed_betas", {}) or {}
+        for batch_name, beta in batch_fixed_betas.items():
+            row[f"batch_fixed_beta_{batch_name}"] = beta if np.isfinite(beta) else np.nan
+        batch_fixed_abs_betas = stats.get("batch_fixed_abs_betas", {}) or {}
+        for batch_name, beta in batch_fixed_abs_betas.items():
+            row[f"batch_fixed_abs_beta_{batch_name}"] = beta if np.isfinite(beta) else np.nan
+        row["batch_fixed_partial_r2"] = stats.get("batch_fixed_partial_r2", np.nan)
         row["reference_batch"] = stats.get("reference_batch", None)
     
         rows.append(row)
@@ -622,6 +668,9 @@ def Run_LMM_cross_sectional(
     summary["n_features"] = p
 
     return results_df, summary
+
+
+"""_______Covariate handling functions_________"""
 
 
 def RobustOLS_Orig(data,covariates,batch,covariate_names,covariate_types,report=None):
@@ -845,6 +894,8 @@ from itertools import combinations
 import numpy as np
 from itertools import combinations
 
+
+"""_------------------ Normalisation Functions ------------------"""
 def z_score(data,MAD=False):
     """
     Z-score normalization of the data matrix (samples x features).
@@ -899,6 +950,7 @@ def robust_z_score(data, method="mad", eps=1e-12) -> np.ndarray:
 
 import numpy as np
 
+"""------------------- Additive Effect Functions ------------------"""
 def Cohens_D(
     Data,
     batch_indices,
@@ -1006,6 +1058,114 @@ def Cohens_D(
 
     return np.vstack(pairwise_d), pair_labels
 
+# MahalanobisDistance computes the Mahalanobis distance (multivariate difference between batch and global centroids)
+def Mahalanobis_Distance(Data=None, batch=None, covariates=None) -> dict[str, Any]:
+
+    """
+    Calculate the Mahalanobis distance between batches in the data.
+    Takes optional covariates and returns distances between each batch pair
+    both before and after regressing out covariates. Additionally provides
+    distance of each batch to the overall centroid before and after residualizing
+    covariates.
+
+    Args:
+        Data (np.ndarray): Data matrix where rows are samples (n) and columns are features (p).
+        batch (np.ndarray): 1D array-like batch labels for each sample (length n).
+        covariates (np.ndarray, optional): Covariate matrix (n x k). An intercept will be added automatically.
+
+    Returns:
+        dict[str, Any]: A dictionary containing pairwise and centroid
+        Mahalanobis distances before and, when covariates are provided, after
+        residualization. Inner dictionary keys use tuples such as `(b1, b2)` or
+        `(b, "global")`.
+    """
+    # ---- validations ----
+    if Data is None or batch is None:
+        raise ValueError("Both Data and batch must be provided.")
+    Data = np.asarray(Data, dtype=float)
+    batch = np.asarray(batch)
+    if Data.ndim != 2:
+        raise ValueError("Data must be a 2D array (samples x features).")
+    n, p = Data.shape
+    if batch.shape[0] != n:
+        raise ValueError("Batch length must match the number of rows in Data.")
+    if np.isnan(Data).any():
+        raise ValueError("Data contains NaNs; please impute or remove missing values first.")
+
+    unique_batches = np.array(list(dict.fromkeys(batch.tolist())))  # stable order
+    if unique_batches.size < 2:
+        raise ValueError("At least two unique batches are required.")
+
+    # Optional covariates handling
+    have_covariates = covariates is not None
+    if have_covariates:
+        covariates = np.asarray(covariates, dtype=float)
+        if covariates.ndim == 1:
+            covariates = covariates.reshape(-1, 1)
+        if covariates.shape[0] != n:
+            raise ValueError("Covariates must have the same number of rows as Data.")
+        if np.isnan(covariates).any():
+            raise ValueError("Covariates contain NaNs; please clean them first.")
+
+    # ---- helpers ----
+    def _batch_means(X):
+        return {b: X[batch == b].mean(axis=0) for b in unique_batches}
+
+    def _global_mean(X):
+        return X.mean(axis=0)
+
+    def _cov_pinv(X):
+        # Sample covariance (unbiased). Use pseudo-inverse for stability (singular or p>n).
+        S = np.cov(X, rowvar=False, bias=False)
+        return np.linalg.pinv(S)
+
+    def _mahal_sq(diff, Sinv):
+        # Quadratic form; return sqrt for distance
+        return float(np.sqrt(diff @ Sinv @ diff))
+
+    def _pairwise_and_centroid_distances(X):
+        means = _batch_means(X)
+        gmean = _global_mean(X)
+        Sinv = _cov_pinv(X)
+
+        # pairwise
+        pw = {}
+        for (b1, b2) in combinations(unique_batches, 2):
+            d = means[b1] - means[b2]
+            pw[(b1, b2)] = _mahal_sq(d, Sinv)
+
+        # centroid
+        cent = {}
+        for b in unique_batches:
+            d = means[b] - gmean
+            cent[(b, "global")] = _mahal_sq(d, Sinv)
+
+        return pw, cent
+
+    # ---- raw distances ----
+    pairwise_raw, centroid_raw = _pairwise_and_centroid_distances(Data)
+
+    # ---- residualize (if covariates) and compute distances again ----
+    if have_covariates:
+        # Add intercept
+        X = np.column_stack([np.ones((n, 1)), covariates])
+        # Solve least squares for each feature simultaneously
+        # Data ≈ X @ B  => B = (X^T X)^+ X^T Data
+        B, *_ = np.linalg.lstsq(X, Data, rcond=None)
+        resid = Data - X @ B
+        pairwise_resid, centroid_resid = _pairwise_and_centroid_distances(resid)
+    else:
+        pairwise_resid, centroid_resid = None, None
+
+    return {
+        "pairwise_raw": pairwise_raw,
+        "pairwise_resid": pairwise_resid,
+        "centroid_raw": centroid_raw,
+        "centroid_resid": centroid_resid,
+        "batches": unique_batches.tolist(),
+    }
+
+"""_------------------ PCA and Correlation Functions ------------------"""
 # PC_Correlations performs PCA on data and computes Pearson correlation of the top N principal components with a batch variable.
 def PC_Correlations(
     Data,
@@ -1131,113 +1291,7 @@ def PC_Correlations(
     # Return PCA object too so callers can access components_, mean_, etc.
     return explained_variance, scores, PC_correlations, pca
 
-# MahalanobisDistance computes the Mahalanobis distance (multivariate difference between batch and global centroids)
-def Mahalanobis_Distance(Data=None, batch=None, covariates=None) -> dict[str, Any]:
-
-    """
-    Calculate the Mahalanobis distance between batches in the data.
-    Takes optional covariates and returns distances between each batch pair
-    both before and after regressing out covariates. Additionally provides
-    distance of each batch to the overall centroid before and after residualizing
-    covariates.
-
-    Args:
-        Data (np.ndarray): Data matrix where rows are samples (n) and columns are features (p).
-        batch (np.ndarray): 1D array-like batch labels for each sample (length n).
-        covariates (np.ndarray, optional): Covariate matrix (n x k). An intercept will be added automatically.
-
-    Returns:
-        dict[str, Any]: A dictionary containing pairwise and centroid
-        Mahalanobis distances before and, when covariates are provided, after
-        residualization. Inner dictionary keys use tuples such as `(b1, b2)` or
-        `(b, "global")`.
-    """
-    # ---- validations ----
-    if Data is None or batch is None:
-        raise ValueError("Both Data and batch must be provided.")
-    Data = np.asarray(Data, dtype=float)
-    batch = np.asarray(batch)
-    if Data.ndim != 2:
-        raise ValueError("Data must be a 2D array (samples x features).")
-    n, p = Data.shape
-    if batch.shape[0] != n:
-        raise ValueError("Batch length must match the number of rows in Data.")
-    if np.isnan(Data).any():
-        raise ValueError("Data contains NaNs; please impute or remove missing values first.")
-
-    unique_batches = np.array(list(dict.fromkeys(batch.tolist())))  # stable order
-    if unique_batches.size < 2:
-        raise ValueError("At least two unique batches are required.")
-
-    # Optional covariates handling
-    have_covariates = covariates is not None
-    if have_covariates:
-        covariates = np.asarray(covariates, dtype=float)
-        if covariates.ndim == 1:
-            covariates = covariates.reshape(-1, 1)
-        if covariates.shape[0] != n:
-            raise ValueError("Covariates must have the same number of rows as Data.")
-        if np.isnan(covariates).any():
-            raise ValueError("Covariates contain NaNs; please clean them first.")
-
-    # ---- helpers ----
-    def _batch_means(X):
-        return {b: X[batch == b].mean(axis=0) for b in unique_batches}
-
-    def _global_mean(X):
-        return X.mean(axis=0)
-
-    def _cov_pinv(X):
-        # Sample covariance (unbiased). Use pseudo-inverse for stability (singular or p>n).
-        S = np.cov(X, rowvar=False, bias=False)
-        return np.linalg.pinv(S)
-
-    def _mahal_sq(diff, Sinv):
-        # Quadratic form; return sqrt for distance
-        return float(np.sqrt(diff @ Sinv @ diff))
-
-    def _pairwise_and_centroid_distances(X):
-        means = _batch_means(X)
-        gmean = _global_mean(X)
-        Sinv = _cov_pinv(X)
-
-        # pairwise
-        pw = {}
-        for (b1, b2) in combinations(unique_batches, 2):
-            d = means[b1] - means[b2]
-            pw[(b1, b2)] = _mahal_sq(d, Sinv)
-
-        # centroid
-        cent = {}
-        for b in unique_batches:
-            d = means[b] - gmean
-            cent[(b, "global")] = _mahal_sq(d, Sinv)
-
-        return pw, cent
-
-    # ---- raw distances ----
-    pairwise_raw, centroid_raw = _pairwise_and_centroid_distances(Data)
-
-    # ---- residualize (if covariates) and compute distances again ----
-    if have_covariates:
-        # Add intercept
-        X = np.column_stack([np.ones((n, 1)), covariates])
-        # Solve least squares for each feature simultaneously
-        # Data ≈ X @ B  => B = (X^T X)^+ X^T Data
-        B, *_ = np.linalg.lstsq(X, Data, rcond=None)
-        resid = Data - X @ B
-        pairwise_resid, centroid_resid = _pairwise_and_centroid_distances(resid)
-    else:
-        pairwise_resid, centroid_resid = None, None
-
-    return {
-        "pairwise_raw": pairwise_raw,
-        "pairwise_resid": pairwise_resid,
-        "centroid_raw": centroid_raw,
-        "centroid_resid": centroid_resid,
-        "batches": unique_batches.tolist(),
-    }
-
+"""------------------- Variance, distribution and homogeneity functions ------------------"""
 def Variance_Ratios(data, batch, covariates=None,
                     covariate_names=None, covariate_types=None,
                     mode='rest') -> dict[Any, np.ndarray]:
@@ -1621,143 +1675,8 @@ def KS_Test(data,
 ------------------ CLI Help Only Setup ------------------
  Help functions are set up to provide descriptions of the available functions without executing them.
 """
-# call the help functions for each diagnostic function, for example in terminal use `python DiagnosticFunctions.py -h Cohens_D`
-def setup_help_only_parser():
-    parser = argparse.ArgumentParser(
-        prog='DiagnosticFunctions',
-        description='Diagnostic function library (use -h with a function name to view its help).'
-    )
-    subparsers = parser.add_subparsers(dest='command', help='Available functions')
-
-    # Help entry for Cohens_D
-    parser_cd = subparsers.add_parser(
-        'Cohens_D',
-        help='Compute Cohen\'s d for two datasets',
-        description="""
-        Computes Cohen's d effect size per feature.
-        """,
-        epilog = '''
-        Example usage:
-        DiagnosticFunctions.Cohens_D.py --Data1 <data1.npy> --Data2 <data2.npy>
-
-        Returns a list of Cohen's d values for each feature.
-        Data1 and Data2 should be numpy arrays with shape (features, samples).
-        Each feature's Cohen's d is calculated as (mean1 - mean2) / pooled_std,
-        where pooled_std is the square root of the average of the variances of both groups
-
-        Note: This function does not handle missing values or NaNs.
-        Ensure that Data1 and Data2 are preprocessed accordingly.
-
-        '''
-    )
-    # Help entry for PcaCorr
-    parser_pca = subparsers.add_parser(
-        'PcaCorr',
-        help='Perform PCA and correlate top PCs with batch',
-        description="""
-        Performs PCA on data and computes correlation of top N principal components with batch variable.
-        Returns Pearson correlations, explained variance, PCA scores, and PC-batch correlations.
-        Optional parameter:
-        --N_components (default=3): Number of PCs to analyze.
-        """,
-        epilog = '''
-        Example usage:
-        DiagnosticFunctions.PcaCorr --Data <data.npy> --batch <batch.npy>
-        Returns:
-        - Pearson correlation coefficients for each PC with the batch variable.
-        - Explained variance for each PC.
-        - PCA scores for each sample.
-        - Correlation of the first N_components PCs with the batch variable.'''
-    )
-    parser_mahalanobis = subparsers.add_parser(
-        'mahalanobis_distance',
-        help='Calculate Mahalanobis distance between batches',
-        description="""
-        Calculates Mahalanobis distance between pairs of batches in the data.
-        If covariates are provided, it will regress each feature on the covariates and return residuals from which the Mahalanobis distance is calculated.
-        Args:
-            Data (np.ndarray): Data matrix where rows are samples and columns are features.
-            batch (np.ndarray): Batch labels for each sample.
-            Cov (np.ndarray, optional): Covariance matrix. If None, it will be computed from Data.
-            covariates (np.ndarray, optional): Covariates to regress out from the data.
-        Returns:
-            dict: A dictionary with Mahalanobis distances for each pair of batches.
-        Raises:
-            ValueError: If less than two unique batches are provided.
-        Example:
-            mahalanobis_distance(Data=data, batch=batch_labels, Cov=cov_matrix, covariates=covariates)
-        """,
-        epilog = '''
-        Example usage:
-        DiagnosticFunctions.mahalanobis_distance --Data <data.npy> --batch <batch.npy>
-        Returns a dictionary with Mahalanobis distances for each pair of batches.
-        '''
-    )
-
-    parser_variance_ratios = subparsers.add_parser(
-
-        'Variance_Ratios',
-        help='Calculate variance ratios between batches',
-        description="""
-        Calculates the feature-wise ratio of variance between each unique batch pair,
-        optionally removing covariate effects via linear regression.
-        """,
-        epilog = '''
-        Example usage:
-        DiagnosticFunctions.Variance_ratios --Data <data.npy> --batch <batch.npy>
-        Returns a dictionary with variance ratios for each pair of batches.
-        '''
-    )
-    parser_ks_test = subparsers.add_parser(
-        'KS_Test',
-        help='Perform KS test between batches',
-        description="""
-        Performs two-sample Kolmogorov-Smirnov test for distribution differences between
-        each unique batch pair and each batch with the overall distribution.
-        """,
-        epilog = '''
-        Example usage:
-        DiagnosticFunctions.KS_test --Data <data.npy> --batch <batch.npy>
-        Returns a dictionary with KS test statistics and p-values for each pair of batches.
-        '''
-    )
-    parser_levene_test = subparsers.add_parser(
-        'Levene_Test',
-        help='Perform Levene\'s test between batches',
-        description="""
-        Performs Levene's test for variance differences between each unique batch pair.
-        """,
-        epilog = '''
-        Example usage:
-        DiagnosticFunctions.Levene_test --Data <data.npy> --batch <batch.npy>
-        Returns a dictionary with Levene's test statistics and p-values for each pair of batches.
-        '''
-    )
-    parser_run_lmm = subparsers.add_parser(
-        'Run_LMM',
-        help='Run linear mixed model diagnostics',
-        description="""
-        Runs linear mixed model diagnostics for each feature in the data,
-        returning variance components, R-squared values, ICC, and fitting notes.
-        """,
-        epilog = '''
-        Example usage:
-        DiagnosticFunctions.run_lmm --Data <data.npy> --batch <batch.npy>
-        Returns a DataFrame with LMM diagnostics for each feature.
-        '''
-    )
-
-    return parser
-
-if __name__ == '__main__':
-    parser = setup_help_only_parser()
-    parser.parse_args()
-"""
 
 
------------------- CLI Help Only Setup ------------------
- Help functions are set up to provide descriptions of the available functions without executing them.
-"""
 # call the help functions for each diagnostic function, for example in terminal use `python DiagnosticFunctions.py -h Cohens_D`
 def setup_help_only_parser():
     parser = argparse.ArgumentParser(

@@ -484,10 +484,11 @@ def extract_summary_metrics(result: CrossSectionalDiagnosticResult) -> dict[str,
         "median_abs_cohens_d": np.nan,
         "prop_large_abs_cohens_d": np.nan,
         "max_mahalanobis": np.nan,
-        "median_r2_marginal": np.nan,
+        "median_r2_covariates": np.nan,
+        "median_r2_covariates_batch": np.nan,
         "median_icc": np.nan,
         "prop_high_icc": np.nan,
-        "median_delta_r2": np.nan,
+        "median_delta_r2_batch": np.nan,
         "median_abs_log_variance_ratio": np.nan,
         "prop_significant_levene": np.nan,
         "prop_significant_ks": np.nan,
@@ -509,18 +510,22 @@ def extract_summary_metrics(result: CrossSectionalDiagnosticResult) -> dict[str,
             metrics["max_mahalanobis"] = float(np.nanmax(vals))
 
     if result.lmm_results is not None and not result.lmm_results.empty:
-        r2_marginal = pd.to_numeric(result.lmm_results.get("R2_marginal"), errors="coerce").to_numpy(dtype=float)
-        if r2_marginal.size:
-            metrics["median_r2_marginal"] = float(np.nanmedian(r2_marginal))
+        r2_covariates = pd.to_numeric(result.lmm_results.get("R2_covariates"), errors="coerce").to_numpy(dtype=float)
+        if r2_covariates.size:
+            metrics["median_r2_covariates"] = float(np.nanmedian(r2_covariates))
+
+        r2_covariates_batch = pd.to_numeric(result.lmm_results.get("R2_covariates_batch"), errors="coerce").to_numpy(dtype=float)
+        if r2_covariates_batch.size:
+            metrics["median_r2_covariates_batch"] = float(np.nanmedian(r2_covariates_batch))
 
         icc = pd.to_numeric(result.lmm_results.get("ICC"), errors="coerce").to_numpy(dtype=float)
         if icc.size:
             metrics["median_icc"] = float(np.nanmedian(icc))
             metrics["prop_high_icc"] = float(np.nanmean(icc >= 0.1))
 
-        delta = pd.to_numeric(result.lmm_results.get("delta_R2"), errors="coerce").to_numpy(dtype=float)
+        delta = pd.to_numeric(result.lmm_results.get("delta_R2_batch"), errors="coerce").to_numpy(dtype=float)
         if delta.size:
-            metrics["median_delta_r2"] = float(np.nanmedian(delta))
+            metrics["median_delta_r2_batch"] = float(np.nanmedian(delta))
 
     if result.variance_ratios is not None:
         ratios = np.asarray(result.variance_ratios, dtype=float).ravel()
@@ -597,23 +602,24 @@ def summarise_method_performance(
         "prop_significant_ks": 0.10,
         "max_frobenius_normalized": 0.10,
         "max_abs_batch_pc_correlation": 0.05,
-        "median_r2_marginal": 0.10,
+        "median_r2_covariates": 0.10,
         "weighted_covariate_pc_correlation_top3": 0.05,
     }
 
     metric_categories = {
         "additive": ["median_abs_cohens_d", "prop_large_abs_cohens_d", "max_mahalanobis"],
         "multiplicative": ["median_abs_log_variance_ratio", "prop_significant_levene"],
-        "linear_modeling": ["median_icc", "prop_high_icc", "median_delta_r2"],
+        "linear_modeling": ["median_icc", "prop_high_icc", "median_delta_r2_batch"],
         "distributional": ["prop_significant_ks", "max_frobenius_normalized"],
         "principal_component_analysis": ["max_abs_batch_pc_correlation"],
-        "biological_effects": ["median_r2_marginal", "weighted_covariate_pc_correlation_top3"],
+        "biological_effects": ["median_r2_covariates", "median_r2_covariates_batch", "weighted_covariate_pc_correlation_top3"],
     }
 
     cfg = scoring_config or {}
     weights = cfg.get("weights", default_weights)
     higher_is_better = {
-        "median_r2_marginal",
+        "median_r2_covariates",
+        "median_r2_covariates_batch",
         "weighted_covariate_pc_correlation_top3",
         *cfg.get("higher_is_better", []),
     }
@@ -1569,22 +1575,23 @@ def CrossSectionalReportMin(data,
             logger.exception("Could not produce ICC histogram")
 
         
-        # Plot conditional and marginal R^2 per feature, indicate what each means for interpretation
-        report.text_simple("Marginal R² represents the variance explained by fixed effects (covariates)\n"
-                           "while Conditional R² represents the variance explained by both fixed and random effects (batch + covariates).")
-        if {"R2_marginal", "R2_conditional"}.issubset(lmm_results_df.columns):
-            lmm_r = lmm_results_df[['R2_marginal', 'R2_conditional']].dropna()
+        # Plot covariates-only and covariates+batch R^2 per feature.
+        report.text_simple("Covariates R² represents variance explained by covariates only (Model 1).\n"
+                           "Covariates + Batch R² represents variance explained after adding fixed batch effects (Model 2).\n"
+                           "Delta R² batch is the incremental variance explained by adding batch terms.")
+        if {"R2_covariates", "R2_covariates_batch"}.issubset(lmm_results_df.columns):
+            lmm_r = lmm_results_df[['R2_covariates', 'R2_covariates_batch']].dropna()
         else:
             lmm_r = pd.DataFrame()
         if len(lmm_r) > 0:
             plt.figure(figsize=(10, 4))
-            plt.plot(lmm_r['R2_marginal'].values, label='Marginal R²', alpha=0.7)
-            plt.plot(lmm_r['R2_conditional'].values, label='Conditional R²', alpha=0.7)
+            plt.plot(lmm_r['R2_covariates'].values, label='Covariates R²', alpha=0.7)
+            plt.plot(lmm_r['R2_covariates_batch'].values, label='Covariates + Batch R²', alpha=0.7)
             plt.xlabel("Feature index")
             plt.ylabel("R² value")
-            plt.title("Marginal and Conditional R² values per feature")
+            plt.title("Covariates and Covariates + Batch R² values per feature")
             plt.legend()
-            report.log_plot(plt, caption="Marginal and Conditional R² values per feature")
+            report.log_plot(plt, caption="Covariates and Covariates + Batch R² values per feature")
             plt.close()
 
         # ---------------------
@@ -2221,6 +2228,27 @@ def CrossSectionalReport(
         # ---------------------
         logger.info("Beginning LMM diagnostics")
         report.log_section("lmm_diagnostics", "Linear mixed effects diagnostics (batch + covariates)")
+
+
+        report.text_simple("This section uses three complementary statistical models to quantify the contribution of covariates and batch effects.\n"
+                           "1. A covariate only OLS model (fixed effects) to quantify variance explained by covariates:\n "
+                           "y=Xcov ​βcov ​+ ε\n"
+                           "\n"
+                           "2. A covariate + batch OLS model (fixed effects) to quantify variance explained by covariates and batch:\n"
+                           "y=Xcov ​βcov ​+ Xbatch ​βbatch ​+ ε\n"
+                           "\n"
+                           "3. Linear mixed effects model (LMM) with random intercept for batch to quantify variance explained by covariates and batch, while accounting for batch as a random effect.\n" \
+                           "y=Xcov​βcov​+ubatch​+ε\n")
+
+
+        report.text_simple("The LMM diagnostics will provide the following metrics per feature:\n"
+                           "- R²_covariates: Variance explained by covariates only (Model 1)\n"
+                           "- R²_covariates_batch: Variance explained by covariates + batch (Model 2)\n"
+                           "- Delta R² batch: Incremental variance explained by adding batch terms (R²_covariates_batch - R²_covariates)\n"
+                           "- ICC (Intraclass Correlation Coefficient): Proportion of variance explained by the random effect of batch in the LMM\n"
+                           "- Model status: Whether LMM fitting succeeded or if fallback to OLS was used\n"          
+        )
+
         report.text_simple(
             "Fitting per-feature LMMs (random intercept for batch). "
             "Where LMM fails or batch variance is zero we fallback to OLS fixed-effects."
@@ -2247,7 +2275,6 @@ def CrossSectionalReport(
             report.text_simple("Warning: no covariates provided; LMM diagnostics were skipped.")
 
         report.text_simple("LMM diagnostics completed.")
-        report.log_text("LMM results table added to report")
 
         report.text_simple(
             f"Number of features analyzed: {lmm_summary.get('n_features', 0)}\n"
@@ -2285,8 +2312,9 @@ def CrossSectionalReport(
 
         report.text_simple("Histogram of ICC (proportion of variance explained by batch):")
         # How to interpret ICC:
-        report.text_simple("Intraclass Correlation Coefficient (ICC) is the ratio of variance due to batch effects to the total variance (batch + residual). \n" 
-        "It quantifies the extent to which batch membership explains variability in the data.")
+        report.text_simple("The Intraclass Correlation Coefficient (ICC) estimates the proportion of unexplained variance attributable to differences between batches.\n"
+                           "An ICC of 0 indicates no detectable clustering by batch, whereas larger ICC values indicate increasing between-batch variability.")
+
         report.text_simple(
             "Interpretation of ICC values:\n"
             "- ICC close to 0: Little to no variance explained by batch; suggests minimal batch effect.\n"
@@ -2295,11 +2323,14 @@ def CrossSectionalReport(
             "- ICC above 0.5: Strong batch effect; likely requires correction to avoid confounding.\n"
         )
         
-        # Plot conditional and marginal R^2 per feature, indicate what each means for interpretation
-        report.text_simple("Marginal R² represents the variance explained by fixed effects (covariates)\n"
-                           "while Conditional R² represents the variance explained by both fixed and random effects (batch + covariates).")
-        if {"R2_marginal", "R2_conditional"}.issubset(lmm_results_df.columns):
-            lmm_r = lmm_results_df[['R2_marginal', 'R2_conditional']].dropna()
+        # Plot covariates-only and covariates+batch R^2 per feature.
+        report.text_simple("Covariates R² represents variance explained by covariates only (Model 1).\n"
+                           "Covariates + Batch R² represents variance explained after adding fixed batch effects (Model 2).\n"
+                           "Delta R² batch is the incremental variance explained by adding batch terms.")
+        
+        
+        if {"R2_covariates", "R2_covariates_batch"}.issubset(lmm_results_df.columns):
+            lmm_r = lmm_results_df[['R2_covariates', 'R2_covariates_batch']].dropna()
             lmm_figs = PlotDiagnosticResults.LMM_Diagnostics_Plot(
                 lmm_results_df,
                 feature_order="original",
@@ -2926,10 +2957,10 @@ def CrossSectionalComparisonReport(
             scorecard_sections = {
                 "additive": ["method", "median_abs_cohens_d", "prop_large_abs_cohens_d", "max_mahalanobis", "additive_score"],
                 "multiplicative": ["method", "median_abs_log_variance_ratio", "prop_significant_levene", "multiplicative_score"],
-                "linear modelling": ["method", "median_icc", "prop_high_icc", "median_delta_r2", "linear_modeling_score"],
+                "linear modelling": ["method", "median_icc", "prop_high_icc", "median_delta_r2_batch", "linear_modeling_score"],
                 "distributional": ["method", "prop_significant_ks", "max_frobenius_normalized", "distributional_score"],
                 "principal component analysis": ["method", "max_abs_batch_pc_correlation", "principal_component_analysis_score"],
-                "biological effects": ["method", "median_r2_marginal", "weighted_covariate_pc_correlation_top3", "biological_effects_score"],
+                "biological effects": ["method", "median_r2_covariates", "median_r2_covariates_batch", "weighted_covariate_pc_correlation_top3", "biological_effects_score"],
             }
 
             report.text_simple("Method scorecard by diagnostic category (higher is better within each block):")

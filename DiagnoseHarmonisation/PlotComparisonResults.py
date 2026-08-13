@@ -421,12 +421,12 @@ def plot_compare_lmm_icc(results):
             continue
         df = res.lmm_results.copy()
         icc = pd.to_numeric(df.get("ICC"), errors="coerce").to_numpy(dtype=float)
-        r2m = pd.to_numeric(df.get("R2_marginal"), errors="coerce").to_numpy(dtype=float)
-        r2c = pd.to_numeric(df.get("R2_conditional"), errors="coerce").to_numpy(dtype=float)
+        r2_cov = pd.to_numeric(df.get("R2_covariates"), errors="coerce").to_numpy(dtype=float)
+        r2_cov_batch = pd.to_numeric(df.get("R2_covariates_batch"), errors="coerce").to_numpy(dtype=float)
         if icc.size:
             icc_items.append((method, icc))
-        if r2m.size and r2c.size:
-            r2_items.append((method, r2m, r2c))
+        if r2_cov.size and r2_cov_batch.size:
+            r2_items.append((method, r2_cov, r2_cov_batch))
 
     if icc_items:
         fig_icc, axes, _, _ = _make_method_grid(len(icc_items))
@@ -472,21 +472,21 @@ def plot_compare_lmm_icc(results):
 
     if r2_items:
         fig_r2, axes, _, _ = _make_method_grid(len(r2_items))
-        for ax, (method, r2m, r2c) in zip(axes, r2_items):
-            x = np.arange(len(r2m))
-            ax.plot(x, r2m, label="Marginal R2", linewidth=1.2)
-            ax.plot(x, r2c, label="Conditional R2", linewidth=1.2)
+        for ax, (method, r2_cov, r2_cov_batch) in zip(axes, r2_items):
+            x = np.arange(len(r2_cov))
+            ax.plot(x, r2_cov, label="Covariates R2", linewidth=1.2)
+            ax.plot(x, r2_cov_batch, label="Covariates + Batch R2", linewidth=1.2)
             ax.set_title(_title(method))
             ax.set_xlabel("Feature")
             ax.set_ylabel("R2")
             ax.set_ylim(bottom=0)
-            labels, rotation = _feature_labels(len(r2m))
+            labels, rotation = _feature_labels(len(r2_cov))
             ax.set_xticks(x)
             ax.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax.legend(fontsize=7, frameon=False)
         _hide_unused_axes(axes, len(r2_items))
         fig_r2.tight_layout()
-        figs.append(("Comparison: LMM marginal and conditional R2", fig_r2))
+        figs.append(("Comparison: covariates and covariates+batch R2", fig_r2))
 
     return figs
 
@@ -504,13 +504,13 @@ def plot_compare_lmm_biological_effects(results):
         bio_df = PlotDiagnosticResults.summarise_lmm_biological_effects(res.lmm_results)
         if not bio_df.empty:
             ols_items.append((method, bio_df[["covariate", "mean_ols_partial_r2"]].copy()))
-            lmm_items.append((method, bio_df[["covariate", "mean_lmm_partial_r2"]].copy()))
+            lmm_items.append((method, bio_df[["covariate", "mean_batch_adjusted_partial_r2"]].copy()))
 
-        r2m = pd.to_numeric(res.lmm_results.get("R2_marginal"), errors="coerce").to_numpy(dtype=float)
+        r2_cov = pd.to_numeric(res.lmm_results.get("R2_covariates"), errors="coerce").to_numpy(dtype=float)
         summary_rows.append(
             {
                 "method": method,
-                "median_r2_marginal": float(np.nanmedian(r2m)) if r2m.size else np.nan,
+                "median_r2_covariates": float(np.nanmedian(r2_cov)) if r2_cov.size else np.nan,
                 "weighted_covariate_pc_correlation_top3": _weighted_covariate_pc_correlation(res.pca_results),
             }
         )
@@ -519,7 +519,7 @@ def plot_compare_lmm_biological_effects(results):
         df = pd.DataFrame(summary_rows)
         x = np.arange(len(df))
         fig, ax = plt.subplots(figsize=(9, 4.5))
-        ax.bar(x - 0.18, df["median_r2_marginal"], width=0.36, label="Median marginal R2")
+        ax.bar(x - 0.18, df["median_r2_covariates"], width=0.36, label="Median covariates R2")
         ax.bar(
             x + 0.18,
             df["weighted_covariate_pc_correlation_top3"],
@@ -537,10 +537,10 @@ def plot_compare_lmm_biological_effects(results):
     for caption, items, value_col, title in [
         ("Comparison: covariate variance from OLS", ols_items, "mean_ols_partial_r2", "OLS partial R2"),
         (
-            "Comparison: covariate variance with batch random effect",
+            "Comparison: covariate variance with incremental batch effect",
             lmm_items,
-            "mean_lmm_partial_r2",
-            "Batch-adjusted partial R2",
+            "mean_batch_adjusted_partial_r2",
+            "Batch incremental partial R2",
         ),
     ]:
         if not items:

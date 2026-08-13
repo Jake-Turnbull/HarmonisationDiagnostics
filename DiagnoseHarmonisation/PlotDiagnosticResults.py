@@ -26,12 +26,11 @@ def summarise_lmm_biological_effects(results_df) -> pd.DataFrame:
     import pandas as pd
 
     if not isinstance(results_df, pd.DataFrame) or results_df.empty:
-        return pd.DataFrame(columns=["covariate", "mean_abs_beta", "mean_ols_partial_r2", "mean_lmm_partial_r2"])
+        return pd.DataFrame(columns=["covariate", "mean_abs_beta", "mean_ols_partial_r2", "mean_batch_adjusted_partial_r2"])
 
     prefixes = {
         "mean_abs_beta": "ols_abs_beta_",
         "mean_ols_partial_r2": "ols_partial_r2_",
-        "mean_lmm_partial_r2": "lmm_partial_r2_",
     }
 
     covariates = set()
@@ -59,10 +58,10 @@ def summarise_lmm_biological_effects(results_df) -> pd.DataFrame:
         "covariate": "batch",
         "mean_abs_beta": np.nan,
         "mean_ols_partial_r2": np.nan,
-        "mean_lmm_partial_r2": np.nan,
+        "mean_batch_adjusted_partial_r2": np.nan,
     }
 
-    batch_beta_cols = [c for c in results_df.columns if c.startswith("ols_batch_beta_")]
+    batch_beta_cols = [c for c in results_df.columns if c.startswith("batch_fixed_beta_")]
     if batch_beta_cols:
         # Being passed as a numpy array in some called, write check only apply if pan
         batch_beta_values = pd.to_numeric(
@@ -72,17 +71,17 @@ def summarise_lmm_biological_effects(results_df) -> pd.DataFrame:
         if np.isfinite(batch_beta_values).any():
             batch_row["mean_abs_beta"] = float(np.nanmean(np.abs(batch_beta_values)))
 
-    if "R2_ols_batch" in results_df.columns:
-        r2_batch = pd.to_numeric(results_df["R2_ols_batch"], errors="coerce").to_numpy(dtype=float)
-        if np.isfinite(r2_batch).any():
-            batch_row["mean_ols_partial_r2"] = float(np.nanmean(r2_batch))
+    if "batch_fixed_partial_r2" in results_df.columns:
+        batch_partial = pd.to_numeric(results_df["batch_fixed_partial_r2"], errors="coerce").to_numpy(dtype=float)
+        if np.isfinite(batch_partial).any():
+            batch_row["mean_ols_partial_r2"] = float(np.nanmean(batch_partial))
 
-    if "delta_R2" in results_df.columns:
-        delta = pd.to_numeric(results_df["delta_R2"], errors="coerce").to_numpy(dtype=float)
+    if "delta_R2_batch" in results_df.columns:
+        delta = pd.to_numeric(results_df["delta_R2_batch"], errors="coerce").to_numpy(dtype=float)
         if np.isfinite(delta).any():
-            batch_row["mean_lmm_partial_r2"] = float(np.nanmean(delta))
+            batch_row["mean_batch_adjusted_partial_r2"] = float(np.nanmean(delta))
 
-    if any(np.isfinite(batch_row[key]) for key in ("mean_abs_beta", "mean_ols_partial_r2", "mean_lmm_partial_r2")):
+    if any(np.isfinite(batch_row[key]) for key in ("mean_abs_beta", "mean_ols_partial_r2", "mean_batch_adjusted_partial_r2")):
         rows.append(batch_row)
 
     return pd.DataFrame(rows)
@@ -98,7 +97,7 @@ def plot_lmm_biological_effects(
         return []
 
     plot_df = summary_df.sort_values(
-        ["mean_lmm_partial_r2", "mean_ols_partial_r2", "mean_abs_beta"],
+        ["mean_batch_adjusted_partial_r2", "mean_ols_partial_r2", "mean_abs_beta"],
         ascending=False,
         na_position="last",
     ).reset_index(drop=True)
@@ -121,8 +120,8 @@ def plot_lmm_biological_effects(
     ax_ols.set_yticklabels([])
     ax_ols.invert_yaxis()
 
-    ax_lmm.barh(y, plot_df["mean_lmm_partial_r2"], color="C2", alpha=0.85)
-    ax_lmm.set_title("Batch-adjusted partial R2")
+    ax_lmm.barh(y, plot_df["mean_batch_adjusted_partial_r2"], color="C2", alpha=0.85)
+    ax_lmm.set_title("Batch incremental partial R2")
     ax_lmm.set_xlabel("Mean explained variance")
     ax_lmm.set_yticks(y)
     ax_lmm.set_yticklabels([])
@@ -149,7 +148,7 @@ def LMM_Diagnostics_Plot(
         results_df (pd.DataFrame): Output dataframe from Run_LMM_cross_sectional.
         feature_order (str): 'original' to preserve input order, 'sorted_icc' to sort by ICC.
         max_labels (int): Maximum number of x-axis labels to show before thinning them.
-        include_delta_r2 (bool): If True, add a delta_R2 plot.
+        include_delta_r2 (bool): If True, add a delta_R2_batch plot.
         include_status_summary (bool): Retained for backward compatibility.
 
     Returns:
@@ -164,7 +163,7 @@ def LMM_Diagnostics_Plot(
     if not isinstance(results_df, pd.DataFrame):
         raise ValueError("results_df must be a pandas DataFrame.")
 
-    required_cols = ["feature", "ICC", "R2_marginal", "R2_conditional"]
+    required_cols = ["feature", "ICC", "R2_covariates", "R2_covariates_batch"]
     missing = [c for c in required_cols if c not in results_df.columns]
     if missing:
         raise ValueError(f"results_df is missing required columns: {missing}")
@@ -237,18 +236,18 @@ def LMM_Diagnostics_Plot(
     figs.append(("ICC per feature sorted", fig2))
 
     # -------------------------------------------------
-    # 3) Marginal and conditional R²
+    # 3) Covariates and covariates+batch R²
     # -------------------------------------------------
     fig3, ax3 = plt.subplots(figsize=(14, 5))
     x_r2 = np.arange(len(df_plot))
 
-    r2_m = pd.to_numeric(df_plot["R2_marginal"], errors="coerce").to_numpy()
-    r2_c = pd.to_numeric(df_plot["R2_conditional"], errors="coerce").to_numpy()
+    r2_cov = pd.to_numeric(df_plot["R2_covariates"], errors="coerce").to_numpy()
+    r2_cov_batch = pd.to_numeric(df_plot["R2_covariates_batch"], errors="coerce").to_numpy()
 
-    ax3.plot(x_r2, r2_m, label="Marginal R²", linewidth=1.5)
-    ax3.plot(x_r2, r2_c, label="Conditional R²", linewidth=1.5)
+    ax3.plot(x_r2, r2_cov, label="Covariates R²", linewidth=1.5)
+    ax3.plot(x_r2, r2_cov_batch, label="Covariates + Batch R²", linewidth=1.5)
 
-    ax3.set_title("Marginal and Conditional R² per feature")
+    ax3.set_title("Covariates and Covariates + Batch R² per feature")
     ax3.set_xlabel("Feature")
     ax3.set_ylabel("R²")
     ax3.set_ylim(bottom=0)
@@ -258,20 +257,20 @@ def LMM_Diagnostics_Plot(
     ax3.set_xticklabels(shown_labels_3, rotation=rot_3, ha="right" if rot_3 else "center")
     ax3.legend()
 
-    figs.append(("Marginal and Conditional R² per feature", fig3))
+    figs.append(("Covariates and Covariates + Batch R² per feature", fig3))
 
     # -------------------------------------------------
     # 4) Delta R²
     # -------------------------------------------------
-    if include_delta_r2 and "delta_R2" in df.columns:
+    if include_delta_r2 and "delta_R2_batch" in df.columns:
         fig4, ax4 = plt.subplots(figsize=(14, 5))
         df_delta = df_plot.copy()
-        df_delta["delta_R2"] = pd.to_numeric(df_delta["delta_R2"], errors="coerce")
+        df_delta["delta_R2_batch"] = pd.to_numeric(df_delta["delta_R2_batch"], errors="coerce")
 
-        delta_vals = df_delta["delta_R2"].to_numpy()
+        delta_vals = df_delta["delta_R2_batch"].to_numpy()
         ax4.bar(np.arange(len(df_delta)), delta_vals, alpha=0.8)
 
-        ax4.set_title("Delta R² per feature (Conditional - Marginal)")
+        ax4.set_title("Delta R² per feature (Covariates + Batch - Covariates)")
         ax4.set_xlabel("Feature")
         ax4.set_ylabel("Delta R²")
 
