@@ -398,7 +398,7 @@ def fit_lmm_safe(
         }
 
     # 5) fit mixed model with optimizer sequence
-    md = mixedlm(formula_covariates_batch, data=df_fit, groups=df_fit[group_col], re_formula="1")
+    md = mixedlm(formula_covariates, data=df_fit, groups=df_fit[group_col], re_formula="1")
     last_exc = None
     chosen_optimizer = None
 
