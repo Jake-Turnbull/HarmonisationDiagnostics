@@ -337,8 +337,1569 @@ def WithinSubjVar_long(
 ##########################################################################################################
 # FOR LONGITUDINAL DATA: Multivariate pairwise site differences using Mahalanobis distances
 ##########################################################################################################
+import re
+import warnings
+from itertools import combinations
+from typing import Any, Dict, Optional, Sequence, Tuple
+
+import numpy as np
+import pandas as pd
+
 
 def MultiVariateBatchDifference_long(
+    idp_matrix: np.ndarray,
+    batch: pd.Series | Sequence,
+    subject: Optional[pd.Series | Sequence] = None,
+    timepoint: Optional[pd.Series | Sequence] = None,
+    idp_names: Optional[Sequence[str]] = None,
+    covariates: Optional[np.ndarray] = None,
+    return_info: bool = False,
+) -> (
+    Dict[str, Any]
+    | Tuple[Dict[str, Any], Dict[str, Any]]
+):
+    """
+    Multivariate batch/site differences using Mahalanobis distances for
+    regular, test-retest, and longitudinal repeated-measures data.
+
+    The function automatically determines the analysis structure.
+
+    CASE 1: REGULAR
+    ---------------
+    Used when subject/timepoint information is not available, or when only
+    one unique timepoint is present.
+
+    This preserves the original longitudinal implementation:
+
+        1. Calculate a mean vector for each batch.
+        2. Calculate a covariance matrix for each batch.
+        3. Average the batch covariance matrices.
+        4. Calculate pairwise Mahalanobis distances between batch means.
+        5. Calculate distances from each batch mean to the global batch
+           centroid.
+
+    CASE 2: LONGITUDINAL, BATCH CONSTANT WITHIN SUBJECT
+    ---------------------------------------------------
+    Used when multiple timepoints are present and each subject remains in
+    the same batch across their repeated measurements.
+
+    For two timepoints:
+
+        change = Y(i,t2) - Y(i,t1)
+
+    For more than two timepoints:
+
+        change vectors =
+            [Y(i,t2)-Y(i,t1),
+             Y(i,t3)-Y(i,t2),
+             ...]
+
+    Thus, only longitudinal changes are used; the baseline measurement
+    itself is not included.
+
+    One subject-level vector is created for each subject and Mahalanobis
+    distances are calculated between batch-specific mean change vectors
+    using a pooled covariance matrix.
+
+    CASE 3: LONGITUDINAL, BATCH VARIES WITHIN SUBJECT
+    -------------------------------------------------
+    Used when multiple timepoints are present and subjects are measured
+    in different batches/sites across time.
+
+    Each observation is centred relative to the subject-specific feature
+    mean:
+
+        Y*(i,t) = Y(i,t) - mean_t(Y(i,t))
+
+    The subject-centred observations are then grouped by batch and
+    Mahalanobis distances are calculated between batch-specific mean
+    profiles using a pooled covariance matrix.
+
+    Parameters
+    ----------
+    idp_matrix : np.ndarray
+        Numeric matrix with shape (n_samples, n_features).
+
+    batch : pd.Series or Sequence
+        Batch/site/session label for each observation.
+
+    subject : pd.Series or Sequence, optional
+        Subject identifier for each observation.
+
+    timepoint : pd.Series or Sequence, optional
+        Timepoint/visit identifier for each observation. The number of
+        unique timepoints is detected automatically.
+
+    idp_names : Sequence[str], optional
+        Names of the IDPs/features.
+
+    covariates : np.ndarray, optional
+        Numeric covariate matrix with shape
+        (n_samples, n_covariates). An intercept is added automatically.
+
+        Covariates are residualized from the original observations before
+        the longitudinal representation is constructed.
+
+    return_info : bool
+        If True, return (results, info).
+
+    Returns
+    -------
+    results : dict
+        Dictionary with the same primary output structure as the
+        cross-sectional Mahalanobis function:
+
+        {
+            "pairwise_raw": {...},
+            "pairwise_resid": {...},
+            "centroid_raw": {...},
+            "centroid_resid": {...},
+            "batches": [...]
+        }
+
+    info : dict
+        Returned when return_info=True. Contains information about the
+        detected analysis mode, timepoints, retained subjects, batch
+        structure, and covariance diagnostics.
+
+    Notes
+    -----
+    - Rows containing NaNs in IDPs are excluded from the relevant analysis.
+    - In Case 2, subjects must have complete measurements at all required
+      timepoints.
+    - In Case 3, a subject must have at least two complete observations.
+    - In Case 2, the batch must be constant within subject.
+    - In Case 3, batch is allowed to vary within subject.
+    - Covariates must be numeric. Categorical covariates should be encoded
+      before being supplied.
+    """
+
+    # ============================================================
+    # 1. Validate / coerce IDP matrix
+    # ============================================================
+
+    if not isinstance(idp_matrix, np.ndarray):
+        idp_matrix = np.asarray(idp_matrix, dtype=float)
+
+    if idp_matrix.ndim != 2:
+        raise ValueError(
+            "idp_matrix must be 2D (n_samples, n_features)."
+        )
+
+    idp_matrix = idp_matrix.astype(float, copy=False)
+
+    n_samples, n_features = idp_matrix.shape
+
+    if n_samples == 0:
+        raise ValueError(
+            "idp_matrix contains no observations."
+        )
+
+    if n_features == 0:
+        raise ValueError(
+            "idp_matrix contains no features."
+        )
+
+    # ============================================================
+    # 2. Validate batch
+    # ============================================================
+
+    if isinstance(batch, pd.Series):
+        batch_ser = batch.reset_index(drop=True)
+    else:
+        batch_ser = pd.Series(batch)
+
+    if len(batch_ser) != n_samples:
+        raise ValueError(
+            "Length of batch must match number of rows in idp_matrix."
+        )
+
+    if batch_ser.isna().any():
+        raise ValueError(
+            "batch contains missing values."
+        )
+
+    # ============================================================
+    # 3. Validate subject
+    # ============================================================
+
+    if subject is not None:
+
+        if isinstance(subject, pd.Series):
+            subject_ser = subject.reset_index(drop=True)
+        else:
+            subject_ser = pd.Series(subject)
+
+        if len(subject_ser) != n_samples:
+            raise ValueError(
+                "Length of subject must match number of rows in "
+                "idp_matrix."
+            )
+
+        if subject_ser.isna().any():
+            raise ValueError(
+                "subject contains missing values."
+            )
+
+    else:
+        subject_ser = None
+
+    # ============================================================
+    # 4. Validate timepoint
+    # ============================================================
+
+    if timepoint is not None:
+
+        if isinstance(timepoint, pd.Series):
+            timepoint_ser = timepoint.reset_index(drop=True)
+        else:
+            timepoint_ser = pd.Series(timepoint)
+
+        if len(timepoint_ser) != n_samples:
+            raise ValueError(
+                "Length of timepoint must match number of rows in "
+                "idp_matrix."
+            )
+
+        if timepoint_ser.isna().any():
+            raise ValueError(
+                "timepoint contains missing values."
+            )
+
+    else:
+        timepoint_ser = None
+
+    # ============================================================
+    # 5. IDP names
+    # ============================================================
+
+    if idp_names is None:
+
+        idp_names = [
+            f"idp_{i + 1}"
+            for i in range(n_features)
+        ]
+
+    else:
+
+        idp_names = list(idp_names)
+
+        if len(idp_names) != n_features:
+            raise ValueError(
+                "idp_names length must match idp_matrix.shape[1]."
+            )
+
+        if len(set(idp_names)) != len(idp_names):
+            raise ValueError(
+                "idp_names must be unique."
+            )
+
+    # ============================================================
+    # 6. Covariates
+    # ============================================================
+
+    have_covariates = covariates is not None
+
+    if have_covariates:
+
+        covariates = np.asarray(
+            covariates,
+            dtype=float,
+        )
+
+        if covariates.ndim == 1:
+            covariates = covariates.reshape(-1, 1)
+
+        if covariates.ndim != 2:
+            raise ValueError(
+                "covariates must be a 2D numeric array."
+            )
+
+        if covariates.shape[0] != n_samples:
+            raise ValueError(
+                "covariates must have the same number of rows as "
+                "idp_matrix."
+            )
+
+        if np.isnan(covariates).any():
+            raise ValueError(
+                "covariates contain NaNs; please clean them first."
+            )
+
+    # ============================================================
+    # 7. Determine timepoint ordering
+    # ============================================================
+
+    def _timepoint_sort_key(value):
+
+        text = str(value).strip().lower()
+
+        baseline_labels = {
+            "baseline",
+            "pre",
+            "pretest",
+            "pre_test",
+            "t0",
+            "time0",
+            "time_0",
+        }
+
+        if text in baseline_labels:
+            return (0, 0.0, text)
+
+        # Direct numeric values
+        try:
+            return (1, float(text), text)
+        except ValueError:
+            pass
+
+        # Labels such as T1, T2, Visit3
+        numbers = re.findall(
+            r"[-+]?\d*\.?\d+",
+            text,
+        )
+
+        if numbers:
+            try:
+                return (
+                    1,
+                    float(numbers[-1]),
+                    text,
+                )
+            except ValueError:
+                pass
+
+        return (2, 0.0, text)
+
+    if timepoint_ser is None:
+
+        ordered_timepoints = None
+        n_timepoints = 1
+        analysis_mode = "regular"
+
+    else:
+
+        if pd.api.types.is_categorical_dtype(
+            timepoint_ser
+        ):
+
+            observed = set(
+                timepoint_ser.tolist()
+            )
+
+            ordered_timepoints = [
+                tp
+                for tp in timepoint_ser.cat.categories
+                if tp in observed
+            ]
+
+        else:
+
+            ordered_timepoints = sorted(
+                pd.unique(
+                    timepoint_ser
+                ).tolist(),
+                key=_timepoint_sort_key,
+            )
+
+        n_timepoints = len(
+            ordered_timepoints
+        )
+
+        if n_timepoints <= 1:
+
+            analysis_mode = "regular"
+
+        else:
+
+            if subject_ser is None:
+                raise ValueError(
+                    "subject must be provided when multiple "
+                    "timepoints are present."
+                )
+
+            analysis_mode = "longitudinal"
+
+    # ============================================================
+    # 8. Helper: residualize covariates
+    # ============================================================
+
+    def _residualize(
+        X: np.ndarray,
+        C: np.ndarray,
+    ) -> np.ndarray:
+
+        design = np.column_stack(
+            [
+                np.ones(
+                    (C.shape[0], 1)
+                ),
+                C,
+            ]
+        )
+
+        B, *_ = np.linalg.lstsq(
+            design,
+            X,
+            rcond=None,
+        )
+
+        return X - design @ B
+
+    # ============================================================
+    # 9. Helper: covariance
+    # ============================================================
+
+    def _covariance(
+        X: np.ndarray,
+    ) -> np.ndarray:
+
+        if X.shape[0] <= 1:
+
+            return np.zeros(
+                (
+                    X.shape[1],
+                    X.shape[1],
+                ),
+                dtype=float,
+            )
+
+        cov = np.cov(
+            X,
+            rowvar=False,
+            ddof=1,
+        )
+
+        cov = np.atleast_2d(
+            np.asarray(
+                cov,
+                dtype=float,
+            )
+        )
+
+        if cov.shape != (
+            X.shape[1],
+            X.shape[1],
+        ):
+            raise ValueError(
+                "Unexpected covariance matrix shape."
+            )
+
+        return cov
+
+    # ============================================================
+    # 10. Helper: stable pseudoinverse
+    # ============================================================
+
+    def _stable_pinv(
+        S: np.ndarray,
+    ):
+
+        U, s, Vt = np.linalg.svd(
+            S,
+            full_matrices=False,
+        )
+
+        if len(s) == 0:
+            return (
+                np.zeros_like(S),
+                0,
+            )
+
+        tol = (
+            np.max(s)
+            * max(S.shape)
+            * np.finfo(float).eps
+        )
+
+        keep = s > tol
+
+        s_inv = np.zeros_like(s)
+        s_inv[keep] = 1.0 / s[keep]
+
+        pinv = (
+            (Vt.T * s_inv)
+            @ U.T
+        )
+
+        return (
+            pinv,
+            int(np.sum(keep)),
+        )
+
+    # ============================================================
+    # 11. Helper: Mahalanobis distances
+    # ============================================================
+
+    def _calculate_distances(
+        X: np.ndarray,
+        batches: np.ndarray,
+        covariance_mode: str,
+        centroid_mode: str,
+    ):
+
+        X = np.asarray(
+            X,
+            dtype=float,
+        )
+
+        batches = np.asarray(
+            batches
+        )
+
+        if X.ndim != 2:
+            raise ValueError(
+                "Analysis matrix must be 2D."
+            )
+
+        if X.shape[0] != len(batches):
+            raise ValueError(
+                "Batch length does not match analysis matrix."
+            )
+
+        if X.shape[0] < 2:
+            raise ValueError(
+                "At least two observations are required."
+            )
+
+        if not np.isfinite(X).all():
+            raise ValueError(
+                "Analysis matrix contains non-finite values."
+            )
+
+        unique_batches = list(
+            dict.fromkeys(
+                batches.tolist()
+            )
+        )
+
+        if len(unique_batches) < 2:
+            raise ValueError(
+                "At least two unique batches are required."
+            )
+
+        # --------------------------------------------------------
+        # Batch means
+        # --------------------------------------------------------
+
+        batch_means = {
+            b: X[
+                batches == b
+            ].mean(axis=0)
+            for b in unique_batches
+        }
+
+        # --------------------------------------------------------
+        # Covariance
+        # --------------------------------------------------------
+
+        if covariance_mode == "site_average":
+
+            site_covariances = []
+
+            for b in unique_batches:
+
+                Xb = X[
+                    batches == b
+                ]
+
+                site_covariances.append(
+                    _covariance(Xb)
+                )
+
+            overall_cov = np.mean(
+                site_covariances,
+                axis=0,
+            )
+
+        elif covariance_mode == "pooled":
+
+            overall_cov = _covariance(
+                X
+            )
+
+        else:
+
+            raise ValueError(
+                "Unknown covariance_mode."
+            )
+
+        # --------------------------------------------------------
+        # Invert covariance
+        # --------------------------------------------------------
+
+        try:
+
+            cond_number = float(
+                np.linalg.cond(
+                    overall_cov
+                )
+            )
+
+        except Exception:
+
+            cond_number = np.inf
+
+        use_pinv = (
+            not np.isfinite(
+                cond_number
+            )
+            or cond_number > 1e15
+        )
+
+        retained_svals = 0
+
+        if use_pinv:
+
+            covariance_inv, retained_svals = (
+                _stable_pinv(
+                    overall_cov
+                )
+            )
+
+        else:
+
+            try:
+
+                covariance_inv = np.linalg.inv(
+                    overall_cov
+                )
+
+            except np.linalg.LinAlgError:
+
+                warnings.warn(
+                    "Covariance matrix was singular during inversion; "
+                    "using pseudoinverse."
+                )
+
+                covariance_inv, retained_svals = (
+                    _stable_pinv(
+                        overall_cov
+                    )
+                )
+
+                use_pinv = True
+
+        # --------------------------------------------------------
+        # Pairwise distances
+        # --------------------------------------------------------
+
+        pairwise = {}
+
+        for b1, b2 in combinations(
+            unique_batches,
+            2,
+        ):
+
+            diff = (
+                batch_means[b1]
+                - batch_means[b2]
+            )
+
+            delta = float(
+                diff
+                @ covariance_inv
+                @ diff
+            )
+
+            pairwise[
+                (b1, b2)
+            ] = float(
+                np.sqrt(
+                    max(
+                        delta,
+                        0.0,
+                    )
+                )
+            )
+
+        # --------------------------------------------------------
+        # Global centroid
+        # --------------------------------------------------------
+
+        if centroid_mode == "site_mean":
+
+            global_mean = np.mean(
+                np.vstack(
+                    [
+                        batch_means[b]
+                        for b in unique_batches
+                    ]
+                ),
+                axis=0,
+            )
+
+        elif centroid_mode == "global":
+
+            global_mean = X.mean(
+                axis=0
+            )
+
+        else:
+
+            raise ValueError(
+                "Unknown centroid_mode."
+            )
+
+        centroid = {}
+
+        for b in unique_batches:
+
+            diff = (
+                batch_means[b]
+                - global_mean
+            )
+
+            delta = float(
+                diff
+                @ covariance_inv
+                @ diff
+            )
+
+            centroid[
+                (b, "global")
+            ] = float(
+                np.sqrt(
+                    max(
+                        delta,
+                        0.0,
+                    )
+                )
+            )
+
+        diagnostics = {
+            "cond_number": cond_number,
+            "used_pseudoinverse": bool(
+                use_pinv
+            ),
+            "num_retained_svals": int(
+                retained_svals
+            ),
+            "covariance_rank": int(
+                np.linalg.matrix_rank(
+                    overall_cov
+                )
+            ),
+            "overallCov": overall_cov,
+            "n_observations": int(
+                X.shape[0]
+            ),
+            "n_features": int(
+                X.shape[1]
+            ),
+        }
+
+        return (
+            pairwise,
+            centroid,
+            diagnostics,
+        )
+
+    # ============================================================
+    # CASE 1: REGULAR
+    # ============================================================
+
+    if analysis_mode == "regular":
+
+        complete_rows = np.isfinite(
+            idp_matrix
+        ).all(axis=1)
+
+        if not complete_rows.any():
+            raise ValueError(
+                "No complete IDP observations remain."
+            )
+
+        X_raw = idp_matrix[
+            complete_rows
+        ]
+
+        B_raw = batch_ser.to_numpy()[
+            complete_rows
+        ]
+
+        # Preserve original implementation:
+        # averaged within-batch covariance and the equally
+        # weighted mean of batch means for the centroid.
+        (
+            pairwise_raw,
+            centroid_raw,
+            raw_diag,
+        ) = _calculate_distances(
+            X_raw,
+            B_raw,
+            covariance_mode="site_average",
+            centroid_mode="site_mean",
+        )
+
+        if have_covariates:
+
+            C_valid = covariates[
+                complete_rows
+            ]
+
+            X_resid = _residualize(
+                X_raw,
+                C_valid,
+            )
+
+            (
+                pairwise_resid,
+                centroid_resid,
+                resid_diag,
+            ) = _calculate_distances(
+                X_resid,
+                B_raw,
+                covariance_mode="site_average",
+                centroid_mode="site_mean",
+            )
+
+        else:
+
+            pairwise_resid = None
+            centroid_resid = None
+            resid_diag = None
+
+        results = {
+            "pairwise_raw": pairwise_raw,
+            "pairwise_resid": pairwise_resid,
+            "centroid_raw": centroid_raw,
+            "centroid_resid": centroid_resid,
+            "batches": list(
+                dict.fromkeys(
+                    B_raw.tolist()
+                )
+            ),
+        }
+
+        info = {
+            "mode": "regular",
+            "longitudinal_case": None,
+            "n_timepoints": int(
+                n_timepoints
+            ),
+            "timepoints": (
+                None
+                if ordered_timepoints is None
+                else list(
+                    ordered_timepoints
+                )
+            ),
+            "n_samples_input": int(
+                n_samples
+            ),
+            "n_samples_retained": int(
+                X_raw.shape[0]
+            ),
+            "n_samples_excluded": int(
+                n_samples
+                - X_raw.shape[0]
+            ),
+            "raw_diagnostics": raw_diag,
+            "residual_diagnostics": resid_diag,
+            "idp_names": list(
+                idp_names
+            ),
+        }
+
+        if return_info:
+            return results, info
+
+        return results
+
+    # ============================================================
+    # LONGITUDINAL DATAFRAME
+    # ============================================================
+
+    data = pd.DataFrame(
+        idp_matrix,
+        columns=idp_names,
+    )
+
+    data["_subject"] = (
+        subject_ser.to_numpy()
+    )
+
+    data["_timepoint"] = (
+        timepoint_ser.to_numpy()
+    )
+
+    data["_batch"] = (
+        batch_ser.to_numpy()
+    )
+
+    # ============================================================
+    # 12. Check duplicate subject/timepoint combinations
+    # ============================================================
+
+    duplicated = data.duplicated(
+        subset=[
+            "_subject",
+            "_timepoint",
+        ],
+        keep=False,
+    )
+
+    if duplicated.any():
+
+        duplicates = (
+            data.loc[
+                duplicated,
+                [
+                    "_subject",
+                    "_timepoint",
+                ],
+            ]
+            .drop_duplicates()
+            .head(10)
+        )
+
+        raise ValueError(
+            "Duplicate subject/timepoint combinations were found. "
+            "Each subject should have at most one observation per "
+            "timepoint.\n"
+            f"{duplicates}"
+        )
+
+    # ============================================================
+    # 13. Determine whether batch varies within subjects
+    # ============================================================
+
+    batch_varies_within_subject = False
+
+    for _, subject_df in data.groupby(
+        "_subject",
+        sort=False,
+    ):
+
+        if subject_df[
+            "_batch"
+        ].nunique() > 1:
+
+            batch_varies_within_subject = True
+            break
+
+    if batch_varies_within_subject:
+
+        longitudinal_case = (
+            "batch_varies_within_subject"
+        )
+
+    else:
+
+        longitudinal_case = (
+            "batch_constant_within_subject"
+        )
+
+    # ============================================================
+    # 14. Residualize covariates at observation level
+    # ============================================================
+
+    if have_covariates:
+
+        complete_for_resid = (
+            np.isfinite(
+                idp_matrix
+            ).all(axis=1)
+        )
+
+        if (
+            complete_for_resid.sum()
+            <= covariates.shape[1] + 1
+        ):
+
+            raise ValueError(
+                "Insufficient complete observations for "
+                "covariate residualization."
+            )
+
+        resid_matrix = np.full_like(
+            idp_matrix,
+            np.nan,
+            dtype=float,
+        )
+
+        resid_matrix[
+            complete_for_resid
+        ] = _residualize(
+            idp_matrix[
+                complete_for_resid
+            ],
+            covariates[
+                complete_for_resid
+            ],
+        )
+
+    else:
+
+        resid_matrix = None
+
+    # ============================================================
+    # CASE 2:
+    # BATCH CONSTANT WITHIN SUBJECT
+    # ============================================================
+
+    if longitudinal_case == (
+        "batch_constant_within_subject"
+    ):
+
+        raw_vectors = []
+        raw_batches = []
+
+        resid_vectors = []
+        resid_batches = []
+
+        retained_subjects = []
+
+        for subject_id, subject_df in data.groupby(
+            "_subject",
+            sort=False,
+        ):
+
+            # ----------------------------------------------------
+            # Subject must have exactly one observation at every
+            # timepoint.
+            # ----------------------------------------------------
+
+            rows_by_timepoint = []
+
+            complete_subject = True
+
+            for tp in ordered_timepoints:
+
+                rows = subject_df[
+                    subject_df["_timepoint"] == tp
+                ]
+
+                if len(rows) != 1:
+
+                    complete_subject = False
+                    break
+
+                rows_by_timepoint.append(
+                    rows.iloc[0]
+                )
+
+            if not complete_subject:
+                continue
+
+            # ----------------------------------------------------
+            # Subject must have one batch
+            # ----------------------------------------------------
+
+            subject_batches = (
+                subject_df["_batch"]
+                .unique()
+            )
+
+            if len(subject_batches) != 1:
+                continue
+
+            subject_batch = (
+                subject_batches[0]
+            )
+
+            # ----------------------------------------------------
+            # Get raw feature values
+            # ----------------------------------------------------
+
+            values_by_timepoint = []
+
+            for row in rows_by_timepoint:
+
+                values = row[
+                    idp_names
+                ].to_numpy(
+                    dtype=float
+                )
+
+                if not np.isfinite(
+                    values
+                ).all():
+
+                    complete_subject = False
+                    break
+
+                values_by_timepoint.append(
+                    values
+                )
+
+            if not complete_subject:
+                continue
+
+            # ----------------------------------------------------
+            # Build change-only representation
+            #
+            # 2 timepoints:
+            #       T2 - T1
+            #
+            # >2 timepoints:
+            #       [T2-T1, T3-T2, ...]
+            # ----------------------------------------------------
+
+            change_blocks = []
+
+            for j in range(
+                1,
+                len(values_by_timepoint),
+            ):
+
+                change_blocks.append(
+                    values_by_timepoint[j]
+                    - values_by_timepoint[j - 1]
+                )
+
+            subject_vector = np.concatenate(
+                change_blocks
+            )
+
+            raw_vectors.append(
+                subject_vector
+            )
+
+            raw_batches.append(
+                subject_batch
+            )
+
+            # ----------------------------------------------------
+            # Residualized representation
+            # ----------------------------------------------------
+
+            if have_covariates:
+
+                resid_values_by_timepoint = []
+
+                for row in rows_by_timepoint:
+
+                    # Locate the original dataframe row by subject
+                    # and timepoint.
+                    idx = data.index[
+                        (
+                            (data["_subject"] == subject_id)
+                            & (
+                                data["_timepoint"]
+                                == row["_timepoint"]
+                            )
+                        )
+                    ]
+
+                    if len(idx) != 1:
+
+                        complete_subject = False
+                        break
+
+                    values = resid_matrix[
+                        idx[0]
+                    ]
+
+                    if not np.isfinite(
+                        values
+                    ).all():
+
+                        complete_subject = False
+                        break
+
+                    resid_values_by_timepoint.append(
+                        values
+                    )
+
+                if complete_subject:
+
+                    resid_change_blocks = []
+
+                    for j in range(
+                        1,
+                        len(
+                            resid_values_by_timepoint
+                        ),
+                    ):
+
+                        resid_change_blocks.append(
+                            resid_values_by_timepoint[j]
+                            - resid_values_by_timepoint[j - 1]
+                        )
+
+                    resid_vector = np.concatenate(
+                        resid_change_blocks
+                    )
+
+                    resid_vectors.append(
+                        resid_vector
+                    )
+
+                    resid_batches.append(
+                        subject_batch
+                    )
+
+            retained_subjects.append(
+                subject_id
+            )
+
+        if len(raw_vectors) < 2:
+
+            raise ValueError(
+                "Fewer than two subjects have complete data across "
+                "all required timepoints. Longitudinal Mahalanobis "
+                "analysis cannot be performed."
+            )
+
+        # --------------------------------------------------------
+        # Raw
+        # --------------------------------------------------------
+
+        X_raw = np.vstack(
+            raw_vectors
+        )
+
+        B_raw = np.asarray(
+            raw_batches
+        )
+
+        (
+            pairwise_raw,
+            centroid_raw,
+            raw_diag,
+        ) = _calculate_distances(
+            X_raw,
+            B_raw,
+            covariance_mode="pooled",
+            centroid_mode="global",
+        )
+
+        # --------------------------------------------------------
+        # Residual
+        # --------------------------------------------------------
+
+        if have_covariates:
+
+            if len(resid_vectors) >= 2:
+
+                X_resid = np.vstack(
+                    resid_vectors
+                )
+
+                B_resid = np.asarray(
+                    resid_batches
+                )
+
+                (
+                    pairwise_resid,
+                    centroid_resid,
+                    resid_diag,
+                ) = _calculate_distances(
+                    X_resid,
+                    B_resid,
+                    covariance_mode="pooled",
+                    centroid_mode="global",
+                )
+
+            else:
+
+                pairwise_resid = None
+                centroid_resid = None
+                resid_diag = None
+
+                warnings.warn(
+                    "Insufficient complete subjects for the "
+                    "covariate-adjusted longitudinal analysis."
+                )
+
+        else:
+
+            pairwise_resid = None
+            centroid_resid = None
+            resid_diag = None
+
+        results = {
+            "pairwise_raw": pairwise_raw,
+            "pairwise_resid": pairwise_resid,
+            "centroid_raw": centroid_raw,
+            "centroid_resid": centroid_resid,
+            "batches": list(
+                dict.fromkeys(
+                    B_raw.tolist()
+                )
+            ),
+        }
+
+        info = {
+            "mode": (
+                "two_timepoints"
+                if n_timepoints == 2
+                else "multiple_timepoints"
+            ),
+            "longitudinal_case": (
+                "batch_constant_within_subject"
+            ),
+            "n_timepoints": int(
+                n_timepoints
+            ),
+            "timepoints": list(
+                ordered_timepoints
+            ),
+            "n_subjects_input": int(
+                subject_ser.nunique()
+            ),
+            "n_subjects_retained": int(
+                len(retained_subjects)
+            ),
+            "n_subjects_excluded": int(
+                subject_ser.nunique()
+                - len(retained_subjects)
+            ),
+            "retained_subjects": retained_subjects,
+            "representation": (
+                "within-subject changes between consecutive "
+                "timepoints"
+            ),
+            "change_definition": (
+                "Y(i,t) - Y(i,t-1)"
+            ),
+            "n_analysis_features": int(
+                X_raw.shape[1]
+            ),
+            "raw_diagnostics": raw_diag,
+            "residual_diagnostics": resid_diag,
+            "idp_names": list(
+                idp_names
+            ),
+        }
+
+        if return_info:
+            return results, info
+
+        return results
+
+    # ============================================================
+    # CASE 3:
+    # BATCH VARIES WITHIN SUBJECT
+    # ============================================================
+
+    def _subject_centre_matrix(
+        X: np.ndarray,
+    ):
+
+        centred_rows = []
+        centred_batches = []
+        centred_subjects = []
+
+        for subject_id, subject_df in data.groupby(
+            "_subject",
+            sort=False,
+        ):
+
+            indices = subject_df.index.to_numpy()
+
+            valid_indices = []
+
+            for idx in indices:
+
+                values = X[idx]
+
+                if np.isfinite(
+                    values
+                ).all():
+
+                    valid_indices.append(
+                        idx
+                    )
+
+            # Need at least two observations to define
+            # within-subject deviations.
+            if len(valid_indices) < 2:
+                continue
+
+            subject_values = X[
+                valid_indices
+            ]
+
+            subject_mean = (
+                subject_values.mean(
+                    axis=0
+                )
+            )
+
+            subject_centred = (
+                subject_values
+                - subject_mean
+            )
+
+            for j, idx in enumerate(
+                valid_indices
+            ):
+
+                centred_rows.append(
+                    subject_centred[j]
+                )
+
+                centred_batches.append(
+                    data.loc[
+                        idx,
+                        "_batch",
+                    ]
+                )
+
+                centred_subjects.append(
+                    subject_id
+                )
+
+        if len(centred_rows) == 0:
+
+            return (
+                np.empty(
+                    (0, X.shape[1]),
+                    dtype=float,
+                ),
+                np.array([]),
+                [],
+            )
+
+        return (
+            np.vstack(
+                centred_rows
+            ),
+            np.asarray(
+                centred_batches
+            ),
+            centred_subjects,
+        )
+
+    # ------------------------------------------------------------
+    # Raw subject-centred data
+    # ------------------------------------------------------------
+
+    (
+        X_raw,
+        B_raw,
+        centred_subjects,
+    ) = _subject_centre_matrix(
+        idp_matrix
+    )
+
+    if X_raw.shape[0] < 2:
+
+        raise ValueError(
+            "Fewer than two usable subject-centred observations "
+            "remain for the batch-varying longitudinal analysis."
+        )
+
+    (
+        pairwise_raw,
+        centroid_raw,
+        raw_diag,
+    ) = _calculate_distances(
+        X_raw,
+        B_raw,
+        covariance_mode="pooled",
+        centroid_mode="global",
+    )
+
+    # ------------------------------------------------------------
+    # Residualized subject-centred data
+    # ------------------------------------------------------------
+
+    if have_covariates:
+
+        (
+            X_resid,
+            B_resid,
+            resid_subjects,
+        ) = _subject_centre_matrix(
+            resid_matrix
+        )
+
+        if X_resid.shape[0] >= 2:
+
+            (
+                pairwise_resid,
+                centroid_resid,
+                resid_diag,
+            ) = _calculate_distances(
+                X_resid,
+                B_resid,
+                covariance_mode="pooled",
+                centroid_mode="global",
+            )
+
+        else:
+
+            pairwise_resid = None
+            centroid_resid = None
+            resid_diag = None
+
+            warnings.warn(
+                "Insufficient subject-centred observations for "
+                "the covariate-adjusted analysis."
+            )
+
+    else:
+
+        pairwise_resid = None
+        centroid_resid = None
+        resid_diag = None
+
+    results = {
+        "pairwise_raw": pairwise_raw,
+        "pairwise_resid": pairwise_resid,
+        "centroid_raw": centroid_raw,
+        "centroid_resid": centroid_resid,
+        "batches": list(
+            dict.fromkeys(
+                B_raw.tolist()
+            )
+        ),
+    }
+
+    info = {
+        "mode": (
+            "two_timepoints"
+            if n_timepoints == 2
+            else "multiple_timepoints"
+        ),
+        "longitudinal_case": (
+            "batch_varies_within_subject"
+        ),
+        "n_timepoints": int(
+            n_timepoints
+        ),
+        "timepoints": list(
+            ordered_timepoints
+        ),
+        "n_subjects_input": int(
+            subject_ser.nunique()
+        ),
+        "n_subjects_with_usable_repeated_data": int(
+            len(
+                set(
+                    centred_subjects
+                )
+            )
+        ),
+        "n_analysis_observations": int(
+            X_raw.shape[0]
+        ),
+        "batch_varies_within_subject": True,
+        "representation": (
+            "subject-centred observations"
+        ),
+        "centering_definition": (
+            "Y(i,t) - subject-specific feature-wise mean"
+        ),
+        "n_analysis_features": int(
+            X_raw.shape[1]
+        ),
+        "raw_diagnostics": raw_diag,
+        "residual_diagnostics": resid_diag,
+        "idp_names": list(
+            idp_names
+        ),
+    }
+
+    if return_info:
+        return results, info
+
+    return results
+def MultiVariateBatchDifference_long_old(
     idp_matrix: np.ndarray,
     batch: pd.Series | Sequence,
     idp_names: Optional[Sequence[str]] = None,
