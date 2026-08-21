@@ -4345,7 +4345,7 @@ def plot_MultivariateBatchDifference(
     )
 
     ax_raw.set_title(
-        "Pairwise Mahalanobis"
+        "Pairwise Mahalanobis (Raw)"
     )
 
     format_batch_labels(
