@@ -3870,14 +3870,14 @@ def LongitudinalReport(data, batch,
            batch=batch,
            subject=subject_ids,
            timepoint=timepoints, 
-           idp_names=features)
+           idp_names=features, return_info=True)
         print("\nMULTIVARIATE PAIRWISE SITE DIFFERENCES:")
         print(md)
         report.text_simple(
             "────────────────────────────────────────────"
             )
        
-        PlotDiagnosticResults.mahalanobis_distance_plot_long(results=md,
+        PlotDiagnosticResults.plot_MultivariateBatchDifference(results=md,
                                                              info=md_info,
                                                              rep=report,
                                                              annotate=True,
