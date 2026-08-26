@@ -617,6 +617,7 @@ def Levenes_Test_with_residuals(
     alpha: float = 0.05,
     show: bool = False,
     rep=None,
+    FK_mode: bool = True,
 ) -> list[tuple[str, plt.Figure]]:
     """
     Plot raw and residualised Levene's test results side-by-side.
@@ -684,7 +685,10 @@ def Levenes_Test_with_residuals(
             if s:
                 bars[xi].set_edgecolor("red")
                 bars[xi].set_linewidth(1.5)
-        ax.set_ylabel("Levene statistic")
+        if FK_mode:
+            ax.set_ylabel("Fligner-Killeen statistic")
+        else:
+            ax.set_ylabel("Levene statistic")
         ax.set_title("Raw")
         # add significance markers above bars for p < alpha
         if sig_raw.any():
@@ -708,7 +712,10 @@ def Levenes_Test_with_residuals(
                 ax2.plot(x[sig_res], np.full(int(np.sum(sig_res)), marker_y2), marker="v", linestyle="", color="red", markersize=6)
 
         left_label, right_label = (comp[0], comp[1]) if isinstance(comp, (list, tuple)) and len(comp) >= 2 else (str(comp), "")
-        fig.suptitle(f"Levene's test: {left_label} vs {right_label}")
+        if FK_mode:
+            fig.suptitle(f"Fligner-Killeen test: {left_label} vs {right_label}")
+        else:
+            fig.suptitle(f"Levene's test: {left_label} vs {right_label}")
 
         for ax_plot in axes[0, :ncols]:
             if hasattr(ax_plot, "set_box_aspect"):
@@ -721,7 +728,7 @@ def Levenes_Test_with_residuals(
         if stat_res is not None:
             ax2.text(0.98, 0.95, f"n_significant_resid={int(np.sum(sig_res))}", transform=ax2.transAxes, ha="right", va="top")
 
-        figs.append((f"Levene: {left_label} vs {right_label}", fig))
+        figs.append((f"{'Fligner-Killeen' if FK_mode else 'Levene'}: {left_label} vs {right_label}", fig))
 
     return None if rep is not None else figs
 
@@ -734,6 +741,7 @@ def Levenes_Test(
     alpha: float = 0.05,
     show: bool = False,
     rep=None,
+    FK_mode: bool = True,
 ) -> list[tuple[str, plt.Figure]]:
     """
     Plot Levene's test results produced by DiagnosticFunctions.Levene_Test.
@@ -800,9 +808,10 @@ def Levenes_Test(
                 bars[xi].set_linewidth(1.5)
 
         left_label, right_label = (comp[0], comp[1]) if isinstance(comp, (list, tuple)) and len(comp) >= 2 else (str(comp), "")
-        ax.set_title(f"Levene's test: {left_label} vs {right_label}")
+
+        ax.set_title(f"{'Fligner-Killeen' if FK_mode else 'Levene'} test: {left_label} vs {right_label}")
         ax.set_xlabel("Feature")
-        ax.set_ylabel("Levene statistic")
+        ax.set_ylabel(f"{'Fligner-Killeen' if FK_mode else 'Levene'} statistic")
         if hasattr(ax, "set_box_aspect"):
             ax.set_box_aspect(1)
         ax.set_xticks(x)
@@ -813,7 +822,7 @@ def Levenes_Test(
         n_sig = int(np.sum(sig))
         ax.text(0.98, 0.95, f"n_significant={n_sig}", transform=ax.transAxes, ha="right", va="top")
 
-        figs.append((f"Levene: {left_label} vs {right_label}", fig))
+        figs.append((f"{'Fligner-Killeen' if FK_mode else 'Levene'}: {left_label} vs {right_label}", fig))
 
     return None if rep is not None else figs
 """----------------------------------------------------------------------------------------------------------------------------"""

@@ -1435,7 +1435,7 @@ def Variance_Ratios(data, batch, covariates=None,
 
 # Define a function to perform the Levene's test for variance differences between each unique batch pair
 
-def Levenes_Test(data, batch, centre = 'median'):
+def Levenes_Test(data, batch, centre = 'median', FK_mode = True):
     # Define a function to perform the Levene's test for variance differences between each unique batch pair
     """
     Perform Levene's test for variance differences between each unique batch pair.
@@ -1443,6 +1443,7 @@ def Levenes_Test(data, batch, centre = 'median'):
         data: np.ndarray of shape (n_samples, n_features) - the data matrix.
         batch: np.ndarray of shape (n_samples,) - the batch labels.
         centre: str, optional - the method to calculate the center for Levene's test ('median', 'mean', or 'trimmed'). Default is 'median' which is more robust to outliers and non-normal distributions.
+        FK_mode: bool, optional - if True, use the Fligner-Killeen test instead of Levene's test for non-normal distributions. Default is True.
     Returns:
         dict: A dictionary where keys are tuples of batch pairs (batch1, batch2) and values are dictionaries containing 'statistic' and 'p_value' arrays of shape (n_features
     """
@@ -1463,19 +1464,38 @@ def Levenes_Test(data, batch, centre = 'median'):
     batch_data = {}
     levene_results = {}
     # Calculate variances for each feature in each batch
-    for b in unique_batches:
-        batch_data[b] = data[batch == b]
-    for b1, b2 in combinations(unique_batches, 2):
-        p_values = []
-        statistics = []
-        for feature_idx in range(data.shape[1]):
-            stat, p_value = levene(batch_data[b1][:, feature_idx], batch_data[b2][:, feature_idx], center=centre)
-            statistics.append(stat)
-            p_values.append(p_value)
-        levene_results[(b1, b2)] = {
-            'statistic': np.array(statistics),
-            'p_value': np.array(p_values)
-        }
+    if FK_mode==False:
+        for b in unique_batches:
+            batch_data[b] = data[batch == b]
+        for b1, b2 in combinations(unique_batches, 2):
+            p_values = []
+            statistics = []
+            for feature_idx in range(data.shape[1]):
+                stat, p_value = levene(batch_data[b1][:, feature_idx], batch_data[b2][:, feature_idx], center=centre)
+                statistics.append(stat)
+                p_values.append(p_value)
+            levene_results[(b1, b2)] = {
+                'statistic': np.array(statistics),
+                'p_value': np.array(p_values),
+                'test_type': 'Levene'+'('+centre+')'
+            }
+    else:
+        # Use the Fligner-Killeen test for non-normal distributions
+        from scipy.stats import fligner
+        for b in unique_batches:
+            batch_data[b] = data[batch == b]
+        for b1, b2 in combinations(unique_batches, 2):
+            p_values = []
+            statistics = []
+            for feature_idx in range(data.shape[1]):
+                stat, p_value = fligner(batch_data[b1][:, feature_idx], batch_data[b2][:, feature_idx])
+                statistics.append(stat)
+                p_values.append(p_value)
+            levene_results[(b1, b2)] = {
+                'statistic': np.array(statistics),
+                'p_value': np.array(p_values),
+                'test_type': 'Fligner-Killeen'
+            }
     return levene_results
 
 # Define a function to perform two-sample Kolmogorov-Smirnov test for distribution differences between

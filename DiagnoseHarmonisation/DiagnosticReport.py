@@ -1058,6 +1058,9 @@ def _run_single_method_diagnostics(
     feature_names,
     ratio_type: str,
     compute_umap: bool = True,
+    levene_center: str = "median",
+    FK_test: bool = True,
+
 ) -> CrossSectionalDiagnosticResult:
     """Execute the full diagnostic suite for one harmonisation method.
 
@@ -1144,13 +1147,13 @@ def _run_single_method_diagnostics(
         result.errors.append(f"Variance_Ratios failed: {exc}")
 
     try:
-        result.levene_raw = DiagnosticFunctions.Levenes_Test(data, batch, centre="median")
+        result.levene_raw = DiagnosticFunctions.Levenes_Test(data, batch, centre=levene_center, FK_mode=FK_test)
     except Exception as exc:
         result.errors.append(f"Levenes_Test (raw) failed: {exc}")
 
     if covariates_numeric is not None:
         try:
-            result.levene_residual = DiagnosticFunctions.Levenes_Test(data_resid, batch, centre="median")
+            result.levene_residual = DiagnosticFunctions.Levenes_Test(data_resid, batch, centre=levene_center, FK_mode=FK_test)
         except Exception as exc:
             result.errors.append(f"Levenes_Test (residual) failed: {exc}")
 
@@ -1781,6 +1784,8 @@ def CrossSectionalReport(
     UMAP_tuning = 'auto', # can also be batch or none (for default umap with no tuning)
     Random_state = None, # random state for reproducibility of UMAP embeddings
     probability_distribution: bool = True,
+    levene_center: str = "median",  # or "mean"
+    FK_test: bool = True,  # whether to use Fligner-Killeen test instead of Levene's test
 ) -> StatsReporter:
     """
     Create a full cross-sectional diagnostic report for batch effects.
@@ -2462,14 +2467,14 @@ def CrossSectionalReport(
         report.log_section("levenes_test", "Levene's test for variance differences between batches")
         logger.info("Levene's test for variance differences between batches")
         # Raw Levene test
-        levene_results_raw = DiagnosticFunctions.Levenes_Test(data, batch, centre='median')
+        levene_results_raw = DiagnosticFunctions.Levenes_Test(data, batch, centre='median', FK_mode=FK_test)
 
         # Residualise covariates (if provided) and run Levene on residuals
         levene_results_resid = None
         if covariates_numeric is not None:
             try:
                 data_resid = DiagnosticFunctions.RobustOLS(data, covariates_numeric, batch, covariate_names or [], covariate_types)
-                levene_results_resid = DiagnosticFunctions.Levenes_Test(data_resid, batch, centre='median')
+                levene_results_resid = DiagnosticFunctions.Levenes_Test(data_resid, batch, centre='median', FK_mode=FK_test )
             except Exception:
                 logger.exception("Failed to compute residualised Levene results; continuing with raw results only")
 
