@@ -3796,73 +3796,97 @@ def LongitudinalReport(data, batch,
        
        # Multivariate site differences using Mahalanobis distances
         report.log_section(
-            "Multivariate_batch_difference_reference",
-            "Batch variability (Multivariate): Difference from reference distribution"
+            "Multivariate_batch_difference",
+            "Batch variability (Multivariate): Mahalanobis distance between batches"
         )
-
+        
         report.text_simple(
         """
         📋 OVERVIEW
         ────────────────────────────────────────────────────────
-
-        This analysis evaluates how different each batch is from
-        a reference distribution when all features are considered
-        simultaneously.
-
-        Unlike univariate analyses, this approach captures
-        relationships between features and assesses the overall
-        multivariate structure of the data.
-
+        
+        This analysis evaluates multivariate differences between
+        batches by calculating Mahalanobis distances across the
+        feature space.
+        
+        Unlike univariate analyses, Mahalanobis distance accounts
+        for the covariance and correlation structure between
+        features, providing a joint measure of batch separation.
+        
         ⚙️ METHOD
         ────────────────────────────────────────────────────────
-
-        For each batch, Mahalanobis distance is computed relative
-        to a reference distribution.
-
-        Mahalanobis distance quantifies how far a batch lies from
-        the reference while accounting for correlations between
-        features.
-
-        Distances are calculated using the full covariance
-        structure of the dataset.
-
-        Both batch-specific distances and the overall average
-        distance are reported.
-
+        
+        The analysis automatically adapts to the structure of the
+        data.
+        
+        When subject and timepoint information are not available,
+        Mahalanobis distances are calculated directly from the
+        observed feature vectors using batch-specific mean vectors
+        and an averaged within-batch covariance matrix.
+        
+        When repeated measurements are available, the batch
+        structure within subjects is assessed. If batch remains
+        constant within subjects, within-subject changes between
+        consecutive timepoints are used. If batch varies within
+        subjects, each observation is centred relative to the
+        subject-specific mean feature profile before calculating
+        batch distances.
+        
+        Pairwise Mahalanobis distances are calculated between each
+        pair of batches. The Mahalanobis distance between each
+        batch and the global centroid is also reported.
+        
+        Where covariates are provided, distances are additionally
+        calculated after covariate adjustment.
+        
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
-
-        Lower Mahalanobis distances indicate that a batch more
-        closely resembles the reference distribution.
-
-        Higher distances indicate greater multivariate
-        differences and suggest stronger residual batch effects.
-
-        When comparing harmonisation strategies, reductions in
-        distance indicate improved alignment of batch
-        distributions in multivariate feature space.
-
+        
+        Lower Mahalanobis distances indicate greater multivariate
+        similarity between batches.
+        
+        Higher pairwise distances indicate greater multivariate
+        separation between batches and therefore stronger
+        batch-associated differences.
+        
+        Distance to the global centroid indicates how far each
+        batch is displaced from the overall multivariate centre.
+        
+        When comparing raw and harmonised data, reductions in
+        pairwise distances and distances to the global centroid
+        indicate reduced multivariate batch separation following
+        harmonisation.
+        
         ⚠️ LIMITATIONS
         ────────────────────────────────────────────────────────
-
-        Distance values depend on the dimensionality and
-        covariance structure of the dataset.
-
-        Distances should therefore be compared within the same
-        dataset and analytical framework rather than across
-        different studies.
+        
+        Mahalanobis distance depends on the covariance structure
+        and dimensionality of the feature space and can be affected
+        by covariance instability, collinearity, and high
+        dimensionality.
+        
+        Distances should therefore be interpreted within the same
+        dataset and analytical framework and alongside other
+        harmonisation diagnostics.
         """
         )
-        md = DiagnosticFunctionsLong.MultiVariateBatchDifference_long(
+        md,md_info = DiagnosticFunctionsLong.MultiVariateBatchDifference_long(
            idp_matrix=data,
            batch=batch,
-           idp_names=features)
+           subject=subject_ids,
+           timepoint=timepoints, 
+           idp_names=features, return_info=True)
         print("\nMULTIVARIATE PAIRWISE SITE DIFFERENCES:")
         print(md)
         report.text_simple(
             "────────────────────────────────────────────"
             )
-        PlotDiagnosticResults.plot_MultivariateBatchDifference(md, figsize=_plot_figsize("summary_hbar", len(md)), rep=report) 
+       
+        PlotDiagnosticResults.plot_MultivariateBatchDifference(results=md,
+                                                             info=md_info,
+                                                             rep=report,
+                                                             annotate=True,
+                                                             show=False)
         report.log_text("Multivariate batch variability plots added to report")
 
 

@@ -3955,8 +3955,673 @@ def plot_WithinSubjVar(
 # ============================================================================
 # 3.  MULTIVARIATE BATCH DIFFERENCE (MAHALANOBIS)
 # ============================================================================
-
 def plot_MultivariateBatchDifference(
+    results: dict,
+    rep=None,
+    info: dict | None = None,
+    annotate: bool = True,
+    figsize=(14, 5),
+    cmap="viridis",
+    show: bool = False,
+):
+    """
+    Plot Mahalanobis distances from the longitudinal Mahalanobis function.
+
+    Produces one figure containing:
+      - Heatmap of pairwise RAW Mahalanobis distances
+      - Heatmap of pairwise RESIDUAL Mahalanobis distances (if available)
+      - Bar chart of centroid-to-global distances (raw vs residual)
+
+    Parameters
+    ----------
+    results : dict
+        Output from MultiVariateBatchDifference_long(...).
+
+    rep : optional
+        Optional DiagnosticReport/report object. If supplied, the figure
+        is logged using rep.log_plot(...).
+
+    info : dict, optional
+        Optional diagnostics dictionary returned by
+        MultiVariateBatchDifference_long(..., return_info=True).
+        Used to display the detected longitudinal analysis mode.
+
+    annotate : bool
+        Annotate heatmap cells and bars with numeric values.
+
+    figsize : tuple
+        Matplotlib figure size.
+
+    cmap : str
+        Matplotlib colormap for heatmaps.
+
+    show : bool
+        If True, display the figure using plt.show().
+
+    Returns
+    -------
+    fig, axes
+        Matplotlib Figure and dictionary of Axes.
+    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+
+    # ============================================================
+    # Validation
+    # ============================================================
+
+    if not isinstance(results, dict):
+        raise ValueError(
+            "results must be a dictionary produced by "
+            "MultiVariateBatchDifference_long(...)."
+        )
+
+    required = [
+        "pairwise_raw",
+        "centroid_raw",
+        "batches",
+    ]
+
+    for key in required:
+        if key not in results:
+            raise ValueError(
+                f"Missing required key '{key}' in results."
+            )
+
+    pairwise_raw = results["pairwise_raw"]
+    pairwise_resid = results.get(
+        "pairwise_resid",
+        None,
+    )
+
+    centroid_raw = results["centroid_raw"]
+    centroid_resid = results.get(
+        "centroid_resid",
+        None,
+    )
+
+    batches = results["batches"]
+
+    if isinstance(
+        batches,
+        np.ndarray,
+    ):
+        batches = batches.tolist()
+
+    batches = list(batches)
+
+    n = len(batches)
+
+    if n < 2:
+        raise ValueError(
+            "Need at least two batches to plot distances."
+        )
+
+    # ============================================================
+    # Helpers
+    # ============================================================
+
+    def build_matrix(
+        pairwise_dict,
+    ):
+        M = np.full(
+            (n, n),
+            np.nan,
+            dtype=float,
+        )
+
+        # Distance of batch to itself = 0
+        np.fill_diagonal(
+            M,
+            0.0,
+        )
+
+        if pairwise_dict is None:
+            return M
+
+        for (b1, b2), distance in pairwise_dict.items():
+
+            if b1 not in batches:
+                continue
+
+            if b2 not in batches:
+                continue
+
+            i = batches.index(b1)
+            j = batches.index(b2)
+
+            M[i, j] = float(
+                distance
+            )
+            M[j, i] = float(
+                distance
+            )
+
+        return M
+
+    def centroid_array(
+        centroid_dict,
+    ):
+        if centroid_dict is None:
+            return None
+
+        values = []
+
+        for batch_name in batches:
+
+            key = (
+                batch_name,
+                "global",
+            )
+
+            if key in centroid_dict:
+
+                values.append(
+                    float(
+                        centroid_dict[key]
+                    )
+                )
+
+            else:
+
+                values.append(
+                    np.nan
+                )
+
+        return np.asarray(
+            values,
+            dtype=float,
+        )
+
+    def annotate_heatmap(
+        ax,
+        M,
+    ):
+
+        for i in range(
+            M.shape[0]
+        ):
+
+            for j in range(
+                M.shape[1]
+            ):
+
+                value = M[i, j]
+
+                if np.isfinite(value):
+
+                    ax.text(
+                        j,
+                        i,
+                        f"{value:.1f}",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                    )
+
+    def format_batch_labels(
+        ax,
+    ):
+
+        ax.set_xticks(
+            np.arange(n)
+        )
+        ax.set_yticks(
+            np.arange(n)
+        )
+
+        ax.set_xticklabels(
+            batches,
+            rotation=45,
+            ha="right",
+        )
+
+        ax.set_yticklabels(
+            batches,
+            rotation=45,
+            ha="right",
+        )
+
+        ax.set_xlabel(
+            "Batch"
+        )
+
+        ax.set_ylabel(
+            "Batch"
+        )
+
+    # ============================================================
+    # Prepare matrices
+    # ============================================================
+
+    M_raw = build_matrix(
+        pairwise_raw
+    )
+
+    M_resid = None
+
+    if pairwise_resid is not None:
+
+        M_resid = build_matrix(
+            pairwise_resid
+        )
+
+    c_raw = centroid_array(
+        centroid_raw
+    )
+
+    c_resid = centroid_array(
+        centroid_resid
+    )
+
+    has_residual = (
+        M_resid is not None
+        and c_resid is not None
+    )
+
+    # ============================================================
+    # Shared heatmap scale
+    # ============================================================
+
+    max_values = []
+
+    finite_raw = M_raw[
+        np.isfinite(M_raw)
+    ]
+
+    if finite_raw.size > 0:
+        max_values.append(
+            np.max(finite_raw)
+        )
+
+    if M_resid is not None:
+
+        finite_resid = M_resid[
+            np.isfinite(M_resid)
+        ]
+
+        if finite_resid.size > 0:
+            max_values.append(
+                np.max(finite_resid)
+            )
+
+    if len(max_values) == 0:
+        vmax = 1.0
+    else:
+        vmax = max(
+            max_values
+        )
+
+    # Avoid an invalid colour scale if all values are zero.
+    if vmax <= 0:
+        vmax = 1.0
+
+    vmin = 0.0
+
+    # ============================================================
+    # Figure title
+    # ============================================================
+
+    if info is not None:
+
+        mode = info.get(
+            "mode",
+            None,
+        )
+
+        longitudinal_case = info.get(
+            "longitudinal_case",
+            None,
+        )
+
+        if longitudinal_case == (
+            "batch_constant_within_subject"
+        ):
+
+            subtitle = (
+                "Longitudinal: batch constant within subject"
+            )
+
+        elif longitudinal_case == (
+            "batch_varies_within_subject"
+        ):
+
+            subtitle = (
+                "Longitudinal: batch varies within subject"
+            )
+
+        elif mode == "regular":
+
+            subtitle = "Regular"
+
+        else:
+
+            subtitle = ""
+
+    else:
+
+        subtitle = ""
+
+    # ============================================================
+    # Figure layout
+    # ============================================================
+
+    if has_residual:
+
+        num_cols = 3
+
+        width_ratios = [
+            1.0,
+            1.0,
+            0.95,
+        ]
+
+    else:
+
+        num_cols = 2
+
+        width_ratios = [
+            1.0,
+            0.95,
+        ]
+
+    fig = plt.figure(
+        figsize=figsize
+    )
+
+    gs = GridSpec(
+        1,
+        num_cols,
+        figure=fig,
+        width_ratios=width_ratios,
+    )
+
+    # ============================================================
+    # Raw heatmap
+    # ============================================================
+
+    ax_raw = fig.add_subplot(
+        gs[0, 0]
+    )
+
+    im_raw = ax_raw.imshow(
+        M_raw,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+    )
+
+    ax_raw.set_title(
+        "Pairwise Mahalanobis (Raw)"
+    )
+
+    format_batch_labels(
+        ax_raw
+    )
+
+    if annotate:
+        annotate_heatmap(
+            ax_raw,
+            M_raw,
+        )
+
+    # ============================================================
+    # Residual heatmap
+    # ============================================================
+
+    if has_residual:
+
+        ax_resid = fig.add_subplot(
+            gs[0, 1]
+        )
+
+        im_resid = ax_resid.imshow(
+            M_resid,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+        )
+
+        ax_resid.set_title(
+            "Pairwise Mahalanobis (Residual)"
+        )
+
+        format_batch_labels(
+            ax_resid
+        )
+
+        if annotate:
+
+            annotate_heatmap(
+                ax_resid,
+                M_resid,
+            )
+
+        # Shared colourbar
+        cbar = fig.colorbar(
+            im_resid,
+            ax=[
+                ax_raw,
+                ax_resid,
+            ],
+            fraction=0.046,
+            pad=0.15,
+            orientation="horizontal",
+            location="top",
+        )
+
+        cbar.set_label(
+            "Mahalanobis distance"
+        )
+
+    else:
+
+        ax_resid = None
+
+        cbar = fig.colorbar(
+            im_raw,
+            ax=ax_raw,
+            fraction=0.046,
+            pad=0.04,
+        )
+
+        cbar.set_label(
+            "Mahalanobis distance"
+        )
+
+    # ============================================================
+    # Centroid bar plot
+    # ============================================================
+
+    if has_residual:
+
+        ax_bar = fig.add_subplot(
+            gs[0, 2]
+        )
+
+    else:
+
+        ax_bar = fig.add_subplot(
+            gs[0, 1]
+        )
+
+    x = np.arange(n)
+
+    if c_resid is None:
+
+        width = 0.6
+
+        bars = ax_bar.bar(
+            x,
+            c_raw,
+            width,
+            label="Raw",
+        )
+
+        if annotate:
+
+            for bar in bars:
+
+                height = bar.get_height()
+
+                if np.isfinite(
+                    height
+                ):
+
+                    ax_bar.text(
+                        bar.get_x()
+                        + bar.get_width()
+                        / 2.0,
+                        height,
+                        f"{height:.1f}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                    )
+
+        ax_bar.set_title(
+            "Centroid → Global"
+        )
+
+        ax_bar.legend()
+
+    else:
+
+        width = 0.38
+
+        bars_raw = ax_bar.bar(
+            x - width / 2,
+            c_raw,
+            width,
+            label="Raw",
+        )
+
+        bars_res = ax_bar.bar(
+            x + width / 2,
+            c_resid,
+            width,
+            label="Residual",
+        )
+
+        if annotate:
+
+            for bar in (
+                list(bars_raw)
+                + list(bars_res)
+            ):
+
+                height = bar.get_height()
+
+                if np.isfinite(
+                    height
+                ):
+
+                    ax_bar.text(
+                        bar.get_x()
+                        + bar.get_width()
+                        / 2.0,
+                        height,
+                        f"{height:.1f}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                    )
+
+        ax_bar.set_title(
+            "Centroid → Global (Raw vs Residual)"
+        )
+
+        ax_bar.legend()
+
+    ax_bar.set_xticks(
+        x
+    )
+
+    ax_bar.set_xticklabels(
+        batches,
+        rotation=45,
+        ha="right",
+    )
+
+    ax_bar.set_ylabel(
+        "Mahalanobis distance"
+    )
+
+    ax_bar.set_xlabel(
+        "Batch"
+    )
+
+    # ============================================================
+    # Overall figure title
+    # ============================================================
+
+    if subtitle:
+
+        fig.suptitle(
+            f"Mahalanobis Batch Differences\n{subtitle}",
+            fontsize=13,
+        )
+
+        fig.tight_layout(
+            rect=[
+                0,
+                0,
+                1,
+                0.92,
+            ]
+        )
+
+    else:
+
+        fig.suptitle(
+            "Mahalanobis Batch Differences",
+            fontsize=13,
+        )
+
+        fig.tight_layout(
+            rect=[
+                0,
+                0,
+                1,
+                0.94,
+            ]
+        )
+
+    # ============================================================
+    # Report integration
+    # ============================================================
+
+    axes = {
+        "heatmap_raw": ax_raw,
+        "bars": ax_bar,
+    }
+
+    if ax_resid is not None:
+
+        axes[
+            "heatmap_resid"
+        ] = ax_resid
+
+    if rep is not None:
+
+        rep.log_plot(
+            fig,
+            "Mahalanobis distances (raw vs residual)",
+        )
+
+        plt.close(fig)
+
+        return None, None
+
+    if show:
+
+        plt.show()
+
+    return fig, axes
+    
+def plot_MultivariateBatchDifference_old(
     df,
     batch_col:    str        = "batch",
     value_col:    str        = "mdval",
