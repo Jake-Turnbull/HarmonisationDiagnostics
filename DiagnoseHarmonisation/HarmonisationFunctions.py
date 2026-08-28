@@ -2249,6 +2249,288 @@ def _safe_float(value: Any) -> float:
     except Exception:
         return np.nan
 
+def _batch_effects_to_weighted_zero(raw_effects: np.ndarray, batch_sizes: np.ndarray) -> np.ndarray:
+    """Convert treatment-coded batch coefficients (reference batch = 0) to the
+    weighted zero-sum parameterisation used by ComBat/longCombat, i.e. so that
+    sum(n_i * effect_i) / N == 0."""
+    n_total = np.sum(batch_sizes)
+    weighted_mean = np.sum(batch_sizes * raw_effects) / n_total
+    return raw_effects - weighted_mean
+#--------------------------------------------------------------------------------------
+def long_combat(
+    data: pd.DataFrame,
+    batch: pd.Series,
+    model_inputs: pd.DataFrame,
+    formula: Optional[str] = None,
+    subject_col: str = "subject_id",
+    timepoint_col: Optional[str] = "timepoint",
+    verbose: bool = True,
+    unique_fraction_threshold: float = 0.1,
+    parametric: bool = True,
+    UseEB: bool = True,
+    covariate_types: Optional[Union[Sequence[str], Mapping[str, str]]] = None,
+    re_formula: Optional[str] = None,
+    reml: bool = True,
+    optimizer: str = "lbfgs",
+    maxiter: int = 100,
+    conv: float = 1e-4,
+    return_all: bool = False,
+) -> Dict[str, Any]:
+    """
+    Longitudinal ComBat harmonisation, mirroring the R `longCombat` algorithm (Beer et al., 2020)
+    almost one-for-one.
+
+    For each feature a `MixedLM` is fit on the *unstandardised* feature (random intercept for
+    `subject_col`, fixed effects for batch/timepoint/covariates). The treatment-coded batch
+    coefficients are converted to the weighted zero-sum parameterisation, residuals are
+    standardised using the per-feature residual scale, and empirical Bayes shrinkage is run on
+    the batch effects (batch x feature orientation) exactly as in `combat`.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        The data to be harmonised, shape (n_observations, n_features).
+    batch : pd.Series
+        Batch label for each observation (row of `data`).
+    model_inputs : pd.DataFrame
+        DataFrame with one row per observation containing at least `subject_col`
+        (used as the random-intercept grouping variable), optionally `timepoint_col`,
+        and any further covariate columns.
+    formula : str, optional
+        Right-hand-side-inclusive Patsy formula, e.g. 'feature ~ C(batch) + age'. If not
+        provided, a formula is built automatically from batch + timepoint (if present) +
+        covariates (typed as binary/categorical/continuous).
+    subject_col : str, default "subject_id"
+        Column in `model_inputs` used as the MixedLM random-intercept grouping variable.
+    timepoint_col : str or None, default "timepoint"
+        Optional column in `model_inputs` treated as a categorical fixed effect.
+    parametric : bool, default True
+        Whether to run parametric empirical Bayes shrinkage on batch effects.
+    UseEB : bool, default True
+        Whether to apply empirical Bayes shrinkage at all (False uses raw batch estimates).
+    re_formula : str, optional
+        Optional custom random-effects formula passed to `smf.mixedlm` (default: random intercept only).
+    return_all : bool, default False
+        If True, also stores the fitted per-feature MixedLM results and random effects
+        in the returned `Effects` dictionary (memory-heavy for many features).
+
+    Returns
+    -------
+    dict
+        'Bayesdata': harmonised data (DataFrame, n_observations x n_features).
+        'gamma_hat', 'delta_hat': raw per-batch/per-feature batch-effect mean/variance estimates.
+        'gamma_star', 'delta_star': empirical-Bayes-adjusted counterparts.
+        'Effects': dict with sigma, fitted values, raw/adjusted batch effects, and priors.
+        'eb_hist': empirical Bayes iteration history.
+    """
+    if data.isnull().values.any():
+        raise ValueError("Input data contains missing values. Please handle missing data before applying long_combat. Consider using imputation methods in DiagnoseHarmonisation.Imputations")
+
+    data = data.reset_index(drop=True)
+    model_inputs = model_inputs.reset_index(drop=True)
+    batch = pd.Series(np.asarray(batch), name="batch").reset_index(drop=True).astype("category")
+
+    if batch.nunique() < 2:
+        raise ValueError("Batch variable must have at least two levels for harmonisation.")
+    if (batch.value_counts() < 2).any():
+        raise ValueError("Each batch level must have at least two samples for harmonisation.")
+    if subject_col not in model_inputs.columns:
+        raise ValueError(f"model_inputs must contain a '{subject_col}' column identifying subjects for the random intercept.")
+    if len(model_inputs) != len(data) or len(batch) != len(data):
+        raise ValueError("data, batch, and model_inputs must all have the same number of rows.")
+
+    feature_names = list(data.columns)
+    n_obs, n_features = data.shape
+    levels = list(batch.cat.categories)
+    n_batch = len(levels)
+    batches_idx = [np.where(batch.to_numpy() == lev)[0] for lev in levels]
+    batch_sizes = np.array([len(b) for b in batches_idx])
+
+    has_timepoint = timepoint_col is not None and timepoint_col in model_inputs.columns
+    covariate_cols = [c for c in model_inputs.columns if c not in {subject_col, timepoint_col}]
+    covariates = model_inputs[covariate_cols].copy() if covariate_cols else None
+    if covariates is not None and not covariates.empty:
+        if covariate_types is None:
+            covariate_types = _normalise_covariate_types(covariates, None, unique_fraction_threshold)
+        elif not isinstance(covariate_types, Mapping):
+            covariate_types = {c: t for c, t in zip(covariates.columns, covariate_types)}
+    else:
+        covariates = None
+        covariate_types = {}
+
+    if formula is None:
+        terms = ["C(batch)"]
+        if has_timepoint:
+            terms.append("C(timepoint)")
+        if covariates is not None:
+            for c in covariates.columns:
+                kind = covariate_types.get(c, "continuous")
+                terms.append(_term(c, kind) if kind in ("binary", "categorical") else _quote(c))
+        formula = "feature ~ " + " + ".join(terms)
+
+    if verbose:
+        print("Starting long_combat harmonisation (R longCombat-style)...")
+        print(f"Data shape: {data.shape}")
+        print(f"Number of batches: {n_batch}, batch sizes: {dict(zip(levels, batch_sizes.tolist()))}")
+        print(f"Fixed-effects formula: {formula}")
+
+    # Shared design frame (everything but the per-feature response). Keep batch as a
+    # pandas Categorical with our explicit level order so patsy's C(batch) treatment
+    # coding always uses levels[0] as the reference.
+    base_frame = pd.DataFrame({
+        "batch": pd.Categorical(batch.to_numpy(), categories=levels),
+        subject_col: model_inputs[subject_col].to_numpy(),
+    })
+    if has_timepoint:
+        base_frame["timepoint"] = model_inputs[timepoint_col].astype("category").to_numpy()
+    if covariates is not None:
+        base_frame = pd.concat([base_frame.reset_index(drop=True), covariates.reset_index(drop=True)], axis=1)
+
+    sigma = np.zeros(n_features)
+    fitted = np.zeros((n_obs, n_features))
+    batch_effects_raw = np.zeros((n_batch, n_features))
+    batch_effects_adjusted = np.zeros((n_batch, n_features))
+    models: Dict[str, Any] = {}
+    random_effects: Dict[str, Any] = {}
+    failed_features: List[str] = []
+
+    # Reference batch (levels[0]) is dropped by patsy's default treatment coding.
+    batch_coef_names = [f"C(batch)[T.{lev}]" for lev in levels[1:]]
+
+    for j, feature in enumerate(feature_names):
+        model_data = base_frame.copy()
+        model_data["feature"] = data[feature].to_numpy(dtype=float)
+
+        try:
+            md = smf.mixedlm(formula, data=model_data, groups=model_data[subject_col], re_formula=re_formula)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                mdf = md.fit(reml=reml, method=optimizer, maxiter=maxiter)
+        except Exception as exc:
+            warnings.warn(f"Failed to fit mixed effects model for feature {feature!r}: {exc}")
+            failed_features.append(feature)
+            continue
+
+        sigma_v = float(np.sqrt(mdf.scale))
+        sigma[j] = sigma_v if sigma_v > 0 else 1e-6
+        # Full conditional fitted values (fixed + random effects).
+        fitted[:, j] = np.asarray(mdf.fittedvalues, dtype=float)
+
+        raw_effects = np.zeros(n_batch)
+        for i, cname in enumerate(batch_coef_names, start=1):
+            raw_effects[i] = float(mdf.params.get(cname, 0.0))
+        batch_effects_raw[:, j] = raw_effects
+        batch_effects_adjusted[:, j] = _batch_effects_to_weighted_zero(raw_effects, batch_sizes)
+
+        if return_all:
+            models[feature] = mdf
+            random_effects[feature] = mdf.random_effects
+
+    if failed_features:
+        warnings.warn(f"{len(failed_features)} feature(s) failed to fit and were skipped: {failed_features}")
+    keep_mask = np.array([f not in failed_features for f in feature_names])
+    feature_names_used = [f for f in feature_names if f not in failed_features]
+
+    sigma = sigma[keep_mask]
+    fitted = fitted[:, keep_mask]
+    batch_effects_raw = batch_effects_raw[:, keep_mask]
+    batch_effects_adjusted = batch_effects_adjusted[:, keep_mask]
+
+    Y = data[feature_names_used].to_numpy(dtype=float)  # n_observations x n_features
+
+    # Expand per-batch effects to observations.
+    batch_idx_per_obs = np.zeros(n_obs, dtype=int)
+    for i, idxs in enumerate(batches_idx):
+        batch_idx_per_obs[idxs] = i
+    batch_effect_expanded = batch_effects_adjusted[batch_idx_per_obs, :]
+
+    # Z = (Y - fitted + batch_effect) / sigma
+    Z = (Y - fitted + batch_effect_expanded) / sigma[None, :]
+
+    # Raw batch-wise mean/variance of Z, kept in (n_batch, n_features) orientation.
+    gamma_hat = np.zeros((n_batch, len(feature_names_used)))
+    delta_hat = np.zeros((n_batch, len(feature_names_used)))
+    for i, idxs in enumerate(batches_idx):
+        z_batch = Z[idxs, :]
+        gamma_hat[i, :] = np.mean(z_batch, axis=0)
+        if len(idxs) > 1:
+            delta_hat[i, :] = np.var(z_batch, axis=0, ddof=1)
+        else:
+            delta_hat[i, :] = np.var(z_batch, axis=0, ddof=0) + 1e-6
+
+    gamma_bar, t2, a_prior, b_prior = _construct_priors(gamma_hat, delta_hat)
+
+    eb_hist: Dict[str, Any] = {"by_batch": {}, "counts": {}, "mode": None}
+    if not UseEB:
+        gamma_star = gamma_hat.copy()
+        delta_star = delta_hat.copy()
+        eb_hist["mode"] = "disabled_use_raw"
+    elif not parametric:
+        warnings.warn(
+            "parametric=False selected but nonparametric EB is not implemented for long_combat; using raw gamma_hat/delta_hat.",
+            RuntimeWarning,
+        )
+        gamma_star = gamma_hat.copy()
+        delta_star = delta_hat.copy()
+        eb_hist["mode"] = "nonparametric_unavailable_use_raw"
+    else:
+        eb_hist["mode"] = "parametric_eb"
+        gamma_star = np.zeros_like(gamma_hat)
+        delta_star = np.zeros_like(delta_hat)
+        Zt = Z.T  # features x samples, matching itSol's convention
+        for i, idxs in enumerate(batches_idx):
+            temp, count, hist = itSol(
+                Zt[:, idxs],
+                gamma_hat[i, :],
+                delta_hat[i, :],
+                gamma_bar[i],
+                t2[i],
+                a_prior[i],
+                b_prior[i],
+                conv=conv,
+                return_hist=True,
+            )
+            gamma_star[i, :] = temp[0, :]
+            delta_star[i, :] = temp[1, :]
+            eb_hist["by_batch"][str(levels[i])] = hist
+            eb_hist["counts"][str(levels[i])] = count
+
+    gamma_star_expanded = gamma_star[batch_idx_per_obs, :]
+    delta_star_expanded = delta_star[batch_idx_per_obs, :]
+
+    # Y_combat = sigma / sqrt(delta_star) * (Z - gamma_star) + fitted - batch_effect
+    Y_combat = (sigma[None, :] / np.sqrt(delta_star_expanded)) * (Z - gamma_star_expanded) + fitted - batch_effect_expanded
+
+    bayesdata = pd.DataFrame(Y_combat, index=data.index, columns=feature_names_used)
+
+    effects: Dict[str, Any] = {
+        "sigma": pd.Series(sigma, index=feature_names_used),
+        "fitted": pd.DataFrame(fitted, index=data.index, columns=feature_names_used),
+        "batch_effects_raw": pd.DataFrame(batch_effects_raw, index=levels, columns=feature_names_used),
+        "batch_effects_adjusted": pd.DataFrame(batch_effects_adjusted, index=levels, columns=feature_names_used),
+        "gamma_bar": gamma_bar,
+        "t2": t2,
+        "a_prior": a_prior,
+        "b_prior": b_prior,
+    }
+    if return_all:
+        effects["models"] = models
+        effects["random_effects"] = random_effects
+
+    output: Dict[str, Any] = {
+        "Bayesdata": bayesdata,
+        "gamma_hat": gamma_hat,
+        "delta_hat": delta_hat,
+        "gamma_star": gamma_star,
+        "delta_star": delta_star,
+        "Effects": effects,
+        "eb_hist": eb_hist,
+        "failed_features": failed_features,
+        "levels": np.array(levels),
+        "formula": formula,
+    }
+    return output
+
 
 def linearmodelling_harmonisation(
     data: Any,

@@ -9,9 +9,8 @@ Usage examples:
 """
 
 from __future__ import annotations
-
-import argparse
 import sys
+import argparse
 from typing import Optional, Sequence
 
 from DiagnoseHarmonisation.cross_sectional_workflow import (
@@ -74,6 +73,7 @@ def launch_gui() -> None:
 
 
 def main(argv: Optional[Sequence[str]] = None):
+
     argv = list(sys.argv[1:]) if argv is None else list(argv)
 
     # Delegate to the harmonisation CLI before the top-level parser sees the args,
@@ -148,10 +148,12 @@ def main(argv: Optional[Sequence[str]] = None):
         help="Open the desktop GUI for generating a cross-sectional report.",
     )
 
-    subparsers.add_parser(
+    harmonise_parser = subparsers.add_parser(
         "harmonise",
         help="Run a harmonisation method (combat/covbat/combat_gam/combat_modular/linear_model) and optionally generate a report.",
+        add_help=False,
     )
+    harmonise_parser.add_argument("harmonise_args", nargs=argparse.REMAINDER)
 
     args = parser.parse_args(argv)
     if args.command == "run":
@@ -170,6 +172,11 @@ def main(argv: Optional[Sequence[str]] = None):
     if args.command == "gui":
         launch_gui()
         return 0
+
+    if args.command == "harmonise":
+        from DiagnoseHarmonisation.Harmonisation_cli import main as harmonisation_main
+
+        return harmonisation_main(args.harmonise_args)
 
     parser.print_help()
     return 0
