@@ -2361,7 +2361,7 @@ def long_combat(
     if formula is None:
         terms = ["C(batch)"]
         if has_timepoint:
-            terms.append("C(timepoint)")
+            terms.append("timepoint")
         if covariates is not None:
             for c in covariates.columns:
                 kind = covariate_types.get(c, "continuous")
@@ -2382,7 +2382,8 @@ def long_combat(
         subject_col: model_inputs[subject_col].to_numpy(),
     })
     if has_timepoint:
-        base_frame["timepoint"] = model_inputs[timepoint_col].astype("category").to_numpy()
+        base_frame["timepoint"] = (pd.to_numeric(model_inputs[timepoint_col],errors="raise",).to_numpy()
+    )
     if covariates is not None:
         base_frame = pd.concat([base_frame.reset_index(drop=True), covariates.reset_index(drop=True)], axis=1)
 
