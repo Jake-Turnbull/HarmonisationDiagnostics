@@ -2264,7 +2264,9 @@ def long_combat(
     formula: Optional[str] = None,
     subject_col: str = "subject_id",
     timepoint_col: Optional[str] = "timepoint",
+    timepoint_as_fixed_effect: bool = True,
     verbose: bool = True,
+    timepoint_as_random_slope: bool = True,
     unique_fraction_threshold: float = 0.1,
     parametric: bool = True,
     UseEB: bool = True,
@@ -2303,7 +2305,7 @@ def long_combat(
     subject_col : str, default "subject_id"
         Column in `model_inputs` used as the MixedLM random-intercept grouping variable.
     timepoint_col : str or None, default "timepoint"
-        Optional column in `model_inputs` treated as a categorical fixed effect.
+        Optional column in `model_inputs` treated as a continuous fixed effect.
     parametric : bool, default True
         Whether to run parametric empirical Bayes shrinkage on batch effects.
     UseEB : bool, default True
@@ -2397,6 +2399,29 @@ def long_combat(
 
     # Reference batch (levels[0]) is dropped by patsy's default treatment coding.
     batch_coef_names = [f"C(batch)[T.{lev}]" for lev in levels[1:]]
+
+    # Check timepoint_as_random_effect and re_formula consistency
+    if timepoint_as_random_slope and re_formula is not None:
+        raise ValueError("timepoint_as_random_slope=True is incompatible with a custom re_formula. Please set one or the other, not both.")
+
+    # If time_point_as_random_slope is True, we add timepoint to the random effects formula. Ensure that this is consistent with the presence of timepoint_col.
+    # To avoid expansion of random effects, treat as a single random slope for timepoint, not as a random intercept for each timepoint level.
+    if timepoint_as_random_slope:
+        if has_timepoint:
+            re_formula = f"1 + (timepoint)" if re_formula is None else f"{re_formula} + (timepoint)"
+        else:
+            raise ValueError("timepoint_as_random_slope=True but timepoint_col is not present in model_inputs.")
+
+    # Write full formula used by md.fit() for each feature for the user to see. Unlike R version, only fixed effects are strings here so we will write the full
+    # formula for each feature, but the random effects formula is passed separately to MixedLM.
+    
+    if timepoint_as_fixed_effect and has_timepoint:
+        formula += " + timepoint"
+
+
+    # create a string that adds group[subject_col] and re_formula to the formula for each feature
+    full_formula = formula + f" + (1|{subject_col})" + (f" + {re_formula}" if re_formula is not None else "")
+
 
     for j, feature in enumerate(feature_names):
         model_data = base_frame.copy()
@@ -2528,7 +2553,7 @@ def long_combat(
         "eb_hist": eb_hist,
         "failed_features": failed_features,
         "levels": np.array(levels),
-        "formula": formula,
+        "formula": full_formula,
     }
     return output
 
