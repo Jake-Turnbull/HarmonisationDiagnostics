@@ -2362,7 +2362,7 @@ def long_combat(
 
     if formula is None:
         terms = ["C(batch)"]
-        if has_timepoint:
+        if has_timepoint and timepoint_as_fixed_effect:
             terms.append("timepoint")
         if covariates is not None:
             for c in covariates.columns:
@@ -2408,20 +2408,14 @@ def long_combat(
     # To avoid expansion of random effects, treat as a single random slope for timepoint, not as a random intercept for each timepoint level.
     if timepoint_as_random_slope:
         if has_timepoint:
-            re_formula = f"1 + (timepoint)" if re_formula is None else f"{re_formula} + (timepoint)"
+            re_formula = f"1 + timepoint" if re_formula is None else f"{re_formula} + timepoint"
         else:
             raise ValueError("timepoint_as_random_slope=True but timepoint_col is not present in model_inputs.")
 
-    # Write full formula used by md.fit() for each feature for the user to see. Unlike R version, only fixed effects are strings here so we will write the full
-    # formula for each feature, but the random effects formula is passed separately to MixedLM.
-    
-    if timepoint_as_fixed_effect and has_timepoint:
-        formula += " + timepoint"
-
-
-    # create a string that adds group[subject_col] and re_formula to the formula for each feature
-    full_formula = formula + f" + (1|{subject_col})" + (f" + {re_formula}" if re_formula is not None else "")
-
+    if re_formula is not None:
+        full_formula = formula + f" + ({re_formula} | {subject_col})"
+    else:
+        full_formula = formula + f" + (1 | {subject_col})"
 
     for j, feature in enumerate(feature_names):
         model_data = base_frame.copy()
