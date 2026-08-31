@@ -401,7 +401,7 @@ def fit_lmm_safe(
     md = mixedlm(formula_covariates, data=df_fit, groups=df_fit[group_col], re_formula="1")
     last_exc = None
     chosen_optimizer = None
-
+    optimizer_attempts = []
     for opt in optimizers:
         try:
             with warnings.catch_warnings(record=True) as caught:
@@ -413,7 +413,20 @@ def fit_lmm_safe(
                     warning_types.append(type(w.message).__name__)
                     warning_messages.append(str(w.message))
 
-            converged = bool(getattr(mdf, "converged", True))
+            converged = bool(getattr(mdf, "converged", False))
+
+            optimizer_attempts.append({
+                "optimizer": opt,
+                "converged": converged,
+                "exception": None,
+            })
+
+            if not converged:
+                notes.append(f"optimizer_{opt}_no_converge")
+                continue
+
+            chosen_optimizer = opt
+
             if not converged:
                 notes.append(f"optimizer_{opt}_no_converge")
                 continue
@@ -455,22 +468,62 @@ def fit_lmm_safe(
             if np.isfinite(var_batch) and abs(var_batch) <= 1e-10:
                 notes.append("var_batch_near_zero")
 
-            # LRT against fixed-only OLS
+            # LRT for random intercept:
+            # H0: covariates only, no random batch effect
+            # H1: same fixed effects + random intercept for batch
+            #
+            # IMPORTANT:
+            # Requires ML fitting (reml=False), because we are comparing 
+
             LR_stat = np.nan
             pval_LRT = np.nan
             pval_LRT_mixture = np.nan
-            try:
-                llf_lmm = float(mdf.llf)
-                llf_ols = float(ols_covariates_batch["ols"].llf)
-                LR_stat = 2.0 * (llf_lmm - llf_ols)
 
-                if np.isfinite(LR_stat) and LR_stat >= 0:
-                    # naive chi-square p-value
-                    pval_LRT = float(chi2.sf(LR_stat, 1))
-                    # mixture approximation for variance-on-boundary testing
-                    pval_LRT_mixture = float(0.5 * chi2.sf(LR_stat, 1)) if boundary_pvalue else np.nan
-            except Exception:
-                notes.append("lrt_failed")
+            try:
+                if reml:
+                    notes.append("lrt_invalid_reml")
+                else:
+                    llf_lmm = float(mdf.llf)
+
+                    # IMPORTANT: compare against OLS with the SAME fixed effects
+                    # as the LMM, NOT the model containing batch as a fixed effect.
+                    llf_null = float(ols_covariates["ols"].llf)
+
+                    raw_LR = 2.0 * (llf_lmm - llf_null)
+
+                    if not np.isfinite(raw_LR):
+                        notes.append("lrt_nonfinite")
+
+                    # A very small negative LR can occur because of numerical
+                    # optimisation error. Treat values close to zero as zero.
+                    elif raw_LR >= -1e-8:
+                        LR_stat = max(0.0, raw_LR)
+
+                        # Standard chi-square approximation
+                        pval_LRT = float(chi2.sf(LR_stat, df=1))
+
+                        # Random-effect variance is tested on the boundary (variance=0).
+                        # Use the 50:50 mixture approximation.
+                        if boundary_pvalue:
+                            if LR_stat == 0:
+                                pval_LRT_mixture = 1.0
+                            else:
+                                pval_LRT_mixture = float(
+                                    0.5 * chi2.sf(LR_stat, df=1)
+                                )
+
+                    else:
+                        # A substantially negative LR indicates something has
+                        # gone wrong with fitting/comparability.
+                        LR_stat = raw_LR
+                        notes.append(
+                            f"lrt_negative_stat={raw_LR:.6g}"
+                        )
+
+            except Exception as e:
+                notes.append(
+                    f"lrt_failed:{type(e).__name__}:{str(e)}"
+    )
 
             stats.update(
                 {
@@ -491,32 +544,47 @@ def fit_lmm_safe(
                 "mdf": mdf,
                 "ols": ols_covariates_batch.get("ols"),
                 "optimizer_used": chosen_optimizer,
+                "optimizer_attempts": optimizer_attempts,
                 "notes": notes,
                 "stats": stats,
                 "warning_types": sorted(set(warning_types)),
-                "warning_messages": list(dict.fromkeys(warning_messages)),  # preserve order, unique
-                "status": "lmm",
+                "warning_messages": list(dict.fromkeys(warning_messages)),
+                "status": "lmm_converged",
             }
 
         except Exception as e:
             last_exc = e
-            notes.append(f"optimizer_{opt}_failed")
+
+            optimizer_attempts.append({
+                "optimizer": opt,
+                "converged": False,
+                "exception": f"{type(e).__name__}: {str(e)}",
+            })
+
+            notes.append(
+                f"optimizer_{opt}_failed:{type(e).__name__}:{str(e)}"
+            )
             continue
 
-    # 6) all LMM attempts failed -> return OLS model outputs only
+    # 6) all LMM attempts failed or failed to converge
     notes.append("all_lmm_optimizers_failed")
+
     if last_exc is not None:
-        notes.append(f"last_exception={type(last_exc).__name__}")
+        notes.append(
+            f"last_exception={type(last_exc).__name__}:{str(last_exc)}"
+        )
+
     return {
         "success": False,
         "mdf": None,
         "ols": ols_covariates_batch.get("ols"),
         "optimizer_used": None,
+        "optimizer_attempts": optimizer_attempts,
         "notes": notes,
         "stats": stats,
         "warning_types": sorted(set(warning_types)),
         "warning_messages": list(dict.fromkeys(warning_messages)),
-        "status": "ols_only_lmm_failed",
+        "status": "lmm_failed_nonconvergence",
     }
 
 
@@ -617,23 +685,50 @@ def Run_LMM_cross_sectional(
         row = {
             "feature_index": fi,
             "feature": feature_names[fi],
+
+            # Model fitting diagnostics
             "success": bool(res.get("success", False)),
             "status": res.get("status", "unknown"),
             "optimizer_used": res.get("optimizer_used", None),
+
+            # Variance components
             "var_fixed": stats.get("var_fixed", np.nan),
             "var_batch": stats.get("var_batch", np.nan),
             "var_resid": stats.get("var_resid", np.nan),
+
+            # R2
             "R2_covariates": stats.get("R2_covariates", np.nan),
-            "R2_covariates_batch": stats.get("R2_covariates_batch", np.nan),
+            "R2_covariates_batch": stats.get(
+                "R2_covariates_batch", np.nan
+            ),
             "delta_R2_batch": stats.get("delta_R2_batch", np.nan),
-            "R2_marginal_lmm": stats.get("R2_marginal_lmm", np.nan),
-            "R2_conditional_lmm": stats.get("R2_conditional_lmm", np.nan),
+            "R2_marginal_lmm": stats.get(
+                "R2_marginal_lmm", np.nan
+            ),
+            "R2_conditional_lmm": stats.get(
+                "R2_conditional_lmm", np.nan
+            ),
+
+            # ICC
             "ICC": stats.get("ICC", np.nan),
+
+            # Random-effect significance
             "LR_stat": stats.get("LR_stat", np.nan),
-            "pval_LRT_random": stats.get("pval_LRT_random", np.nan),
-            "pval_LRT_random_mixture": stats.get("pval_LRT_random_mixture", np.nan),
+            "pval_LRT_random": stats.get(
+                "pval_LRT_random", np.nan
+            ),
+            "pval_LRT_random_mixture": stats.get(
+                "pval_LRT_random_mixture", np.nan
+            ),
+
+            # Diagnostics
             "notes": ";".join(notes),
-            "warning_types": ";".join(res.get("warning_types", []) or []),
+            "warning_types": ";".join(
+                res.get("warning_types", []) or []
+            ),
+            "warning_messages": ";".join(
+                res.get("warning_messages", []) or []
+            ),
         }
         # Loop over OLS fixed betas and add them to the row with a prefix, ensuring we handle missing values gracefully
         ols_fixed_betas = stats.get("ols_fixed_betas", {}) or {}

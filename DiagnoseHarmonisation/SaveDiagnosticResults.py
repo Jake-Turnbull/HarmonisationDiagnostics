@@ -51,7 +51,7 @@ def save_test_results(results, test_name: str, save_root: str | Path,
 
     # If already a DataFrame, just save
     if isinstance(results, pd.DataFrame):
-        results.to_csv(csv_path, index=True)
+        results.to_csv(csv_path, index=True, na_rep="NaN")
         return str(csv_path)
 
     # If results is a mapping/dict
@@ -112,20 +112,20 @@ def save_test_results(results, test_name: str, save_root: str | Path,
                 final_df = arr_df
 
             final_df.index.name = "comparison"
-            final_df.to_csv(csv_path, index=True)
+            final_df.to_csv(csv_path, index=True, na_rep="NaN")
             return str(csv_path)
 
         else:
             # purely scalar/dict rows -> convert to DataFrame where each row is a comparison
             df = pd.DataFrame.from_dict(rows, orient="index")
             df.index.name = "comparison"
-            df.to_csv(csv_path, index=True)
+            df.to_csv(csv_path, index=True, na_rep="NaN") # results_df.to_csv(output_path, index=False, na_rep="NaN")
             return str(csv_path)
 
     # Otherwise, try to coerce to DataFrame and save
     try:
         df = pd.DataFrame(results)
-        df.to_csv(csv_path, index=True)
+        df.to_csv(csv_path, index=True, na_rep="NaN")
         return str(csv_path)
     except Exception as exc:
         raise ValueError(f"Unable to save results for {test_name}: {exc}")

@@ -72,7 +72,7 @@ def test_long_combat_runs_and_returns_expected_structure():
         model_inputs=model_inputs,
         verbose=False,
     )
-
+    
     assert not output["failed_features"]
 
     bayesdata = output["Bayesdata"]

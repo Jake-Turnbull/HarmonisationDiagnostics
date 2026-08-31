@@ -199,14 +199,33 @@ def LMM_Diagnostics_Plot(
     # -------------------------------------------------
     fig1, ax1 = plt.subplots(figsize=(14, 5))
     x_labels, x = _x_labels(df_plot)
+    # Get Pvalues for ICC and convert to numeric, coercing errors to NaN
+    # If significant, plot in red otherwise in blue 
+    icc_pvalues = pd.to_numeric(df.get("pval_LRT_random_mixture", pd.Series([np.nan] * len(df_plot))), errors="coerce").to_numpy()
 
     icc_vals = pd.to_numeric(df_plot["ICC"], errors="coerce").to_numpy()
-    ax1.bar(x, icc_vals, alpha=0.8)
+    # Handle NaN p-values by coloring them gray
+    colors = np.where(np.isnan(icc_pvalues), "gray", np.where(icc_pvalues < 0.05, "red", "blue"))
+    ax1.bar(x, icc_vals, color=colors, alpha=0.8)
 
+    # Add color legend for significance
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], color='red', lw=4, label='Significant ICC (p < 0.05)'),
+        Line2D([0], [0], color='blue', lw=4, label='Non-significant ICC (p >= 0.05)'),
+        Line2D([0], [0], color='gray', lw=4, label='P-value unavailable')
+    ]
+    ax1.legend(handles=legend_elements, frameon=False)
     ax1.set_title("ICC per feature")
     ax1.set_xlabel("Feature")
     ax1.set_ylabel("ICC")
     ax1.set_ylim(bottom=0)
+    # Add a legend explaining colors
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], color='red', lw=4, label='Significant ICC (p < 0.05)'),
+        Line2D([0], [0], color='blue', lw=4, label='Non-significant ICC (p >= 0.05)')
+    ]
 
     ax1.set_xticks(x)
     shown_labels_1, rot_1 = _feature_tick_policy(list(x_labels))
@@ -214,6 +233,7 @@ def LMM_Diagnostics_Plot(
 
     figs.append(("ICC per feature", fig1))
 
+    """ # Remove the ordered plot as unnecessary; the unsorted plot is more informative and can be used to identify features with high ICC.
     # -------------------------------------------------
     # 2) ICC sorted descending
     # -------------------------------------------------
@@ -233,7 +253,7 @@ def LMM_Diagnostics_Plot(
     shown_labels_2, rot_2 = _feature_tick_policy(list(x_labels2))
     ax2.set_xticklabels(shown_labels_2, rotation=rot_2, ha="right" if rot_2 else "center")
 
-    figs.append(("ICC per feature sorted", fig2))
+    figs.append(("ICC per feature sorted", fig2)) """
 
     # -------------------------------------------------
     # 3) Covariates and covariates+batch R²
@@ -2021,7 +2041,9 @@ def mahalanobis_distance_plot(results: dict,
 
     ax_bar.set_xticks(x)
     ax_bar.set_xticklabels(batches, rotation=45, ha="right")
-    ax_bar.set_ylabel("Mahalanobis distance")
+    if has_resid:
+        ax_bar.set_ylabel("Mahalanobis distance")
+        # Else we leave blank to avoid cluttering the y-axis with a single bar chart
     ax_bar.set_xlabel("Batch")
 
     axes = {"heatmap_raw": ax_raw, "bars": ax_bar}

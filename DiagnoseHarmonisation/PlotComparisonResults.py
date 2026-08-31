@@ -257,7 +257,7 @@ def plot_compare_zscore_distributions(
             
         ax.set_xlim([-8, 8])
         ax.invert_xaxis()
-        panel_suffix = "residual" if use_residual else "raw"
+        panel_suffix = "Cov_adjusted" if use_residual else "Cov_unadjusted"
         ax.set_title(_title(f"{method} ({panel_suffix})"))
         ax.set_xlabel("Robust z-score")
         ax.set_ylabel("Proportion within batch" if density_mode else "Frequency")
@@ -364,6 +364,7 @@ def plot_compare_variance_ratios(results):
                 "method": method,
                 "mean_abs_log_ratio": float(np.nanmean(np.abs(log_vals))),
                 "median_abs_log_ratio": float(np.nanmedian(np.abs(log_vals))),
+                "max_abs_log_ratio": float(np.nanmax(np.abs(log_vals))),
             }
         )
 
@@ -389,8 +390,12 @@ def plot_compare_variance_ratios(results):
     fig.tight_layout()
     figs.append(("Comparison: variance ratios summary", fig))
 
+    # Find maximum absolute log ratio across all methods for setting y-limits in feature-wise plots
+    max_log_ratio = max((row["max_abs_log_ratio"] for row in rows), default=0)
+    
     if featurewise:
         fig2, axes, _, _ = _make_method_grid(len(featurewise))
+        # Calculate max variance ratio of each method for setting y-limits
         for ax2, (method, vec) in zip(axes, featurewise):
             vec = np.asarray(vec, dtype=float)
             x2 = np.arange(vec.size)
@@ -403,6 +408,7 @@ def plot_compare_variance_ratios(results):
             ax2.set_xticks(np.arange(vec.size))
             ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax2.grid(True, alpha=0.2)
+            ax2.set_ylim(-max_log_ratio * 1.1, max_log_ratio * 1.1)  # Set y-limits based on max log ratio across all methods
 
         _hide_unused_axes(axes, len(featurewise))
         fig2.tight_layout()
@@ -445,8 +451,11 @@ def plot_compare_lmm_icc(results):
                         pvals = np.full_like(icc, np.nan, dtype=float)
             else:
                 pvals = np.full_like(icc, np.nan, dtype=float)
+
+            # If pvals are none, model failed to converge or there is a problem. Plot all points in gray. If pvals are available, color significant points in red and non-significant in blue.
+            nan_mask = ~np.isfinite(pvals)
             sig_mask = np.isfinite(pvals) & (pvals < 0.05)
-            colors = np.where(sig_mask, "C2", "C3")
+            colors = np.where(nan_mask, "lightgray", np.where(sig_mask, "C3", "C2"))
             ax.scatter(x, icc, c=colors, s=22, zorder=3)
             ax.axhline(0.5, color="black", linestyle="--", linewidth=1, alpha=0.5)
             ax.text(0.98, 0.5, "ICC=0.5", transform=ax.get_yaxis_transform(), ha="right", va="bottom", fontsize=6, color="black")
@@ -459,8 +468,9 @@ def plot_compare_lmm_icc(results):
             ax.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax.legend(
                 handles=[
-                    Line2D([0], [0], marker="o", color="w", markerfacecolor="C2", markersize=5, label="p < 0.05"),
-                    Line2D([0], [0], marker="o", color="w", markerfacecolor="C3", markersize=5, label="p >= 0.05"),
+                    Line2D([0], [0], marker="o", color="w", markerfacecolor="C3", markersize=5, label="p < 0.05"),
+                    Line2D([0], [0], marker="o", color="w", markerfacecolor="C2", markersize=5, label="p >= 0.05"),
+                    Line2D([0], [0], marker="o", color="w", markerfacecolor="lightgray", markersize=5, label="p unavailable"),
                 ],
                 frameon=False,
                 fontsize=6,
@@ -535,23 +545,25 @@ def plot_compare_lmm_biological_effects(results):
         figs.append(("Comparison: biological preservation summary", fig))
 
     for caption, items, value_col, title in [
-        ("Comparison: covariate variance from OLS", ols_items, "mean_ols_partial_r2", "OLS partial R2"),
-        (
-            "Comparison: covariate variance with incremental batch effect",
-            lmm_items,
-            "mean_batch_adjusted_partial_r2",
-            "Batch incremental partial R2",
-        ),
+        ("Comparison: covariate variance from OLS", ols_items, "mean_ols_partial_r2", "OLS partial R2")
     ]:
         if not items:
             continue
         fig_grid, axes, _, _ = _make_method_grid(len(items), square_size=5.2)
         for ax, (method, df_cov) in zip(axes, items):
-            df_cov = df_cov.sort_values(value_col, ascending=True, na_position="last")
+
+            
+            # df_cov = df_cov.sort_values(by=value_col, ascending=True, na_position="last") # Commented out to keep original order
             ax.barh(df_cov["covariate"].astype(str), df_cov[value_col], color="C1" if "OLS" in caption else "C2", alpha=0.85)
             ax.set_title(_title(method))
             ax.set_xlabel(title)
             ax.grid(axis="x", alpha=0.2)
+            # Make text for batch on axis bold if exists in covariates
+            for label in ax.get_yticklabels():
+                if "batch" in label.get_text().lower():
+                    label.set_fontweight("bold")
+            
+
         _hide_unused_axes(axes, len(items))
         fig_grid.tight_layout()
         figs.append((caption, fig_grid))
@@ -618,7 +630,7 @@ def plot_compare_pca_correlation_heatmaps(
     if not items:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.8, max_cols=2)
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.8, max_cols=3)
     last_im = None
     for ax, (method, matrix, row_names, col_names, explained) in zip(axes, items):
         last_im = ax.imshow(matrix, vmin=-1.0, vmax=1.0, cmap="coolwarm", aspect="auto")
