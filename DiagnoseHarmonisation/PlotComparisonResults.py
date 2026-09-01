@@ -753,17 +753,24 @@ def plot_compare_covariance(results):
     figs = []
     mats = []
     names = []
+    batch_labels = []
     vmax = 0.0
     for method, res in _method_items(results):
         cov = res.covariance_results or {}
         mat = cov.get("pairwise_frobenius_normalized")
         if mat is None:
             continue
-        arr = mat.to_numpy(dtype=float) if isinstance(mat, pd.DataFrame) else np.asarray(mat, dtype=float)
+        if isinstance(mat, pd.DataFrame):
+            arr = mat.to_numpy(dtype=float)
+            labels = [str(name) for name in mat.index]
+        else:
+            arr = np.asarray(mat, dtype=float)
+            labels = [str(i) for i in range(arr.shape[0])]
         if arr.ndim != 2:
             continue
         mats.append(arr)
         names.append(method)
+        batch_labels.append(labels)
         vmax = max(vmax, float(np.nanmax(arr)))
 
     if len(mats) == 0:
@@ -771,11 +778,16 @@ def plot_compare_covariance(results):
 
     fig, axes, _, _ = _make_method_grid(len(mats))
 
-    for ax, method, arr in zip(axes, names, mats):
+    for ax, method, arr, labels in zip(axes, names, mats, batch_labels):
         im = ax.imshow(arr, vmin=0.0, vmax=vmax if vmax > 0 else None, aspect="equal")
         ax.set_title(_title(method))
         ax.set_xlabel("Batch")
         ax.set_ylabel("Batch")
+        # Make the x and y ticks correspond to the batch names
+        ax.set_xticks(np.arange(arr.shape[1]))
+        ax.set_yticks(np.arange(arr.shape[0]))
+        ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=7)
+        ax.set_yticklabels(labels, fontsize=7)
         # Add numbers to each tile in the heatmap, but only if the matrix is small enough
         if arr.shape[0] <= 10 and arr.shape[1] <= 10:
             for (i, j), val in np.ndenumerate(arr):
