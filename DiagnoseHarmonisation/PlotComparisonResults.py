@@ -749,12 +749,19 @@ def plot_compare_ks(results):
     return figs
 
 
-def plot_compare_covariance(results):
+def plot_compare_covariance(results, batch=None):
     figs = []
     mats = []
     names = []
     batch_labels = []
     vmax = 0.0
+
+    # Ground-truth batch labels, in the same sorted order used to build the
+    # pairwise Frobenius matrices, so labels never fall back to plain indices.
+    original_batch_labels = None
+    if batch is not None:
+        original_batch_labels = [str(b) for b in np.unique(np.asarray(batch))]
+
     for method, res in _method_items(results):
         cov = res.covariance_results or {}
         mat = cov.get("pairwise_frobenius_normalized")
@@ -768,6 +775,8 @@ def plot_compare_covariance(results):
             labels = [str(i) for i in range(arr.shape[0])]
         if arr.ndim != 2:
             continue
+        if original_batch_labels is not None and len(original_batch_labels) == arr.shape[0]:
+            labels = original_batch_labels
         mats.append(arr)
         names.append(method)
         batch_labels.append(labels)

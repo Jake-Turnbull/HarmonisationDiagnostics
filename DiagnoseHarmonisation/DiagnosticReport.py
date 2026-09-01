@@ -3023,7 +3023,7 @@ def CrossSectionalComparisonReport(
         _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results))
         _log_figures(PlotComparisonResults.plot_compare_mahalanobis(method_results))
         _log_figures(PlotComparisonResults.plot_compare_ks(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_covariance(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_covariance(method_results, batch=batch_arr))
         _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr))
         _log_figures(
             PlotComparisonResults.plot_compare_pca_correlation_heatmaps(

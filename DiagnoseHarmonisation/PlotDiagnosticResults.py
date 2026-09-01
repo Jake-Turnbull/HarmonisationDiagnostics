@@ -1750,7 +1750,7 @@ def plot_covariance_frobenius(
     Compute pairwise Frobenius norms of covariance differences between batches
 
     Args:
-        score: (n_samples, n_pcs) whole data matrix in real space
+        data: (n_samples, n_pcs) whole data matrix in real space
         batch: (n_samples,) batch labels.
         rep: report object (must support rep.log_plot and rep.log_text).
         normalize: if True, divide pairwise norms by Frobenius norm of pooled covariance.
