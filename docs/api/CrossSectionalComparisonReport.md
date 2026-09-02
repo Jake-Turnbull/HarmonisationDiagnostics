@@ -17,8 +17,15 @@ The comparison report expects a dictionary of equally shaped data matrices that 
 - In `save_data=True` mode, per-method exports include:
   - UMAP embeddings (when computed).
   - PCA scores, explained variance, and PC-correlation tables.
+  - PC-metadata omnibus R² associations (`calculate_pc_associations`), tidy CSV per method.
   - Frobenius covariance matrices (raw and normalized).
   - Per-batch scree and cumulative variance tables.
+- A batch-covariate confounding diagnostic (`calculate_batch_covariate_confounding`) is computed
+  once (it depends only on batch/covariates, not on the harmonised data) and saved as a single
+  tidy CSV: omnibus R² for continuous covariates vs. batch, Cramér's V for binary/categorical
+  covariates vs. batch. This is distinct from the per-method PC-metadata association analysis.
+- PCA-related plots (scatter and R² heatmaps) are capped at 5 principal components and annotated
+  with each PC's explained variance.
 
 ## Public entry point
 

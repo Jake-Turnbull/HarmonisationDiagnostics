@@ -759,6 +759,18 @@ def Run_LMM_cross_sectional(
         notes_counter["succeeded_LMM" if res.get("success", False) else "used_fallback"] += 1
 
     results_df = pd.DataFrame(rows)
+
+    # BH-FDR correction for the ICC (random batch effect) LRT p-values, applied
+    # across features since each feature is tested independently.
+    if "pval_LRT_random" in results_df.columns:
+        results_df["pval_LRT_random_fdr"] = benjamini_hochberg(
+            results_df["pval_LRT_random"].to_numpy(dtype=float)
+        )
+    if "pval_LRT_random_mixture" in results_df.columns:
+        results_df["pval_LRT_random_mixture_fdr"] = benjamini_hochberg(
+            results_df["pval_LRT_random_mixture"].to_numpy(dtype=float)
+        )
+
     summary = dict(notes_counter)
     summary["n_features"] = p
 
@@ -1386,6 +1398,207 @@ def PC_Correlations(
     # Return PCA object too so callers can access components_, mean_, etc.
     return explained_variance, scores, PC_correlations, pca
 
+
+def _fit_marginal_r2(y: "np.ndarray", x: "pd.Series", vtype: str) -> float:
+    """Fit PC ~ variable and return the OLS R^2 (NaN if the fit is degenerate)."""
+    import numpy as np
+    import pandas as pd
+    import statsmodels.api as sm
+
+    df = pd.DataFrame({"y": np.asarray(y, dtype=float), "x": pd.Series(x).reset_index(drop=True)}).dropna()
+    if df.shape[0] < 3:
+        return np.nan
+
+    if vtype == "categorical":
+        dummies = pd.get_dummies(df["x"].astype(str), drop_first=True)
+        if dummies.shape[1] == 0:
+            return np.nan  # single-level / constant categorical variable
+        design = sm.add_constant(dummies.to_numpy(dtype=float))
+    else:
+        x_numeric = pd.to_numeric(df["x"], errors="coerce")
+        if x_numeric.isna().any() or np.nanstd(x_numeric.to_numpy()) == 0:
+            return np.nan  # constant / non-numeric variable
+        design = sm.add_constant(x_numeric.to_numpy(dtype=float))
+
+    try:
+        r2 = float(sm.OLS(df["y"].to_numpy(dtype=float), design).fit().rsquared)
+    except Exception:
+        return np.nan
+    return float(np.clip(r2, 0.0, 1.0)) if np.isfinite(r2) else np.nan
+
+
+def calculate_pc_associations(pc_scores, covariates=None, batch=None, variable_types=None):
+    """
+    Fit one marginal OLS model per (principal component, metadata variable) pair,
+    PC_k = beta0 + f(variable_j) + eps, and return the resulting R^2 as a matrix.
+
+    Batch is always modelled as nominal categorical (dummy-coded), regardless of
+    whether it is supplied as strings or integers, so the result is invariant to
+    batch label relabelling/permutation. Covariates are modelled as continuous,
+    binary, or categorical; categorical/binary covariates are dummy-coded.
+    Each cell is a marginal association (other metadata variables are not
+    included in the same model).
+
+    Args:
+        pc_scores: array-like or DataFrame of shape (n_samples, n_components) -
+            PCA scores (e.g. the `scores` output of `PC_Correlations`).
+        covariates: optional DataFrame (or 2D array-like) of shape
+            (n_samples, n_covariates) with metadata variables excluding batch.
+        batch: optional 1D array-like of length n_samples with batch labels.
+        variable_types: optional dict mapping covariate column name to one of
+            "continuous", "binary", "categorical". Types not supplied are
+            inferred with the same heuristic used elsewhere for covariates.
+            Batch's type is always "categorical" regardless of this argument.
+
+    Returns:
+        dict with keys:
+            - "r2_matrix": DataFrame indexed by variable name, columns are PC
+              names, values are R^2 in [0, 1] (NaN for degenerate variables).
+            - "tidy": long-format DataFrame with columns
+              ["PC", "Variable", "Type", "R2"].
+            - "variable_types": dict of variable name -> type used.
+    """
+    import numpy as np
+    import pandas as pd
+    from DiagnoseHarmonisation.HarmonisationFunctions import _infer_covariate_type
+
+    if isinstance(pc_scores, pd.DataFrame):
+        pc_df = pc_scores.reset_index(drop=True)
+    else:
+        pc_arr = np.asarray(pc_scores, dtype=float)
+        if pc_arr.ndim != 2:
+            raise ValueError("pc_scores must be a 2D array-like (samples x components).")
+        pc_df = pd.DataFrame(pc_arr, columns=[f"PC{i+1}" for i in range(pc_arr.shape[1])])
+    n_samples = pc_df.shape[0]
+
+    variables: dict[str, pd.Series] = {}
+    var_types: dict[str, str] = {}
+
+    if batch is not None:
+        batch_series = pd.Series(np.asarray(batch)).reset_index(drop=True)
+        if len(batch_series) != n_samples:
+            raise ValueError("batch length must match the number of PCA samples.")
+        variables["batch"] = batch_series.astype(str)  # always nominal categorical
+        var_types["batch"] = "categorical"
+
+    if covariates is not None:
+        if isinstance(covariates, pd.DataFrame):
+            cov_df = covariates.reset_index(drop=True)
+        else:
+            cov_arr = np.asarray(covariates)
+            if cov_arr.ndim == 1:
+                cov_arr = cov_arr[:, None]
+            cov_df = pd.DataFrame(cov_arr, columns=[f"covariate_{i+1}" for i in range(cov_arr.shape[1])])
+        if cov_df.shape[0] != n_samples:
+            raise ValueError("covariates must have the same number of rows as pc_scores.")
+
+        for col in cov_df.columns:
+            if variable_types is not None and col in variable_types:
+                vtype = str(variable_types[col]).lower()
+            else:
+                vtype = _infer_covariate_type(cov_df[col])
+            if vtype not in {"continuous", "binary", "categorical"}:
+                raise ValueError(f"Invalid variable type '{vtype}' for '{col}'. Use continuous, binary, or categorical.")
+            variables[col] = cov_df[col]
+            var_types[col] = vtype
+
+    pc_names = list(pc_df.columns)
+    r2_matrix = pd.DataFrame(index=list(variables.keys()), columns=pc_names, dtype=float)
+    rows = []
+    for var_name, series in variables.items():
+        vtype = var_types[var_name]
+        for pc_name in pc_names:
+            r2 = _fit_marginal_r2(pc_df[pc_name].to_numpy(dtype=float), series, vtype)
+            r2_matrix.loc[var_name, pc_name] = r2
+            rows.append({"PC": pc_name, "Variable": var_name, "Type": vtype, "R2": r2})
+
+    tidy = pd.DataFrame(rows, columns=["PC", "Variable", "Type", "R2"])
+    return {"r2_matrix": r2_matrix, "tidy": tidy, "variable_types": var_types}
+
+
+def _cramers_v(x: "pd.Series", y: "pd.Series") -> float:
+    """Bias-uncorrected Cramer's V between two categorical series (NaN if degenerate)."""
+    import numpy as np
+    import pandas as pd
+    from scipy.stats import chi2_contingency
+
+    df = pd.DataFrame({"x": x, "y": y}).dropna()
+    if df.empty:
+        return np.nan
+    contingency = pd.crosstab(df["x"], df["y"])
+    if contingency.shape[0] < 2 or contingency.shape[1] < 2:
+        return np.nan  # single-level variable
+    try:
+        chi2_stat = chi2_contingency(contingency, correction=False)[0]
+    except Exception:
+        return np.nan
+    n = contingency.to_numpy().sum()
+    denom = min(contingency.shape[0] - 1, contingency.shape[1] - 1)
+    if n == 0 or denom <= 0:
+        return np.nan
+    v = np.sqrt((chi2_stat / n) / denom)
+    return float(np.clip(v, 0.0, 1.0)) if np.isfinite(v) else np.nan
+
+
+def calculate_batch_covariate_confounding(covariates, batch, variable_types=None):
+    """
+    Quantify batch-covariate imbalance/confounding, kept separate from the
+    PC-vs-metadata association analysis (`calculate_pc_associations`).
+
+    For each continuous covariate, fits covariate ~ C(batch) and reports the
+    omnibus R^2. For each binary/categorical covariate, reports Cramer's V
+    against batch. Batch is always treated as nominal categorical regardless
+    of its input encoding, so results are invariant to arbitrary batch labels.
+
+    Args:
+        covariates: DataFrame (or 2D array-like) of shape (n_samples, n_covariates).
+        batch: 1D array-like of length n_samples with batch labels.
+        variable_types: optional dict mapping covariate name to
+            "continuous"/"binary"/"categorical". Inferred if not supplied.
+
+    Returns:
+        dict with keys:
+            - "tidy": DataFrame with columns ["Variable", "Type", "Statistic", "Value"].
+            - "variable_types": dict of variable name -> type used.
+    """
+    import numpy as np
+    import pandas as pd
+    from DiagnoseHarmonisation.HarmonisationFunctions import _infer_covariate_type
+
+    if isinstance(covariates, pd.DataFrame):
+        cov_df = covariates.reset_index(drop=True)
+    else:
+        cov_arr = np.asarray(covariates)
+        if cov_arr.ndim == 1:
+            cov_arr = cov_arr[:, None]
+        cov_df = pd.DataFrame(cov_arr, columns=[f"covariate_{i+1}" for i in range(cov_arr.shape[1])])
+
+    batch_series = pd.Series(np.asarray(batch)).reset_index(drop=True).astype(str)  # always nominal categorical
+    if len(batch_series) != cov_df.shape[0]:
+        raise ValueError("batch length must match the number of covariate rows.")
+
+    rows = []
+    var_types: dict[str, str] = {}
+    for col in cov_df.columns:
+        if variable_types is not None and col in variable_types:
+            vtype = str(variable_types[col]).lower()
+        else:
+            vtype = _infer_covariate_type(cov_df[col])
+        if vtype not in {"continuous", "binary", "categorical"}:
+            raise ValueError(f"Invalid variable type '{vtype}' for '{col}'. Use continuous, binary, or categorical.")
+        var_types[col] = vtype
+
+        if vtype == "continuous":
+            value = _fit_marginal_r2(cov_df[col].to_numpy(dtype=float), batch_series, "categorical")
+            rows.append({"Variable": col, "Type": vtype, "Statistic": "R2", "Value": value})
+        else:
+            value = _cramers_v(cov_df[col].astype(str), batch_series)
+            rows.append({"Variable": col, "Type": vtype, "Statistic": "CramersV", "Value": value})
+
+    tidy = pd.DataFrame(rows, columns=["Variable", "Type", "Statistic", "Value"])
+    return {"tidy": tidy, "variable_types": var_types}
+
+
 """------------------- Variance, distribution and homogeneity functions ------------------"""
 def Variance_Ratios(data, batch, covariates=None,
                     covariate_names=None, covariate_types=None,
@@ -1528,9 +1741,47 @@ def Variance_Ratios(data, batch, covariates=None,
 
     return variance_ratios, pair_labels
 
+
+def benjamini_hochberg(pvals) -> np.ndarray:
+    """
+    Benjamini-Hochberg FDR correction, shared across diagnostic tests that
+    perform many per-feature hypothesis tests (Levene/Fligner-Killeen, KS,
+    LMM random-effect LRT).
+
+    Args:
+        pvals: array-like of raw p-values. May contain np.nan, which are left
+            as np.nan in the output (excluded from the correction).
+
+    Returns:
+        np.ndarray of BH-adjusted p-values, same shape as input.
+    """
+    p = np.asarray(pvals, dtype=float)
+    mask = ~np.isnan(p)
+    p_nonan = p[mask]
+    m = len(p_nonan)
+    out = np.full_like(p, np.nan, dtype=float)
+    if m == 0:
+        return out
+    order = np.argsort(p_nonan)
+    cummin = 1.0
+    adj = np.empty(m, dtype=float)
+    # compute adjusted p in reverse order
+    for i in range(m - 1, -1, -1):
+        rank = i + 1
+        pval = p_nonan[order[i]]
+        adj_val = min(cummin, pval * m / rank)
+        cummin = adj_val
+        adj[i] = adj_val
+    # put back in original order
+    adj_ordered = np.empty(m, dtype=float)
+    adj_ordered[order] = adj
+    out[mask] = np.minimum(adj_ordered, 1.0)
+    return out
+
+
 # Define a function to perform the Levene's test for variance differences between each unique batch pair
 
-def Levenes_Test(data, batch, centre = 'median', FK_mode = True):
+def Levenes_Test(data, batch, centre='median', FK_mode=True, do_fdr=True):
     # Define a function to perform the Levene's test for variance differences between each unique batch pair
     """
     Perform Levene's test for variance differences between each unique batch pair.
@@ -1539,8 +1790,11 @@ def Levenes_Test(data, batch, centre = 'median', FK_mode = True):
         batch: np.ndarray of shape (n_samples,) - the batch labels.
         centre: str, optional - the method to calculate the center for Levene's test ('median', 'mean', or 'trimmed'). Default is 'median' which is more robust to outliers and non-normal distributions.
         FK_mode: bool, optional - if True, use the Fligner-Killeen test instead of Levene's test for non-normal distributions. Default is True.
+        do_fdr: bool, optional - if True, add a Benjamini-Hochberg FDR-adjusted
+            p-value array (across features, within each batch-pair comparison)
+            under the 'p_value_fdr' key. Default is True.
     Returns:
-        dict: A dictionary where keys are tuples of batch pairs (batch1, batch2) and values are dictionaries containing 'statistic' and 'p_value' arrays of shape (n_features
+        dict: A dictionary where keys are tuples of batch pairs (batch1, batch2) and values are dictionaries containing 'statistic', 'p_value' and (if do_fdr) 'p_value_fdr' arrays of shape (n_features
     """
     import numpy as np
     from scipy.stats import levene
@@ -1569,9 +1823,11 @@ def Levenes_Test(data, batch, centre = 'median', FK_mode = True):
                 stat, p_value = levene(batch_data[b1][:, feature_idx], batch_data[b2][:, feature_idx], center=centre)
                 statistics.append(stat)
                 p_values.append(p_value)
+            p_values = np.array(p_values)
             levene_results[(b1, b2)] = {
                 'statistic': np.array(statistics),
-                'p_value': np.array(p_values),
+                'p_value': p_values,
+                'p_value_fdr': benjamini_hochberg(p_values) if do_fdr else None,
                 'test_type': 'Levene'+'('+centre+')'
             }
     else:
@@ -1586,9 +1842,11 @@ def Levenes_Test(data, batch, centre = 'median', FK_mode = True):
                 stat, p_value = fligner(batch_data[b1][:, feature_idx], batch_data[b2][:, feature_idx])
                 statistics.append(stat)
                 p_values.append(p_value)
+            p_values = np.array(p_values)
             levene_results[(b1, b2)] = {
                 'statistic': np.array(statistics),
-                'p_value': np.array(p_values),
+                'p_value': p_values,
+                'p_value_fdr': benjamini_hochberg(p_values) if do_fdr else None,
                 'test_type': 'Fligner-Killeen'
             }
     return levene_results
@@ -1639,32 +1897,6 @@ def KS_Test(data,
     import numpy as np
     from scipy.stats import ks_2samp
     from itertools import combinations
-
-    def benjamini_hochberg(pvals):
-        """Simple BH FDR correction. pvals can contain np.nan; those are left as np.nan."""
-        p = np.asarray(pvals)
-        mask = ~np.isnan(p)
-        p_nonan = p[mask]
-        m = len(p_nonan)
-        if m == 0:
-            return np.full_like(p, np.nan, dtype=float)
-        order = np.argsort(p_nonan)
-        ranked = np.empty(m, dtype=float)
-        # compute adjusted p in reverse order
-        cummin = 1.0
-        adj = np.empty(m, dtype=float)
-        for i in range(m-1, -1, -1):
-            rank = i + 1
-            pval = p_nonan[order[i]]
-            adj_val = min(cummin, pval * m / rank)
-            cummin = adj_val
-            adj[i] = adj_val
-        # put back in original order
-        adj_ordered = np.empty(m, dtype=float)
-        adj_ordered[order] = adj
-        out = np.full_like(p, np.nan, dtype=float)
-        out[mask] = np.minimum(adj_ordered, 1.0)
-        return out
 
     # ---- Validation ----
     if not hasattr(data, "ndim") or data.ndim != 2:

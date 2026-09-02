@@ -338,6 +338,7 @@ class CrossSectionalDiagnosticResult:
     ks_results: dict[str, Any] | None = None
     covariance_results: dict[str, Any] | None = None
     pca_results: dict[str, Any] | None = None
+    pc_associations: dict[str, Any] | None = None
     umap_results: dict[str, Any] | None = None
     summary_metrics: dict[str, float] | None = None
     errors: list[str] | None = None
@@ -523,6 +524,13 @@ def extract_summary_metrics(result: CrossSectionalDiagnosticResult) -> dict[str,
             metrics["median_icc"] = float(np.nanmedian(icc))
             metrics["prop_high_icc"] = float(np.nanmean(icc >= 0.1))
 
+        icc_pvals = result.lmm_results.get("pval_LRT_random_mixture_fdr")
+        if icc_pvals is None:
+            icc_pvals = result.lmm_results.get("pval_LRT_random_fdr")
+        icc_pvals = pd.to_numeric(icc_pvals, errors="coerce").to_numpy(dtype=float) if icc_pvals is not None else np.array([])
+        if icc_pvals.size:
+            metrics["prop_significant_icc"] = float(np.nanmean(icc_pvals < 0.05))
+
         delta = pd.to_numeric(result.lmm_results.get("delta_R2_batch"), errors="coerce").to_numpy(dtype=float)
         if delta.size:
             metrics["median_delta_r2_batch"] = float(np.nanmedian(delta))
@@ -538,7 +546,9 @@ def extract_summary_metrics(result: CrossSectionalDiagnosticResult) -> dict[str,
     if isinstance(levene_source, dict) and len(levene_source) > 0:
         pvals = []
         for comp_result in levene_source.values():
-            p = comp_result.get("p_value")
+            p = comp_result.get("p_value_fdr")
+            if p is None:
+                p = comp_result.get("p_value")
             if p is not None:
                 pvals.extend(np.asarray(p, dtype=float).ravel().tolist())
         if len(pvals) > 0:
@@ -983,6 +993,18 @@ def _save_comparison_results(
                     report_name=report_name,
                 )
 
+        if isinstance(result.pc_associations, dict):
+            tidy_r2 = result.pc_associations.get("tidy")
+            if isinstance(tidy_r2, pd.DataFrame) and not tidy_r2.empty:
+                saved_paths["pc_associations"] = save_test_results(
+                    tidy_r2,
+                    test_name=f"{prefix}_PCAssociationsR2",
+                    save_root=save_dir,
+                    feature_names=list(tidy_r2.columns),
+                    report_date=report_date,
+                    report_name=report_name,
+                )
+
         if pca_scores.ndim == 2 and pca_scores.shape[0] == result.data.shape[0]:
             n_pc = min(pca_scores.shape[1], 20)
             batch_arr = np.asarray(batch)
@@ -1198,6 +1220,24 @@ def _run_single_method_diagnostics(
         }
     except Exception as exc:
         result.errors.append(f"PC_Correlations failed: {exc}")
+
+    try:
+        cov_df = None
+        variable_types = None
+        if covariates_numeric is not None:
+            names = list(covariate_names) if covariate_names is not None else [f"covariate_{i+1}" for i in range(covariates_numeric.shape[1])]
+            cov_df = pd.DataFrame(covariates_numeric, columns=names)
+            if covariate_types is not None:
+                type_labels = {0: "binary", 2: "categorical", 3: "continuous"}
+                variable_types = {name: type_labels.get(t, "continuous") for name, t in zip(names, covariate_types)}
+        result.pc_associations = DiagnosticFunctions.calculate_pc_associations(
+            result.pca_results["scores"],
+            covariates=cov_df,
+            batch=batch,
+            variable_types=variable_types,
+        )
+    except Exception as exc:
+        result.errors.append(f"calculate_pc_associations failed: {exc}")
 
     if compute_umap:
         try:
@@ -2517,6 +2557,53 @@ def CrossSectionalReport(
         report.text_simple("Levene's test summaries added to report and saved as csv if requested")
         report.text_simple(line_break_in_text)
 
+        # ---------------------
+        # Batch-covariate confounding (kept separate from PC-metadata associations)
+        # ---------------------
+        report.log_section("batch_covariate_confounding", "Batch-covariate confounding diagnostics")
+        if covariates_numeric is not None:
+            try:
+                confound_cov_names = (
+                    list(covariate_names)
+                    if covariate_names is not None and len(covariate_names) == covariates_numeric.shape[1]
+                    else [f"covariate_{i+1}" for i in range(covariates_numeric.shape[1])]
+                )
+                confound_cov_df = pd.DataFrame(covariates_numeric, columns=confound_cov_names)
+                confound_variable_types = None
+                if covariate_types is not None and len(covariate_types) == len(confound_cov_names):
+                    type_labels = {0: "binary", 2: "categorical", 3: "continuous"}
+                    confound_variable_types = {
+                        name: type_labels.get(t, "continuous") for name, t in zip(confound_cov_names, covariate_types)
+                    }
+
+                confounding = DiagnosticFunctions.calculate_batch_covariate_confounding(
+                    confound_cov_df, batch, variable_types=confound_variable_types
+                )
+                report.text_simple(
+                    "Batch-covariate confounding quantifies potential imbalance of each covariate across batches, "
+                    "kept separate from PCA structure. Continuous covariates are summarised by the omnibus R2 from "
+                    "covariate ~ batch; binary/categorical covariates are summarised by Cramer's V. Batch is always "
+                    "treated as nominal categorical regardless of its input encoding. Larger values indicate greater "
+                    "covariate imbalance across batches and therefore greater potential for confounding."
+                )
+                report.text_simple(confounding["tidy"].round(3).to_string(index=False))
+                PlotDiagnosticResults.plot_batch_covariate_confounding(
+                    confound_cov_df, batch, confounding, rep=report, show=False
+                )
+                if save_data:
+                    save_test_results(
+                        confounding["tidy"],
+                        test_name="Batch_Covariate_Confounding",
+                        save_root=save_dir,
+                        feature_names=list(confounding["tidy"].columns),
+                        report_date=report_date,
+                        report_name=report_name,
+                    )
+            except Exception as exc:
+                report.text_simple(f"Failed to compute batch-covariate confounding diagnostics: {exc}")
+        else:
+            report.text_simple("No covariates provided; batch-covariate confounding diagnostics skipped.")
+        report.text_simple(line_break_in_text)
 
         # ---------------------
         # PCA and clustering
@@ -2571,6 +2658,44 @@ def CrossSectionalReport(
                 report_date=report_date,
                 report_name=report_name,
             )
+
+        try:
+            cov_df = None
+            variable_types = None
+            if covariates_numeric is not None:
+                if covariate_names is not None and len(covariate_names) == covariates_numeric.shape[1]:
+                    assoc_cov_names = list(covariate_names)
+                else:
+                    assoc_cov_names = [f"covariate_{i+1}" for i in range(covariates_numeric.shape[1])]
+                cov_df = pd.DataFrame(covariates_numeric, columns=assoc_cov_names)
+                if covariate_types is not None and len(covariate_types) == len(assoc_cov_names):
+                    type_labels = {0: "binary", 2: "categorical", 3: "continuous"}
+                    variable_types = {name: type_labels.get(t, "continuous") for name, t in zip(assoc_cov_names, covariate_types)}
+
+            pc_associations = DiagnosticFunctions.calculate_pc_associations(
+                score, covariates=cov_df, batch=batch, variable_types=variable_types
+            )
+            r2_matrix = pc_associations["r2_matrix"]
+            report.log_section("pca_associations", "Variance associated with metadata (Omnibus R2)")
+            report.text_simple(
+                "Omnibus R2 quantifies the proportion of variation in each principal component associated with each "
+                "supplied metadata variable. Categorical variables, including batch, are modelled categorically, making "
+                "their association independent of arbitrary category labels. Large R2 values for batch indicate that "
+                "batch membership is strongly associated with variation captured by that PC."
+            )
+            report.text_simple(r2_matrix.round(3).to_string())
+            PlotDiagnosticResults.plot_pc_r2_heatmap(r2_matrix, explained_variance=explained_variance, rep=report, show=False)
+            if save_data:
+                save_test_results(
+                    pc_associations["tidy"],
+                    test_name="PCA_R2_Associations",
+                    save_root=save_dir,
+                    feature_names=list(pc_associations["tidy"].columns),
+                    report_date=report_date,
+                    report_name=report_name,
+                )
+        except Exception as exc:
+            report.text_simple(f"Failed to compute PC-metadata R2 associations: {exc}")
 
         report.log_section("Eigenvalue_Scree", "PCA Eigenvalues and Covariance Structure")  
         report.text_simple(
@@ -2635,6 +2760,7 @@ def CrossSectionalReport(
         covariates=covariates,
         rep=report,
         variable_names=covariate_names,
+        explained_variance=explained_variance,
         UMAP_embedding=UMAP_embedding,
         UMAP_tuning=UMAP_tuning)
         logger.info("Clustering visualizations added to report")
@@ -2906,9 +3032,63 @@ def CrossSectionalComparisonReport(
         report.text_simple("\n".join(dataset_overview_lines))
         report.text_simple(line_break_in_text)
 
+        report_date = datetime.now().date().isoformat()
+
+        # ---------------------
+        # Batch-covariate confounding (shared across methods; kept separate from
+        # per-method PC-metadata associations, since it depends only on batch/covariates)
+        # ---------------------
+        report.log_section("batch_covariate_confounding", "Batch-covariate confounding diagnostics")
+        confounding_figs = []
+        if covariates_numeric is not None:
+            try:
+                confound_cov_names = (
+                    list(covariate_names)
+                    if covariate_names is not None and len(covariate_names) == covariates_numeric.shape[1]
+                    else [f"covariate_{i+1}" for i in range(covariates_numeric.shape[1])]
+                )
+                confound_cov_df = pd.DataFrame(covariates_numeric, columns=confound_cov_names)
+                confound_variable_types = None
+                if covariate_types is not None and len(covariate_types) == len(confound_cov_names):
+                    type_labels = {0: "binary", 2: "categorical", 3: "continuous"}
+                    confound_variable_types = {
+                        name: type_labels.get(t, "continuous") for name, t in zip(confound_cov_names, covariate_types)
+                    }
+
+                confounding = DiagnosticFunctions.calculate_batch_covariate_confounding(
+                    confound_cov_df, batch_arr, variable_types=confound_variable_types
+                )
+                report.text_simple(
+                    "Batch-covariate confounding quantifies potential imbalance of each covariate across batches, "
+                    "kept separate from PCA structure. Continuous covariates are summarised by the omnibus R2 from "
+                    "covariate ~ batch; binary/categorical covariates are summarised by Cramer's V. Batch is always "
+                    "treated as nominal categorical regardless of its input encoding. Larger values indicate greater "
+                    "covariate imbalance across batches and therefore greater potential for confounding."
+                )
+                report.text_simple(confounding["tidy"].round(3).to_string(index=False))
+                # Captured (not logged here) so it renders alongside the other comparison plots below.
+                confounding_figs = PlotDiagnosticResults.plot_batch_covariate_confounding(
+                    confound_cov_df, batch_arr, confounding, show=False
+                )
+                if save_data:
+                    from DiagnoseHarmonisation.SaveDiagnosticResults import save_test_results
+
+                    save_test_results(
+                        confounding["tidy"],
+                        test_name="Batch_Covariate_Confounding",
+                        save_root=save_dir,
+                        feature_names=list(confounding["tidy"].columns),
+                        report_date=report_date,
+                        report_name=report_name,
+                    )
+            except Exception as exc:
+                report.text_simple(f"Failed to compute batch-covariate confounding diagnostics: {exc}")
+        else:
+            report.text_simple("No covariates provided; batch-covariate confounding diagnostics skipped.")
+        report.text_simple(line_break_in_text)
+
         method_results: dict[str, CrossSectionalDiagnosticResult] = {}
         saved_paths: dict[str, dict[str, str]] = {}
-        report_date = datetime.now().date().isoformat()
 
         for method_name, data in normalized_datasets.items():
             report.log_section(_sanitize_name(method_name), f"Diagnostics for {method_name}")
@@ -2931,6 +3111,14 @@ def CrossSectionalComparisonReport(
                 report.text_simple(f"Warnings for {method_name}:")
                 for err in method_result.errors:
                     report.text_simple(f"- {err}")
+
+            if isinstance(method_result.pc_associations, dict):
+                r2_matrix = method_result.pc_associations.get("r2_matrix")
+                if isinstance(r2_matrix, pd.DataFrame) and not r2_matrix.empty:
+                    report.text_simple(
+                        f"Omnibus R2 (variance associated with metadata) per PC for {method_name}:"
+                    )
+                    report.text_simple(r2_matrix.round(3).to_string())
 
             metrics = method_result.summary_metrics or {}
             report.text_simple(f"Summary metrics for {method_name}:")
@@ -3025,14 +3213,8 @@ def CrossSectionalComparisonReport(
         _log_figures(PlotComparisonResults.plot_compare_ks(method_results))
         _log_figures(PlotComparisonResults.plot_compare_covariance(method_results, batch=batch_arr))
         _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr))
-        _log_figures(
-            PlotComparisonResults.plot_compare_pca_correlation_heatmaps(
-                method_results,
-                batch=batch_arr,
-                covariates=covariates_numeric,
-                covariate_names=covariate_names,
-            )
-        )
+        _log_figures(confounding_figs)
+        _log_figures(PlotComparisonResults.plot_compare_pca_r2_heatmaps(method_results))
         _log_figures(
             PlotComparisonResults.plot_compare_pca_embeddings(
                 method_results,

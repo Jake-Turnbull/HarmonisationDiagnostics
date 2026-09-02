@@ -51,13 +51,19 @@ By seeing which batches have larger ratios compared to the rest of the data, or 
 
 In this section we show a batch effect approach that differes slightly from general methods but one that can be useful for showing preservation of covariate effects and reduction of batch effects.
 
+### Batch-covariate confounding
+
+Before looking at PCA structure, we separately quantify how imbalanced each covariate is across batches. This is a property of the study design (batch and covariates alone) rather than of the harmonised data, so it does not depend on PCA. For each continuous covariate we fit `covariate ~ C(batch)` and report the omnibus R², and for each binary/categorical covariate we report [Cramér's V](https://en.wikipedia.org/wiki/Cram%C3%A9r%27s_V) against batch. Batch is always modelled as nominal categorical regardless of how it is encoded in the input data, so these statistics are invariant to arbitrary batch labelling. Larger values indicate greater covariate imbalance across batches and therefore greater potential for confounding between batch and biology.
+
+This is distinct from, and complements, the PCA association analysis below: batch-covariate confounding tells you whether batch and a covariate are entangled in the study design, while PCA associations (below) tell you whether that covariate (or batch) is associated with the dominant axes of variance in the data.
+
 ### PCA correlations
 
 [Principle Component Analysis](https://en.wikipedia.org/wiki/Principal_component_analysis) is a linear dimensionality technique projects a dataset to a set of N orthoganal components with each N+i component explaining less variance to the Nth component. PCA can be very useful for reducing the size of large datasets with many dimensions to only a few while retaining a large portion of the variance.
 
-We use it here to show the correlations with the batch effect and covariates. By using PCA to reduce the whole dataset into just four components, we can see how well correlated the variables given are with the linear axes explaining the most variance in the data. We also show here the explained variance by principle component number by batch which can show overall if the multivariate variance structure differs between batches.
+We use it here to show the association of the batch effect and covariates with the dominant axes of variance in the data. For each retained PC and each metadata variable (batch and covariates), we fit a marginal model `PC ~ variable` and report the R². Batch and categorical covariates are dummy-coded, so this omnibus R² is invariant to arbitrary category labelling (unlike a Pearson correlation with factorized labels). We also show here the explained variance by principle component number by batch which can show overall if the multivariate variance structure differs between batches.
 
-If batch explains a large proportion of the variance, it is likely to be well correlated with one or more of the first 4 PC's. The same is then true for covariates. This analysis can tell you how well correlated these variables are with the overall variance structure of the data, but also with eacother. After harmonisation, we would define success by a reduction of correlation of the PC's with batch and a preservation (or indeed increase) of the correlations with covariates (such as age)
+If batch explains a large proportion of the variance, it will have a large R² with one or more of the (at most 5) plotted PCs. The same is then true for covariates. This analysis can tell you how strongly associated these variables are with the overall variance structure of the data. After harmonisation, we would define success by a reduction of association of the PC's with batch and a preservation (or indeed increase) of the association with covariates (such as age). Note this is separate from batch-covariate confounding (above): a covariate can be strongly associated with a PC without being imbalanced across batches, and vice versa.
 
 ### Covariance structure
 

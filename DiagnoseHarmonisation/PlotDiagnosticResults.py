@@ -200,8 +200,11 @@ def LMM_Diagnostics_Plot(
     fig1, ax1 = plt.subplots(figsize=(14, 5))
     x_labels, x = _x_labels(df_plot)
     # Get Pvalues for ICC and convert to numeric, coercing errors to NaN
-    # If significant, plot in red otherwise in blue 
-    icc_pvalues = pd.to_numeric(df.get("pval_LRT_random_mixture", pd.Series([np.nan] * len(df_plot))), errors="coerce").to_numpy()
+    # If significant, plot in red otherwise in blue
+    # Prefer BH-FDR corrected p-values (multiple comparisons across features).
+    icc_pvalues = pd.to_numeric(df.get("pval_LRT_random_mixture_fdr", pd.Series([np.nan] * len(df_plot))), errors="coerce").to_numpy()
+    if not np.isfinite(icc_pvalues).any():
+        icc_pvalues = pd.to_numeric(df.get("pval_LRT_random_mixture", pd.Series([np.nan] * len(df_plot))), errors="coerce").to_numpy()
 
     icc_vals = pd.to_numeric(df_plot["ICC"], errors="coerce").to_numpy()
     # Handle NaN p-values by coloring them gray
@@ -671,8 +674,8 @@ def Levenes_Test_with_residuals(
     for comp, res_raw in levene_results_raw.items():
         stat_raw = np.asarray(res_raw.get("stat") if "stat" in res_raw else res_raw.get("statistic"))
         pval_raw = None
-        for key in ("p_value", "pvalue", "p_val", "pvalues", "p"):
-            if key in res_raw:
+        for key in ("p_value_fdr", "p_value", "pvalue", "p_val", "pvalues", "p"):
+            if key in res_raw and res_raw[key] is not None:
                 pval_raw = np.asarray(res_raw[key])
                 break
         if pval_raw is None:
@@ -683,8 +686,8 @@ def Levenes_Test_with_residuals(
         if levene_results_resid is not None and comp in levene_results_resid:
             res_res = levene_results_resid[comp]
             stat_res = np.asarray(res_res.get("stat") if "stat" in res_res else res_res.get("statistic"))
-            for key in ("p_value", "pvalue", "p_val", "pvalues", "p"):
-                if key in res_res:
+            for key in ("p_value_fdr", "p_value", "pvalue", "p_val", "pvalues", "p"):
+                if key in res_res and res_res[key] is not None:
                     pval_res = np.asarray(res_res[key])
                     break
             if pval_res is None:
@@ -802,10 +805,10 @@ def Levenes_Test(
     # For each comparison create a bar plot of the test statistic and mark significant features
     for comp, res in levene_results.items():
         stat = np.asarray(res.get("stat") if "stat" in res else res.get("statistic"))
-        # try a few common p-value keys
+        # try a few common p-value keys, preferring BH-FDR corrected values
         pval = None
-        for key in ("p_value", "pvalue", "p_val", "pvalues", "p"):
-            if key in res:
+        for key in ("p_value_fdr", "p_value", "pvalue", "p_val", "pvalues", "p"):
+            if key in res and res[key] is not None:
                 pval = np.asarray(res[key])
                 break
         if pval is None:
@@ -1049,29 +1052,11 @@ def PC_corr_plot(
     batch_numeric = pd.Categorical(batch).codes
     batch_col_code = f"{batch_col_name}_code"
     df[batch_col_code] = batch_numeric
-    # --- 
-    if PC_correlations:
-        # create combined_data and combined_names in the same order used for corr matrix
-        if cov_names:
-            combined_data = np.column_stack((PrincipleComponents, df[batch_col_code].values.reshape(-1, 1), df[cov_names].values))
-            combined_names = PC_Names + [batch_col_code] + cov_names
-        else:
-            combined_data = np.column_stack((PrincipleComponents, df[batch_col_code].values.reshape(-1, 1)))
-            combined_names = PC_Names + [batch_col_code]
+    # Note: PC-vs-metadata association is reported separately via
+    # calculate_pc_associations()/plot_pc_r2_heatmap (see DiagnosticFunctions.py),
+    # which avoids a Pearson correlation matrix that is sensitive to arbitrary
+    # batch/categorical label encoding.
 
-        corr = np.corrcoef(combined_data.T)
-        fig, ax = plt.subplots(figsize=(10, 8))
-        # Check number of combined_names to adjust font size for readability:
-        if len(combined_names) > 10:
-            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", xticklabels=combined_names, yticklabels=combined_names, ax=ax)
-        else: # Use just numbers if too many variables to avoid clutter:
-            x_ticks = [f"{name}\n({i+1})" for i, name in enumerate(combined_names)]
-            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", xticklabels=x_ticks, yticklabels=x_ticks, ax=ax)
-            # Add the score into each cell for clarity
-            
-        ax.set_title("Correlation Matrix of PCs, Batch, and Covariates")
-        figs.append(("PCA correlation matrix", fig))
-    
     # show only if requested
     if show:
         for _, f in figs:
@@ -1082,6 +1067,154 @@ def PC_corr_plot(
                 pass
 
     return figs
+
+
+@rep_plot_wrapper
+def plot_pc_r2_heatmap(r2_matrix, explained_variance=None, max_pcs: int = 5, *, show: bool = False) -> list[tuple[str, plt.Figure]]:
+    """
+    Heatmap of omnibus R^2 between each metadata variable (rows) and each
+    principal component (columns), as produced by
+    `DiagnosticFunctions.calculate_pc_associations`.
+
+    Args:
+        r2_matrix: DataFrame (or array-like) with variables as rows and PCs as
+            columns, values in [0, 1].
+        explained_variance: optional array-like of per-PC explained variance
+            percentages (same order/length as `r2_matrix` columns), shown in
+            the PC axis labels.
+        max_pcs (int, optional): Hard limit on the number of PCs plotted
+            (regardless of how many were computed), to keep the heatmap
+            readable when many low-variance PCs are retained. Defaults to 5.
+        show (bool, optional): Whether to display the figure interactively.
+
+    Returns:
+        list[tuple[str, plt.Figure]]: Single (caption, figure) pair.
+    """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    if not isinstance(r2_matrix, pd.DataFrame):
+        r2_matrix = pd.DataFrame(r2_matrix)
+    r2_matrix = r2_matrix.astype(float)
+
+    k = min(max(int(max_pcs), 1), 5, r2_matrix.shape[1])
+    r2_matrix = r2_matrix.iloc[:, :k]
+
+    if explained_variance is not None:
+        explained_arr = np.asarray(explained_variance, dtype=float)
+        col_labels = [
+            f"{col}\n({explained_arr[i]:.1f}%)" if i < explained_arr.shape[0] else col
+            for i, col in enumerate(r2_matrix.columns)
+        ]
+    else:
+        col_labels = list(r2_matrix.columns)
+
+    fig_width = max(6.0, 0.6 * r2_matrix.shape[1] + 3.0)
+    fig_height = max(4.0, 0.5 * r2_matrix.shape[0] + 2.0)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    sns.heatmap(
+        r2_matrix,
+        annot=True,
+        fmt=".2f",
+        cmap="viridis",
+        vmin=0.0,
+        vmax=1.0,
+        cbar_kws={"label": "Omnibus R2"},
+        xticklabels=col_labels,
+        ax=ax,
+    )
+    ax.set_title("Variance associated with metadata (R2)")
+    ax.set_xlabel("Principal component (% variance explained)")
+    ax.set_ylabel("Metadata variable")
+
+    if show:
+        plt.show()
+
+    return [("PC-metadata association (Omnibus R2) heatmap", fig)]
+
+
+@rep_plot_wrapper
+def plot_batch_covariate_confounding(covariates, batch, confounding, *, show: bool = False) -> list[tuple[str, plt.Figure]]:
+    """
+    Batch-wise distribution plots per covariate, annotated with the batch-covariate
+    confounding statistic from `DiagnosticFunctions.calculate_batch_covariate_confounding`
+    (omnibus R2 for continuous covariates, Cramer's V for binary/categorical).
+    Larger values indicate greater covariate imbalance across batches and
+    therefore greater potential for confounding.
+
+    Args:
+        covariates: DataFrame (or 2D array-like) of shape (n_samples, n_covariates).
+        batch: 1D array-like of batch labels.
+        confounding: dict returned by `calculate_batch_covariate_confounding`
+            (with "tidy" and "variable_types" keys).
+        show (bool, optional): Whether to display the figure interactively.
+
+    Returns:
+        list[tuple[str, plt.Figure]]: Single (caption, figure) pair.
+    """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    if isinstance(covariates, pd.DataFrame):
+        cov_df = covariates.reset_index(drop=True)
+    else:
+        cov_arr = np.asarray(covariates)
+        if cov_arr.ndim == 1:
+            cov_arr = cov_arr[:, None]
+        cov_df = pd.DataFrame(cov_arr, columns=[f"covariate_{i+1}" for i in range(cov_arr.shape[1])])
+
+    if cov_df.shape[1] == 0:
+        return []
+
+    batch_series = pd.Series(np.asarray(batch)).astype(str).reset_index(drop=True)
+
+    tidy = confounding.get("tidy") if isinstance(confounding, dict) else None
+    var_types = confounding.get("variable_types", {}) if isinstance(confounding, dict) else {}
+    stat_lookup: dict[str, tuple[str, float]] = {}
+    if isinstance(tidy, pd.DataFrame):
+        for _, row in tidy.iterrows():
+            stat_lookup[str(row["Variable"])] = (str(row["Statistic"]), float(row["Value"]))
+
+    n_cov = cov_df.shape[1]
+    ncols = min(3, n_cov)
+    nrows = int(np.ceil(n_cov / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5.5 * ncols, 4.5 * nrows), squeeze=False)
+    axes_flat = axes.flatten()
+
+    for i, col in enumerate(cov_df.columns):
+        ax = axes_flat[i]
+        vtype = var_types.get(col, "continuous")
+        stat_name, stat_value = stat_lookup.get(col, (None, np.nan))
+        plot_df = pd.DataFrame({"batch": batch_series, str(col): cov_df[col].to_numpy()}).dropna()
+
+        if vtype == "continuous":
+            sns.boxplot(data=plot_df, x="batch", y=str(col), ax=ax)
+        else:
+            counts = plot_df.groupby(["batch", str(col)]).size().unstack(fill_value=0)
+            proportions = counts.div(counts.sum(axis=1), axis=0)
+            proportions.plot(kind="bar", stacked=True, ax=ax, legend=(i == 0))
+            ax.set_ylabel("Proportion")
+
+        stat_label = f"{stat_name}={stat_value:.2f}" if stat_name is not None and np.isfinite(stat_value) else "n/a"
+        ax.set_title(f"{col} ({vtype})\nbatch association: {stat_label}")
+        ax.set_xlabel("Batch")
+        ax.tick_params(axis="x", rotation=45)
+
+    for j in range(n_cov, len(axes_flat)):
+        axes_flat[j].axis("off")
+
+    fig.suptitle("Batch-covariate confounding: distributions by batch (larger values = greater imbalance)")
+    fig.tight_layout()
+
+    if show:
+        plt.show()
+
+    return [("Batch-covariate confounding: distributions by batch", fig)]
+
 
 @rep_plot_wrapper
 def clustering_analysis_PCA(
@@ -1261,6 +1394,7 @@ def clustering_analysis_all(
     batch,
     covariates=None,
     variable_names=None,
+    explained_variance=None,
     show: bool = False,
     UMAP_embedding=True,
     UMAP_neighbors=15,
@@ -1280,6 +1414,8 @@ def clustering_analysis_all(
         covariates (optional): Optional covariate data to color the plots.
         variable_names (optional): Optional names for the covariates and batch
             variables.
+        explained_variance (optional): Optional array-like of per-PC explained
+            variance percentages, used to annotate the PC1/PC2 axis labels.
         show (bool, optional): Whether to display the figures interactively.
         UMAP_embedding (bool, optional): Whether to compute and plot a UMAP
             embedding of the raw data.
@@ -1300,6 +1436,13 @@ def clustering_analysis_all(
 
 
     figs = []
+
+    def _pc_axis_label(pc_index: int) -> str:
+        if explained_variance is not None and pc_index < len(explained_variance):
+            return f"Principal Component {pc_index+1} ({explained_variance[pc_index]:.1f}% variance)"
+        return f"Principal Component {pc_index+1}"
+
+
 
     # Basic validation
     if not isinstance(PrincipleComponents, np.ndarray) or PrincipleComponents.ndim != 2:
@@ -1486,8 +1629,8 @@ def clustering_analysis_all(
         for b in unique_batches:
             ax[1].scatter(df.loc[df[batch_col_name] == b, "PC1"], df.loc[df[batch_col_name] == b, "PC2"], label=f"{batch_col_name} {b}", alpha=0.7)
         
-        ax[1].set_xlabel("Principal Component 1")
-        ax[1].set_ylabel("Principal Component 2")
+        ax[1].set_xlabel(_pc_axis_label(0))
+        ax[1].set_ylabel(_pc_axis_label(1))
         ax[1].set_title("PCA Scatter Plot by Batch")
         ax[1].legend(loc="best", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)
         ax[1].grid(True)
@@ -1514,8 +1657,8 @@ def clustering_analysis_all(
                 else:
                     sc = ax_cov[1].scatter(df["PC1"], df["PC2"], c=vals, cmap="viridis", alpha=0.7)
                     plt.colorbar(sc, ax=ax_cov[1], label=name)
-                ax_cov[1].set_xlabel("Principal Component 1")
-                ax_cov[1].set_ylabel("Principal Component 2")
+                ax_cov[1].set_xlabel(_pc_axis_label(0))
+                ax_cov[1].set_ylabel(_pc_axis_label(1))
                 ax_cov[1].set_title(f"PCA Scatter Plot by {name}")
                 if len(np.unique(vals)) <= 20:
                     ax_cov[1].legend(loc="best", bbox_to_anchor=(1, 0.5), fontsize="small", frameon=True)

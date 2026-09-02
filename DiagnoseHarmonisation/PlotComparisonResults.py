@@ -440,12 +440,16 @@ def plot_compare_lmm_icc(results):
             x = np.arange(len(icc))
             df_method = next((res.lmm_results for m, res in _method_items(results) if m == method), None)
             if isinstance(df_method, pd.DataFrame):
-                if "pval_LRT_random_mixture" in df_method:
+                if "pval_LRT_random_mixture_fdr" in df_method:
+                    pvals = pd.to_numeric(df_method["pval_LRT_random_mixture_fdr"], errors="coerce").to_numpy(dtype=float)
+                elif "pval_LRT_random_mixture" in df_method:
                     pvals = pd.to_numeric(df_method["pval_LRT_random_mixture"], errors="coerce").to_numpy(dtype=float)
                 else:
                     pvals = np.full_like(icc, np.nan, dtype=float)
                 if not np.isfinite(pvals).any():
-                    if "pval_LRT_random" in df_method:
+                    if "pval_LRT_random_fdr" in df_method:
+                        pvals = pd.to_numeric(df_method["pval_LRT_random_fdr"], errors="coerce").to_numpy(dtype=float)
+                    elif "pval_LRT_random" in df_method:
                         pvals = pd.to_numeric(df_method["pval_LRT_random"], errors="coerce").to_numpy(dtype=float)
                     else:
                         pvals = np.full_like(icc, np.nan, dtype=float)
@@ -571,95 +575,61 @@ def plot_compare_lmm_biological_effects(results):
     return figs
 
 
-def plot_compare_pca_correlation_heatmaps(
-    results,
-    max_pcs: int = 3,
-    batch=None,
-    covariates=None,
-    covariate_names=None,
-):
+def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 5):
+    """
+    Grid of omnibus R^2 heatmaps (metadata variable x PC) per method, built from
+    each method's `pc_associations` (see `DiagnosticFunctions.calculate_pc_associations`).
+
+    Unlike a Pearson correlation matrix, R^2 is invariant to arbitrary batch/
+    categorical label encoding, so this replaces the old PCA correlation heatmap.
+    `max_pcs` is hard-capped at 5 to keep the heatmap readable when many
+    low-variance PCs are retained.
+    """
     figs = []
     items = []
-    batch_arr = np.asarray(batch) if batch is not None else None
-    cov_matrix = _safe_covariate_matrix(covariates)
-    if covariate_names is not None:
-        cov_name_list = [str(name) for name in covariate_names]
-    elif isinstance(covariates, pd.DataFrame):
-        cov_name_list = [str(name) for name in covariates.columns]
-    elif cov_matrix is not None:
-        cov_name_list = [f"covariate_{i+1}" for i in range(cov_matrix.shape[1])]
-    else:
-        cov_name_list = []
-    if cov_matrix is not None and len(cov_name_list) < cov_matrix.shape[1]:
-        cov_name_list = cov_name_list + [f"covariate_{i+1}" for i in range(len(cov_name_list), cov_matrix.shape[1])]
-
+    k_pcs = min(max(int(max_pcs), 1), 5)
     for method, res in _method_items(results):
-        pca_results = res.pca_results or {}
-        corr_dict = pca_results.get("pc_correlations", {}) or {}
-        explained = np.asarray(pca_results.get("explained_variance", []), dtype=float)
-        scores = np.asarray(pca_results.get("scores", []), dtype=float)
-        if explained.size == 0 or scores.ndim != 2:
+        pc_associations = getattr(res, "pc_associations", None) or {}
+        r2_matrix = pc_associations.get("r2_matrix")
+        if not isinstance(r2_matrix, pd.DataFrame) or r2_matrix.empty:
             continue
-
-        k = min(max_pcs, explained.shape[0], scores.shape[1])
-        if batch_arr is not None and batch_arr.shape[0] == scores.shape[0]:
-            batch_codes = pd.factorize(batch_arr)[0].astype(float)
-            batch_codes[batch_codes < 0] = np.nan
-            matrices = [scores[:, :k], batch_codes.reshape(-1, 1)]
-            labels = [f"PC{i+1}" for i in range(k)] + ["batch"]
-            if cov_matrix is not None and cov_matrix.shape[0] == scores.shape[0] and cov_matrix.shape[1] > 0:
-                matrices.append(cov_matrix.astype(float))
-                labels.extend(cov_name_list[: cov_matrix.shape[1]])
-            combined = np.column_stack(matrices)
-            corr_df = pd.DataFrame(combined, columns=labels).corr()
-            items.append((method, corr_df.to_numpy(dtype=float), labels, labels, explained[:k]))
-            continue
-
-        if not corr_dict:
-            continue
-
-        row_names = list(corr_dict.keys())
-        matrix = []
-        for row_name in row_names:
-            corr = np.asarray((corr_dict[row_name] or {}).get("correlation", []), dtype=float)
-            if corr.shape[0] < k:
-                corr = np.pad(corr, (0, max(0, k - corr.shape[0])), constant_values=np.nan)
-            matrix.append(corr[:k])
-        items.append((method, np.asarray(matrix, dtype=float), row_names, [f"PC{i+1}" for i in range(k)], explained[:k]))
+        k = min(k_pcs, r2_matrix.shape[1])
+        explained = np.asarray((res.pca_results or {}).get("explained_variance", []), dtype=float)
+        items.append((method, r2_matrix.iloc[:, :k], explained[:k]))
 
     if not items:
         return figs
 
     fig, axes, _, _ = _make_method_grid(len(items), square_size=5.8, max_cols=3)
     last_im = None
-    for ax, (method, matrix, row_names, col_names, explained) in zip(axes, items):
-        last_im = ax.imshow(matrix, vmin=-1.0, vmax=1.0, cmap="coolwarm", aspect="auto")
-        # Add the score to each cell
-        for (i, j), value in np.ndenumerate(matrix):
-            ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=6)
+    for ax, (method, matrix, explained) in zip(axes, items):
+        values = matrix.to_numpy(dtype=float)
+        last_im = ax.imshow(values, vmin=0.0, vmax=1.0, cmap="viridis", aspect="auto")
         ax.set_title(_title(method))
         ax.set_xticks(np.arange(matrix.shape[1]))
-        if len(col_names) == matrix.shape[1]:
-            ax.set_xticklabels(
-                col_names,
-                fontsize=7,
-                rotation=45 if len(col_names) > 8 else 0,
-                ha="right" if len(col_names) > 8 else "center",
-            )
-        else:
-            ax.set_xticklabels([f"PC{i+1}\n({explained[i]:.1f}%)" for i in range(matrix.shape[1])], fontsize=7)
-        ax.set_yticks(np.arange(len(row_names)))
-        ax.set_yticklabels([str(name) for name in row_names], fontsize=7)
-        ax.set_xlabel("PCs, batch, and covariates")
-        _add_right_colorbar(fig, ax, last_im, label="Correlation coefficient")
+        col_labels = [
+            f"{col}\n({explained[i]:.1f}%)" if i < explained.shape[0] else str(col)
+            for i, col in enumerate(matrix.columns)
+        ]
+        ax.set_xticklabels(
+            col_labels,
+            fontsize=7,
+            rotation=45 if matrix.shape[1] > 8 else 0,
+            ha="right" if matrix.shape[1] > 8 else "center",
+        )
+        ax.set_yticks(np.arange(matrix.shape[0]))
+        ax.set_yticklabels([str(name) for name in matrix.index], fontsize=7)
+        ax.set_xlabel("Principal component (% variance explained)")
+        _add_right_colorbar(fig, ax, last_im, label="Omnibus R2")
 
-        if matrix.shape[0] * matrix.shape[1] <= 24:
-            for (i, j), value in np.ndenumerate(matrix):
-                ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=6)
+        if values.shape[0] * values.shape[1] <= 24:
+            for (i, j), value in np.ndenumerate(values):
+                if np.isfinite(value):
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=6)
 
     _hide_unused_axes(axes, len(items))
     fig.subplots_adjust(left=0.10, right=0.92, bottom=0.10, top=0.92, wspace=0.40, hspace=0.40)
-    figs.append(("Comparison: PCA covariate correlation heatmaps", fig))
+    figs.append(("Comparison: variance associated with metadata (Omnibus R2)", fig))
     return figs
 
 
@@ -933,8 +903,9 @@ def plot_compare_pca_embeddings(
             color = batch_cmap(np.where(unique_batches == b)[0][0])
             ax.scatter(score[idx, 0], score[idx, 1], s=8, alpha=0.6, label=str(b), color=color)
         ax.set_title(_title(method))
-        ax.set_xlabel("PC1")
-        ax.set_ylabel("PC2")
+        explained = np.asarray(res.pca_results.get("explained_variance", []), dtype=float)
+        ax.set_xlabel(f"PC1 ({explained[0]:.1f}%)" if explained.shape[0] > 0 else "PC1")
+        ax.set_ylabel(f"PC2 ({explained[1]:.1f}%)" if explained.shape[0] > 1 else "PC2")
         ax.legend(fontsize=6, frameon=False, loc="best")
 
     _hide_unused_axes(axes, len(items))
