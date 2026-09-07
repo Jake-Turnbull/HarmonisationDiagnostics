@@ -290,6 +290,32 @@ def test_compare_zscore_histograms_can_use_frequencies():
     plt.close(fig)
 
 
+def test_compare_effect_plots_only_share_y_limits_when_requested():
+    class _Result:
+        def __init__(self, cohens_d, variance_ratios):
+            self.cohens_d = cohens_d
+            self.variance_ratios = variance_ratios
+
+    results = {
+        "Small": _Result(np.array([[0.1, 0.2]]), np.array([[1.1, 0.9]])),
+        "Large": _Result(np.array([[3.0, 4.0]]), np.array([[4.0, 0.25]])),
+    }
+
+    for plotter in (
+        PlotComparisonResults.plot_compare_cohens_d,
+        PlotComparisonResults.plot_compare_variance_ratios,
+    ):
+        _, automatic_fig = plotter(results)[-1]
+        automatic_limits = [ax.get_ylim() for ax in automatic_fig.axes[:2]]
+        assert automatic_limits[0] != automatic_limits[1]
+        plt.close(automatic_fig)
+
+        _, shared_fig = plotter(results, shared_y=True)[-1]
+        shared_limits = [ax.get_ylim() for ax in shared_fig.axes[:2]]
+        assert shared_limits[0] == shared_limits[1]
+        plt.close(shared_fig)
+
+
 def test_comparison_report_uses_global_zscore_not_per_batch(test_results_dir):
     rng = np.random.default_rng(123)
     n_a, n_b = 8, 24

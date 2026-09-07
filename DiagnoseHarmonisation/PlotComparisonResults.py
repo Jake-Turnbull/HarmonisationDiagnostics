@@ -275,7 +275,7 @@ def plot_compare_zscore_distributions(
     return figs
 
 
-def plot_compare_cohens_d(results, adaptive_y: bool = True):
+def plot_compare_cohens_d(results, shared_y: bool = False):
     figs = []
     rows = []
     featurewise = []
@@ -319,8 +319,9 @@ def plot_compare_cohens_d(results, adaptive_y: bool = True):
 
     if featurewise:
         fig2, axes, _, _ = _make_method_grid(len(featurewise))
-        shared_y_max = max((np.nanmax(np.abs(vec)) if np.asarray(vec).size else 1.0 for _, vec in featurewise), default=1.0)
-        shared_y_max = max(1.0, shared_y_max) * 1.1
+        if shared_y:
+            shared_y_max = max((np.nanmax(np.abs(vec)) if np.asarray(vec).size else 1.0 for _, vec in featurewise), default=1.0)
+            shared_y_max = max(1.0, shared_y_max) * 1.1
 
         for ax2, (method, vec) in zip(axes, featurewise):
             vec = np.asarray(vec, dtype=float)
@@ -328,13 +329,8 @@ def plot_compare_cohens_d(results, adaptive_y: bool = True):
             ax2.scatter(x2, vec, color="C0", s=12)
             _draw_effect_size_guides(ax2, vec)
 
-            if adaptive_y:
-                y_max = np.nanmax(np.abs(vec)) if vec.size else 1.0
-                y_max = max(1.0, y_max) * 1.1
-            else:
-                y_max = shared_y_max
-
-            ax2.set_ylim(-0.1, y_max)
+            if shared_y:
+                ax2.set_ylim(-0.1, shared_y_max)
             ax2.set_title(_title(method))
             ax2.set_xlabel("Feature")
             ax2.set_ylabel("Median |d| across comparisons")
@@ -350,7 +346,7 @@ def plot_compare_cohens_d(results, adaptive_y: bool = True):
     return figs
 
 
-def plot_compare_variance_ratios(results, adaptive_y: bool = True):
+def plot_compare_variance_ratios(results, shared_y: bool = False):
     figs = []
     rows = []
     featurewise = []
@@ -401,13 +397,9 @@ def plot_compare_variance_ratios(results, adaptive_y: bool = True):
     
     if featurewise:
         fig2, axes, _, _ = _make_method_grid(len(featurewise))
-        # Calculate max variance ratio of each method for setting y-limits
+        # Calculate a common limit only when explicitly requested.
         for ax2, (method, vec) in zip(axes, featurewise):
             vec = np.asarray(vec, dtype=float)
-            if adaptive_y:
-                y_max = np.nanmax(np.abs(vec)) if vec.size else 1.0
-                y_max = max(1.0, y_max) * 1.1
-                ax2.set_ylim(-y_max, y_max)
             x2 = np.arange(vec.size)
             ax2.plot(x2, vec, "b-", linewidth=1)
             ax2.plot(x2, vec, "r.", markersize=2)
@@ -418,7 +410,7 @@ def plot_compare_variance_ratios(results, adaptive_y: bool = True):
             ax2.set_xticks(np.arange(vec.size))
             ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax2.grid(True, alpha=0.2)
-            if not adaptive_y:
+            if shared_y:
                 ax2.set_ylim(-max_log_ratio * 1.1, max_log_ratio * 1.1)  # Set y-limits based on max log ratio across all methods
 
         _hide_unused_axes(axes, len(featurewise))
