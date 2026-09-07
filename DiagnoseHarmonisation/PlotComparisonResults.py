@@ -70,10 +70,10 @@ def _feature_labels(n_features: int):
     return labels, 45
 
 
-def _add_right_colorbar(fig, ax, mappable, label: str | None = None,shrink=0.5):
+def _add_right_colorbar(fig, ax, mappable, label: str | None = None,shrink=0.5,labelsize=3):
     cbar = fig.colorbar(mappable, ax=ax, location="right", fraction=0.04, pad=0.01, shrink=shrink)
 
-    cbar.ax.tick_params(labelsize=3)
+    cbar.ax.tick_params(labelsize=labelsize)
     return cbar
 
 
@@ -623,7 +623,7 @@ def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 5):
         ax.set_yticks(np.arange(matrix.shape[0]))
         ax.set_yticklabels([str(name) for name in matrix.index], fontsize=7)
         ax.set_xlabel("Principal component (% variance explained)")
-        _add_right_colorbar(fig, ax, last_im, label="Omnibus R2",shrink=0.8)
+        _add_right_colorbar(fig, ax, last_im, label="Omnibus R2", shrink=1.0, labelsize=6)
 
         if values.shape[0] * values.shape[1] <= 24:
             for (i, j), value in np.ndenumerate(values):
