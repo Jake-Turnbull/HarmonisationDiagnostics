@@ -2873,6 +2873,7 @@ def CrossSectionalComparisonReport(
     allow_many_covariate_embeddings: bool = False,
     probability_distribution: bool = True,
     base_cmap: str = "tab10",
+    adaptive_y: bool = True,
 ) -> StatsReporter:
     """
     Create a comparative diagnostic report for multiple harmonisation methods.
@@ -2909,6 +2910,10 @@ def CrossSectionalComparisonReport(
         timestamped_reports: Whether to timestamp the report filename.
         covariate_types: Optional covariate type codes.
         ratio_type: Variance-ratio mode.
+        adaptive_y: Whether feature-wise Cohen's d and variance-ratio plots use
+            per-method y-axis limits (`True`, default; each panel scaled to
+            1.1x its own max value) or a shared y-axis limit across all
+            methods (`False`).
 
     Returns:
         StatsReporter: Report object containing method-wise diagnostics,
@@ -3205,8 +3210,8 @@ def CrossSectionalComparisonReport(
                 base_cmap=base_cmap,
             )
         )
-        _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results, adaptive_y=adaptive_y))
+        _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results, adaptive_y=adaptive_y))
         _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results))
         _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results))
         _log_figures(PlotComparisonResults.plot_compare_mahalanobis(method_results))

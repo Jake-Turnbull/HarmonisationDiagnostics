@@ -70,8 +70,8 @@ def _feature_labels(n_features: int):
     return labels, 45
 
 
-def _add_right_colorbar(fig, ax, mappable, label: str | None = None):
-    cbar = fig.colorbar(mappable, ax=ax, location="right", fraction=0.04, pad=0.01, shrink=0.5)
+def _add_right_colorbar(fig, ax, mappable, label: str | None = None,shrink=0.5):
+    cbar = fig.colorbar(mappable, ax=ax, location="right", fraction=0.04, pad=0.01, shrink=shrink)
 
     cbar.ax.tick_params(labelsize=3)
     return cbar
@@ -275,7 +275,7 @@ def plot_compare_zscore_distributions(
     return figs
 
 
-def plot_compare_cohens_d(results):
+def plot_compare_cohens_d(results, adaptive_y: bool = True):
     figs = []
     rows = []
     featurewise = []
@@ -319,14 +319,20 @@ def plot_compare_cohens_d(results):
 
     if featurewise:
         fig2, axes, _, _ = _make_method_grid(len(featurewise))
+        shared_y_max = max((np.nanmax(np.abs(vec)) if np.asarray(vec).size else 1.0 for _, vec in featurewise), default=1.0)
+        shared_y_max = max(1.0, shared_y_max) * 1.1
+
         for ax2, (method, vec) in zip(axes, featurewise):
             vec = np.asarray(vec, dtype=float)
             x2 = np.arange(vec.size)
             ax2.scatter(x2, vec, color="C0", s=12)
             _draw_effect_size_guides(ax2, vec)
-            
-            y_max = np.nanmax(np.abs(vec)) if vec.size else 1.0
-            y_max = max(1.0, y_max)
+
+            if adaptive_y:
+                y_max = np.nanmax(np.abs(vec)) if vec.size else 1.0
+                y_max = max(1.0, y_max) * 1.1
+            else:
+                y_max = shared_y_max
 
             ax2.set_ylim(-0.1, y_max)
             ax2.set_title(_title(method))
@@ -344,7 +350,7 @@ def plot_compare_cohens_d(results):
     return figs
 
 
-def plot_compare_variance_ratios(results):
+def plot_compare_variance_ratios(results, adaptive_y: bool = True):
     figs = []
     rows = []
     featurewise = []
@@ -398,6 +404,10 @@ def plot_compare_variance_ratios(results):
         # Calculate max variance ratio of each method for setting y-limits
         for ax2, (method, vec) in zip(axes, featurewise):
             vec = np.asarray(vec, dtype=float)
+            if adaptive_y:
+                y_max = np.nanmax(np.abs(vec)) if vec.size else 1.0
+                y_max = max(1.0, y_max) * 1.1
+                ax2.set_ylim(-y_max, y_max)
             x2 = np.arange(vec.size)
             ax2.plot(x2, vec, "b-", linewidth=1)
             ax2.plot(x2, vec, "r.", markersize=2)
@@ -408,7 +418,8 @@ def plot_compare_variance_ratios(results):
             ax2.set_xticks(np.arange(vec.size))
             ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
             ax2.grid(True, alpha=0.2)
-            ax2.set_ylim(-max_log_ratio * 1.1, max_log_ratio * 1.1)  # Set y-limits based on max log ratio across all methods
+            if not adaptive_y:
+                ax2.set_ylim(-max_log_ratio * 1.1, max_log_ratio * 1.1)  # Set y-limits based on max log ratio across all methods
 
         _hide_unused_axes(axes, len(featurewise))
         fig2.tight_layout()
@@ -620,7 +631,7 @@ def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 5):
         ax.set_yticks(np.arange(matrix.shape[0]))
         ax.set_yticklabels([str(name) for name in matrix.index], fontsize=7)
         ax.set_xlabel("Principal component (% variance explained)")
-        _add_right_colorbar(fig, ax, last_im, label="Omnibus R2")
+        _add_right_colorbar(fig, ax, last_im, label="Omnibus R2",shrink=0.8)
 
         if values.shape[0] * values.shape[1] <= 24:
             for (i, j), value in np.ndenumerate(values):
