@@ -2580,11 +2580,11 @@ def CrossSectionalReport(
                     confound_cov_df, batch, variable_types=confound_variable_types
                 )
                 report.text_simple(
-                    "Batch-covariate confounding quantifies potential imbalance of each covariate across batches, "
-                    "kept separate from PCA structure. Continuous covariates are summarised by the omnibus R2 from "
-                    "covariate ~ batch; binary/categorical covariates are summarised by Cramer's V. Batch is always "
-                    "treated as nominal categorical regardless of its input encoding. Larger values indicate greater "
-                    "covariate imbalance across batches and therefore greater potential for confounding."
+                    "Batch-covariate confounding quantifies potential imbalance of each covariate across batches,\n "
+                    "Continuous covariates are summarised by the omnibus R2 from \n"
+                    "covariate ~ batch; binary/categorical covariates are summarised by Cramer's V. Batch is always \n"
+                    "treated as nominal categorical regardless of its input encoding. Larger values indicate greater \n"
+                    "covariate imbalance across batches and therefore greater potential for confounding.\n"
                 )
                 report.text_simple(confounding["tidy"].round(3).to_string(index=False))
                 PlotDiagnosticResults.plot_batch_covariate_confounding(
@@ -3024,11 +3024,14 @@ def CrossSectionalComparisonReport(
             if covariate_names is not None
             else ([f"covariate_{i+1}" for i in range(covariates_numeric.shape[1])] if covariates is not None else [])
         )
+        # batch counts expressed as np.int64(n), correct to just number by converting to int
+        batch_counts_temp = {k: int(v) for k, v in batch_counts.items()}
         dataset_overview_lines = [
             f"Validated methods: {', '.join(normalized_datasets.keys())}",
             f"Total samples: {n_samples}",
             f"Features: {n_features}",
-            f"Samples in each batch: {batch_counts}",
+            f"Samples in each batch: \n" # Split over two lines to avoid clustering
+            f"{batch_counts_temp}",
             f"Missing data per method: {', '.join(f'{name}={int(np.isnan(data).sum())}' for name, data in normalized_datasets.items())}",
             f"Covariates: {', '.join(covariate_labels) if covariate_labels else 'None'}",
         ]

@@ -238,6 +238,11 @@ def combat(data, batch, mod=[], parametric=True,
         mod_np = None
     else:
         if mod_was_df:
+            # Mod_df may contain strings as categorical variables, which need to be converted to float
+            
+            # Try and figure out if any columns are categorical and convert them to dummy variables
+            mod = pd.get_dummies(mod, drop_first=True)
+
             mod_np = mod.values.astype(float)
             # If mod rows equal n_samples -> OK; else if mod.columns equal n_samples -> transpose
             n_samples = dat_np.shape[1]
@@ -270,6 +275,7 @@ def combat(data, batch, mod=[], parametric=True,
     data = dat_np
     batch = batch_np
     mod = mod_np
+    n_input_covariates = 0 if mod is None else mod.shape[1]
 
     # Check the given parameters and print status messages
     if ReferenceBatch is None:
@@ -390,6 +396,7 @@ def combat(data, batch, mod=[], parametric=True,
         residuals_ref = data[:, ref_samples] - predicted_ref
         var_ref = np.mean(residuals_ref ** 2, axis=1)
 
+        offset_vec = ref_batch_effect.copy()
         stand_mean = np.tile(ref_batch_effect[:, None], (1, n_array))
         stand_mean = stand_mean + Cov_effects
         var_pooled = var_ref.copy()
@@ -401,6 +408,7 @@ def combat(data, batch, mod=[], parametric=True,
         inv_XtX = np.linalg.pinv(XtX)
         B_hat = inv_XtX @ design.T @ data.T
         grand_mean = (n_batches / n_array) @ B_hat[0:n_batch, :]
+        offset_vec = grand_mean.copy()
         predicted = (design @ B_hat).T
         resid = data - predicted
         var_pooled = np.mean(resid ** 2, axis=1)
@@ -420,10 +428,15 @@ def combat(data, batch, mod=[], parametric=True,
     # Optional: regress covariates
     if design.shape[1] > n_batch:
         X_cov = design[:, n_batch:]
-        X_cov = X_cov - np.mean(X_cov, axis=0, keepdims=True)
+        X_cov_mean = np.mean(X_cov, axis=0)
+        X_cov = X_cov - X_cov_mean
         B_cov = B_hat[n_batch:, :]
         Cov_effects = (X_cov @ B_cov).T
+        # stand_mean above used the raw (uncentered) covariate contribution, so fold the
+        # centering term into offset_vec: offset_vec + Cov_effects then reproduces stand_mean.
+        offset_vec = offset_vec + X_cov_mean @ B_cov
     else:
+        X_cov_mean = None
         Cov_effects = np.zeros_like(data)
 
     # Standardize the data, adding in small constant to avoid division by zero
@@ -649,13 +662,49 @@ def combat(data, batch, mod=[], parametric=True,
             "gamma_star": gamma_star,
             "delta_star": delta_star,
             "num_iter": eb_hist["counts"],
-            "hist": eb_hist
+            "hist": eb_hist,
+            "var_pooled": var_pooled,
+            "offset_vec": offset_vec,
+            "X_cov_mean": X_cov_mean,
+            "n_input_covariates": n_input_covariates,
+        }
+
+        # Quantities needed to replay standardisation/correction on unseen data via combat_apply().
+        ref_idx_out = ref_idx if ReferenceBatch is not None else None
+        standardisation = {
+            "levels": levels,
+            "n_batch": n_batch,
+            "var_pooled": var_pooled,
+            "offset_vec": offset_vec,
+            "X_cov_mean": X_cov_mean,
+            "mod_col_names": [f"cov{i}" for i in range(n_input_covariates)],
+            "n_input_covariates": n_input_covariates,
+            "ref_batch_idx": ref_idx_out,
+            "reference_batch_label": ReferenceBatch,
+            "mean_model": "ols",
+            "encoding_info": None,
+            "gamma_hat": gamma_hat,
+            "delta_hat": delta_hat,
+            "gamma_star": gamma_star,
+            "delta_star": delta_star,
+            "priors_used_gamma_bar": np.tile(gamma_bar[:, None], (1, gamma_hat.shape[1])),
+            "priors_used_t2": np.tile(t2[:, None], (1, gamma_hat.shape[1])),
+            "priors_used_a_prior": np.tile(a_prior[:, None], (1, gamma_hat.shape[1])),
+            "priors_used_b_prior": np.tile(b_prior[:, None], (1, gamma_hat.shape[1])),
+            "DeltaCorrection": bool(DeltaCorrection),
+            "GammaCorrection": bool(GammaCorrection),
+            "RegressCovariates": bool(RegressCovariates),
+            "CovariateRemovalMatrix": None,
+            "parametric": bool(parametric),
+            "UseEB": bool(UseEB),
+            "covbat_mode": bool(covbat_mode),
         }
 
         output = {
             "bayesdata": bayesdata,
             "B_hat": B_hat,
             "priors": priors,
+            "standardisation": standardisation,
 
             # Optional flat copies for backwards compatibility
             "gamma_bar": gamma_bar,
@@ -842,6 +891,9 @@ def _encode_covariates_modular(mod, n_samples, mean_model="ols", gam_opts=None):
         "encoded_columns": [],
         "column_sources": {},
         "encoding": {},
+        "categories": {},
+        "design_info": {},
+        "safe_col": {},
     }
 
     if mod_df is None or mod_df.shape[1] == 0:
@@ -864,6 +916,8 @@ def _encode_covariates_modular(mod, n_samples, mean_model="ols", gam_opts=None):
                     basis = patsy.dmatrix(formula, data=tmp_df, return_type="dataframe")
                     enc = basis
                     diagnostics["encoding"][col] = "spline"
+                    diagnostics["design_info"][col] = basis.design_info
+                    diagnostics["safe_col"][col] = safe_col
                 except Exception:
                     enc = pd.DataFrame({str(col): s_num.values})
                     diagnostics["encoding"][col] = "numeric_fallback"
@@ -877,6 +931,7 @@ def _encode_covariates_modular(mod, n_samples, mean_model="ols", gam_opts=None):
             dummies = pd.get_dummies(s.astype("category"), prefix=str(col), drop_first=False)
             enc = dummies
             diagnostics["encoding"][col] = "categorical_dummy"
+            diagnostics["categories"][col] = list(s.astype("category").cat.categories)
 
         encoded_frames.append(enc)
         for cname in enc.columns:
@@ -1153,7 +1208,7 @@ def combat_modular(
                 raise ValueError("ReferenceBatch not found in batch levels.")
 
     # Fit mean model and compute standardization
-    B_hat, stand_mean, var_pooled, Cov_effects = _fit_mean_model(dat_np, design, n_batch, batches, ref_batch_idx)
+    B_hat, stand_mean, var_pooled, Cov_effects, offset_vec, X_cov_mean = _fit_mean_model(dat_np, design, n_batch, batches, ref_batch_idx)
     s_data = _standardize(dat_np, stand_mean, var_pooled)
 
     # Estimate raw batch parameters
@@ -1286,11 +1341,42 @@ def combat_modular(
     if prior_mode == "local":
         priors["local_priors"] = local_priors
 
+    # Quantities needed to replay standardisation/correction on unseen data via combat_apply().
+    standardisation = {
+        "levels": levels,
+        "n_batch": n_batch,
+        "var_pooled": var_pooled,
+        "offset_vec": offset_vec,
+        "X_cov_mean": X_cov_mean,
+        "mod_col_names": mod_col_names,
+        "n_input_covariates": len(enc_diag.get("source_columns", [])),
+        "ref_batch_idx": ref_batch_idx,
+        "reference_batch_label": ReferenceBatch,
+        "mean_model": mean_model,
+        "encoding_info": enc_diag,
+        "gamma_hat": gamma_hat,
+        "delta_hat": delta_hat,
+        "gamma_star": gamma_star,
+        "delta_star": delta_star,
+        "priors_used_gamma_bar": gamma_bar_used,
+        "priors_used_t2": t2_used,
+        "priors_used_a_prior": a_prior_used,
+        "priors_used_b_prior": b_prior_used,
+        "DeltaCorrection": bool(DeltaCorrection),
+        "GammaCorrection": bool(GammaCorrection),
+        "RegressCovariates": bool(RegressCovariates),
+        "CovariateRemovalMatrix": CovariateRemovalMatrix,
+        "parametric": bool(parametric),
+        "UseEB": bool(UseEB),
+        "covbat_mode": bool(covbat_mode),
+    }
+
     output = {
         "bayesdata": bayesdata,
         "B_hat": B_hat,
         "priors": priors,
         "design_diagnostics": design_diagnostics,
+        "standardisation": standardisation,
         # legacy flat copies
         "gamma_bar": gamma_bar_global,
         "t2": t2_global,
@@ -1303,6 +1389,306 @@ def combat_modular(
         "hist": eb_hist,
     }
     return output
+#--------------------------------------------------------------------------------------
+def _encode_new_covariates(new_mod, n_new_samples, encoding_info, mod_col_names, mean_model):
+    """Re-encode unseen covariates using the exact per-column encoding fitted at train time.
+
+    Numeric columns pass through; categorical columns are re-dummied against the
+    trained category list (raises on unseen categories); spline columns are
+    rebuilt via the trained patsy `design_info` so the basis is identical.
+    """
+    source_columns = encoding_info.get("source_columns", [])
+    mod_df = _normalize_mod_to_dataframe(new_mod, n_new_samples)
+    if mod_df is None:
+        mod_df = pd.DataFrame(index=range(n_new_samples))
+    if mod_df.shape[1] != len(source_columns):
+        raise ValueError(
+            f"'new_mod' has {mod_df.shape[1]} covariate column(s) but the trained encoding "
+            f"expects {len(source_columns)} column(s) in the same order as training."
+        )
+    mod_df = mod_df.copy()
+    mod_df.columns = source_columns
+
+    encoding_by_col = encoding_info.get("encoding", {})
+    categories_by_col = encoding_info.get("categories", {})
+    design_info_by_col = encoding_info.get("design_info", {})
+    safe_col_by_col = encoding_info.get("safe_col", {})
+
+    encoded_frames = []
+    for col in source_columns:
+        s = mod_df[col]
+        kind = encoding_by_col.get(col)
+
+        if kind == "categorical_dummy":
+            trained_categories = categories_by_col.get(col, [])
+            s_cat = s.astype("category")
+            unknown = sorted(set(s_cat.dropna().unique().tolist()) - set(trained_categories))
+            if unknown:
+                raise ValueError(
+                    f"Covariate '{col}' contains categor(y/ies) not seen during training: {unknown}."
+                )
+            s_cat = s_cat.cat.set_categories(trained_categories)
+            enc = pd.get_dummies(s_cat, prefix=str(col), drop_first=False)
+        elif kind == "spline":
+            design_info = design_info_by_col.get(col)
+            safe_col = safe_col_by_col.get(col, str(col))
+            s_num = pd.to_numeric(s, errors="coerce")
+            tmp_df = pd.DataFrame({safe_col: s_num.values})
+            built = patsy.build_design_matrices([design_info], tmp_df)[0]
+            enc = pd.DataFrame(np.asarray(built), columns=design_info.column_names)
+        else:
+            s_num = pd.to_numeric(s, errors="coerce")
+            enc = pd.DataFrame({str(col): s_num.values})
+
+        encoded_frames.append(enc)
+
+    if len(encoded_frames) == 0 or len(mod_col_names) == 0:
+        return np.zeros((n_new_samples, 0), dtype=float)
+
+    mod_enc_df = pd.concat(encoded_frames, axis=1)
+    if np.isnan(mod_enc_df.to_numpy(dtype=float)).any():
+        raise ValueError("Encoded new covariates contain missing values; impute or remove samples before combat_apply.")
+
+    # Reorder/select to the exact (post-pruning) columns used at train time.
+    mod_enc_df = mod_enc_df.reindex(columns=mod_col_names, fill_value=0.0)
+    return mod_enc_df.to_numpy(dtype=float)
+#--------------------------------------------------------------------------------------
+def combat_apply(
+    new_data,
+    new_batch,
+    new_mod=None,
+    trained_output=None,
+    refine_eb=False,
+    conv=0.001,
+    RegressCovariates=None,
+    CovariateRemovalMatrix=None,
+):
+    """
+    Apply a previously trained `combat`/`combat_modular` model to unseen data.
+
+    Replays the exact standardisation (mean-model offset, covariate effects,
+    pooled variance) and batch corrections (gamma/delta) learned during training,
+    without refitting. Optionally refines the empirical Bayes estimates using the
+    new data, seeded by the trained gamma_hat/delta_hat as anchors.
+
+    Args:
+        new_data (np.array or pd.DataFrame): Unseen data, shape (n_features, n_samples)
+            or (n_samples, n_features) (orientation auto-detected against the
+            trained feature count).
+        new_batch (np.array or pd.Series): Batch label per sample; every label
+            must have been present in the training data.
+        new_mod (np.array or pd.DataFrame, optional): Covariates for the new
+            samples, with the same number of raw columns (and, for modular-
+            trained models, the same column order) as used at train time.
+        trained_output (dict): Output of `combat(..., return_priors=True)` or
+            `combat_modular(...)`, must contain a `"standardisation"` block.
+        refine_eb (bool): If True, re-run the empirical Bayes shrinkage per
+            batch using the new data, seeded with the trained gamma_hat/delta_hat
+            and prior hyperparameters, instead of directly reusing the trained
+            gamma_star/delta_star.
+        conv (float): Convergence threshold for the optional EB refinement.
+        RegressCovariates (bool, optional): Override the trained RegressCovariates
+            setting. Defaults to the value used at train time.
+        CovariateRemovalMatrix (np.array, optional): Override the trained
+            CovariateRemovalMatrix. Defaults to the value used at train time.
+
+    Returns:
+        dict with keys "bayesdata", "gamma_used", "delta_used", "refine_eb",
+        "eb_hist", "levels_applied".
+    """
+    if not isinstance(trained_output, dict) or "standardisation" not in trained_output:
+        raise ValueError(
+            "trained_output must be a dict returned by combat(..., return_priors=True) or "
+            "combat_modular(...), containing a 'standardisation' block."
+        )
+    std = trained_output["standardisation"]
+
+    if std.get("covbat_mode"):
+        raise NotImplementedError("combat_apply does not support models trained with covbat_mode=True.")
+
+    levels = np.asarray(std["levels"])
+    level_list = levels.tolist()
+    n_batch = int(std["n_batch"])
+    var_pooled = np.asarray(std["var_pooled"], dtype=float)
+    offset_vec = np.asarray(std["offset_vec"], dtype=float)
+    n_features_trained = var_pooled.shape[0]
+    ref_batch_idx = std.get("ref_batch_idx")
+    mean_model = std.get("mean_model", "ols")
+    encoding_info = std.get("encoding_info")
+    mod_col_names = list(std.get("mod_col_names") or [])
+    B_hat = np.asarray(trained_output["B_hat"])
+
+    use_regress_cov = bool(std["RegressCovariates"]) if RegressCovariates is None else bool(RegressCovariates)
+    use_removal_matrix = std["CovariateRemovalMatrix"] if CovariateRemovalMatrix is None else CovariateRemovalMatrix
+
+    # --- Normalize new_data orientation against the trained feature count ---
+    dat_was_df = isinstance(new_data, pd.DataFrame)
+    if dat_was_df:
+        dat_orig_index = new_data.index
+        dat_orig_columns = new_data.columns
+        dat_np = new_data.values.astype(float)
+    else:
+        dat_np = np.asarray(new_data, dtype=float)
+        dat_orig_index = None
+        dat_orig_columns = None
+
+    if dat_np.ndim != 2:
+        raise ValueError('"new_data" must be 2-dimensional.')
+
+    dat_transposed = False
+    if dat_np.shape[0] != n_features_trained and dat_np.shape[1] == n_features_trained:
+        dat_np = dat_np.T
+        dat_transposed = True
+
+    if dat_np.shape[0] != n_features_trained:
+        raise ValueError(
+            f"'new_data' has {dat_np.shape[0]} feature row(s) after orientation checks, "
+            f"but the trained model was fit on {n_features_trained} feature(s)."
+        )
+
+    n_new_samples = dat_np.shape[1]
+
+    # --- Normalize batch and validate against trained batch levels ---
+    if isinstance(new_batch, (pd.Series, pd.Index)):
+        batch_np = new_batch.values
+    else:
+        batch_np = np.asarray(new_batch)
+    batch_np = batch_np.ravel()
+
+    if batch_np.shape[0] != n_new_samples:
+        raise ValueError('Length of "new_batch" must match the number of samples in "new_data".')
+
+    unknown_batches = sorted(set(batch_np.tolist()) - set(level_list))
+    if unknown_batches:
+        raise ValueError(
+            f"'new_batch' contains label(s) not seen during training: {unknown_batches}. "
+            "combat_apply cannot harmonise unseen batches without retraining."
+        )
+
+    # --- Validate raw covariate column count ---
+    n_input_covariates_trained = int(std["n_input_covariates"])
+    if new_mod is None:
+        n_new_cov_cols = 0
+    elif isinstance(new_mod, pd.DataFrame):
+        n_new_cov_cols = new_mod.shape[1]
+    else:
+        arr = np.asarray(new_mod)
+        n_new_cov_cols = 1 if arr.ndim == 1 else arr.shape[1]
+    if n_new_cov_cols != n_input_covariates_trained:
+        raise ValueError(
+            f"'new_mod' has {n_new_cov_cols} covariate column(s), but the trained model "
+            f"was fit with {n_input_covariates_trained} covariate column(s)."
+        )
+
+    # --- Encode covariates consistent with training ---
+    if len(mod_col_names) == 0:
+        encoded = np.zeros((n_new_samples, 0), dtype=float)
+    elif encoding_info is None:
+        # Fast-path-trained model: mod must already be pre-encoded numeric, in the same order.
+        if isinstance(new_mod, pd.DataFrame):
+            arr = new_mod.to_numpy(dtype=float)
+        else:
+            arr = np.asarray(new_mod, dtype=float)
+            if arr.ndim == 1:
+                arr = arr.reshape(-1, 1)
+        if arr.shape[0] != n_new_samples and arr.shape[1] == n_new_samples:
+            arr = arr.T
+        if arr.shape[1] != len(mod_col_names):
+            raise ValueError(
+                "'new_mod' column count does not match the trained (fast-path) design; "
+                "fast-path-trained models require pre-encoded numeric covariates in the same order."
+            )
+        encoded = arr
+    else:
+        encoded = _encode_new_covariates(new_mod, n_new_samples, encoding_info, mod_col_names, mean_model)
+
+    X_cov_mean = std.get("X_cov_mean")
+    if encoded.shape[1] > 0 and X_cov_mean is not None:
+        X_cov_new = encoded - np.asarray(X_cov_mean, dtype=float)
+        cov_rows = B_hat[n_batch:, :]
+        Cov_effects_new = (X_cov_new @ cov_rows).T
+    else:
+        Cov_effects_new = np.zeros((n_features_trained, n_new_samples))
+
+    if use_removal_matrix is not None and use_regress_cov and mean_model == "ols":
+        Cov_effects_new = np.asarray(use_removal_matrix) @ Cov_effects_new
+
+    stand_mean_new = np.tile(offset_vec[:, None], (1, n_new_samples)) + Cov_effects_new
+    s_new = (dat_np - stand_mean_new) / (np.sqrt(var_pooled)[:, None] + 1e-8)
+
+    gamma_hat = np.asarray(std["gamma_hat"])
+    delta_hat = np.asarray(std["delta_hat"])
+    gamma_star = np.asarray(std["gamma_star"])
+    delta_star = np.asarray(std["delta_star"])
+    priors_gamma_bar = np.asarray(std["priors_used_gamma_bar"])
+    priors_t2 = np.asarray(std["priors_used_t2"])
+    priors_a = np.asarray(std["priors_used_a_prior"])
+    priors_b = np.asarray(std["priors_used_b_prior"])
+
+    delta_correction = bool(std["DeltaCorrection"])
+    gamma_correction = bool(std["GammaCorrection"])
+
+    gamma_used = {}
+    delta_used = {}
+    eb_hist_out = {} if refine_eb else None
+
+    unique_new_batches = pd.unique(batch_np)
+    for lev in unique_new_batches:
+        idx = np.where(batch_np == lev)[0]
+        i = level_list.index(lev)
+
+        if ref_batch_idx is not None and i == ref_batch_idx:
+            g_use = np.zeros(n_features_trained)
+            d_use = np.ones(n_features_trained)
+        elif not refine_eb:
+            g_use = gamma_star[i, :]
+            d_use = delta_star[i, :]
+        else:
+            temp, count, hist = itSol(
+                s_new[:, idx],
+                gamma_hat[i, :],
+                delta_hat[i, :],
+                priors_gamma_bar[i, :],
+                priors_t2[i, :],
+                priors_a[i, :],
+                priors_b[i, :],
+                conv=conv,
+                return_hist=True,
+            )
+            g_use = temp[0, :]
+            d_use = temp[1, :]
+            eb_hist_out[str(lev)] = hist
+
+        gamma_used[str(lev)] = g_use
+        delta_used[str(lev)] = d_use
+
+        if delta_correction:
+            if gamma_correction:
+                s_new[:, idx] = (s_new[:, idx] - g_use[:, None]) / (np.sqrt(d_use)[:, None] + 1e-8)
+            else:
+                s_new[:, idx] = s_new[:, idx] / (np.sqrt(d_use)[:, None] + 1e-8)
+        elif gamma_correction:
+            s_new[:, idx] = s_new[:, idx] - g_use[:, None]
+
+    if use_regress_cov:
+        bayesdata_new = (s_new * np.sqrt(var_pooled)[:, None]) + (stand_mean_new - Cov_effects_new)
+    else:
+        bayesdata_new = (s_new * np.sqrt(var_pooled)[:, None]) + stand_mean_new
+
+    if dat_transposed:
+        bayesdata_new = bayesdata_new.T
+
+    if dat_was_df:
+        bayesdata_new = pd.DataFrame(bayesdata_new, index=dat_orig_index, columns=dat_orig_columns)
+
+    return {
+        "bayesdata": bayesdata_new,
+        "gamma_used": gamma_used,
+        "delta_used": delta_used,
+        "refine_eb": bool(refine_eb),
+        "eb_hist": eb_hist_out,
+        "levels_applied": [str(l) for l in unique_new_batches],
+    }
 #--------------------------------------------------------------------------------------
 def summarize_priors_output(output, print_summary=True):
     """Summarize prior structures and key shapes from ComBat outputs.
@@ -1424,6 +1810,8 @@ def _fit_mean_model(data, design, n_batch, batches, ReferenceBatch=None):
     - stand_mean: (n_features, n_samples)
     - var_pooled: (n_features,)
     - Cov_effects: (n_features, n_samples)
+    - offset_vec: (n_features,) grand_mean or ref_batch_effect, before Cov_effects added
+    - X_cov_mean: (n_covariates,) or None, covariate column means used for centering
     """
     # Estimate coefficients B_hat using least squares
     XtX = design.T @ design
@@ -1454,9 +1842,11 @@ def _fit_mean_model(data, design, n_batch, batches, ReferenceBatch=None):
         predicted_ref = (design_ref @ B_hat).T
         residuals_ref = data[:, ref_samples] - predicted_ref
         var_pooled = np.mean(residuals_ref ** 2, axis=1)
+        offset_vec = ref_batch_effect.copy()
         stand_mean = np.tile(ref_batch_effect[:, None], (1, n_array)) + Cov_only
     else:
         grand_mean = (n_batches / n_array) @ B_hat[0:n_batch, :]
+        offset_vec = grand_mean.copy()
         resid = data - predicted
         var_pooled = np.mean(resid ** 2, axis=1)
         stand_mean = np.tile(grand_mean[:, None], (1, n_array))
@@ -1475,13 +1865,18 @@ def _fit_mean_model(data, design, n_batch, batches, ReferenceBatch=None):
     # Covariate effects (if any)
     if design.shape[1] > n_batch:
         X_cov = design[:, n_batch:]
-        X_cov = X_cov - np.mean(X_cov, axis=0, keepdims=True)
+        X_cov_mean = np.mean(X_cov, axis=0)
+        X_cov = X_cov - X_cov_mean
         B_cov = B_hat[n_batch:, :]
         Cov_effects = (X_cov @ B_cov).T
+        # stand_mean above used the raw (uncentered) covariate contribution, so fold the
+        # centering term into offset_vec: offset_vec + Cov_effects then reproduces stand_mean.
+        offset_vec = offset_vec + X_cov_mean @ B_cov
     else:
+        X_cov_mean = None
         Cov_effects = np.zeros_like(data)
 
-    return B_hat, stand_mean, var_pooled, Cov_effects
+    return B_hat, stand_mean, var_pooled, Cov_effects, offset_vec, X_cov_mean
 #--------------------------------------------------------------------------------------
 def _standardize(data, stand_mean, var_pooled):
     """Standardize data using provided mean and pooled variance."""
