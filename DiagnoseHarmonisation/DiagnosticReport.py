@@ -3066,11 +3066,11 @@ def CrossSectionalComparisonReport(
                     confound_cov_df, batch_arr, variable_types=confound_variable_types
                 )
                 report.text_simple(
-                    "Batch-covariate confounding quantifies potential imbalance of each covariate across batches, "
-                    "kept separate from PCA structure. Continuous covariates are summarised by the omnibus R2 from "
-                    "covariate ~ batch; binary/categorical covariates are summarised by Cramer's V. Batch is always "
-                    "treated as nominal categorical regardless of its input encoding. Larger values indicate greater "
-                    "covariate imbalance across batches and therefore greater potential for confounding."
+                    "Batch-covariate confounding quantifies potential imbalance of each covariate across batches, \n"
+                    "Continuous covariates are summarised by the omnibus R2 from \n"
+                    "covariate ~ batch; binary/categorical covariates are summarised by Cramer's V. Batch is always \n"
+                    "treated as nominal categorical regardless of its input encoding. Larger values indicate greater \n"
+                    "covariate imbalance across batches and therefore greater potential for confounding.\n"
                 )
                 report.text_simple(confounding["tidy"].round(3).to_string(index=False))
                 # Captured (not logged here) so it renders alongside the other comparison plots below.
