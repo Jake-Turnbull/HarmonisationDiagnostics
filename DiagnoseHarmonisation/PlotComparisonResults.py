@@ -913,7 +913,7 @@ def plot_compare_pca_embeddings(
         explained = np.asarray(res.pca_results.get("explained_variance", []), dtype=float)
         ax.set_xlabel(f"PC1 ({explained[0]:.1f}%)" if explained.shape[0] > 0 else "PC1", fontsize=fontsize)
         ax.set_ylabel(f"PC2 ({explained[1]:.1f}%)" if explained.shape[0] > 1 else "PC2", fontsize=fontsize)
-        ax.legend(fontsize=fontsize, frameon=False, loc="best")
+        ax.legend(fontsize=7, frameon=False, loc="best")
 
     _hide_unused_axes(axes, len(items))
     fig.subplots_adjust(left=0.07, right=0.93, bottom=0.08, top=0.92, wspace=0.30, hspace=0.35)

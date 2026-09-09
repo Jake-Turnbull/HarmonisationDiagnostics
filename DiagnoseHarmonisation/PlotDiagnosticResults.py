@@ -1123,7 +1123,7 @@ def plot_pc_r2_heatmap(r2_matrix, explained_variance=None, max_pcs: int = 5, *, 
         vmax=1.0,
         cbar_kws={"label": "Omnibus R2"},
         xticklabels=col_labels,
-        ax=ax,
+        ax=ax
     )
     ax.set_title("Variance associated with metadata (R2)")
     ax.set_xlabel("Principal component (% variance explained)")
@@ -1136,7 +1136,7 @@ def plot_pc_r2_heatmap(r2_matrix, explained_variance=None, max_pcs: int = 5, *, 
 
 
 @rep_plot_wrapper
-def plot_batch_covariate_confounding(covariates, batch, confounding, *, show: bool = False) -> list[tuple[str, plt.Figure]]:
+def plot_batch_covariate_confounding(covariates, batch, confounding, *, show: bool = False, fontsize: float = 10) -> list[tuple[str, plt.Figure]]:
     """
     Batch-wise distribution plots per covariate, annotated with the batch-covariate
     confounding statistic from `DiagnosticFunctions.calculate_batch_covariate_confounding`
@@ -1197,12 +1197,12 @@ def plot_batch_covariate_confounding(covariates, batch, confounding, *, show: bo
             counts = plot_df.groupby(["batch", str(col)]).size().unstack(fill_value=0)
             proportions = counts.div(counts.sum(axis=1), axis=0)
             proportions.plot(kind="bar", stacked=True, ax=ax, legend=(i == 0))
-            ax.set_ylabel("Proportion")
+            ax.set_ylabel("Proportion", fontsize=fontsize)
 
         stat_label = f"{stat_name}={stat_value:.2f}" if stat_name is not None and np.isfinite(stat_value) else "n/a"
-        ax.set_title(f"{col} ({vtype})\nbatch association: {stat_label}")
-        ax.set_xlabel("Batch")
-        ax.tick_params(axis="x", rotation=45)
+        ax.set_title(f"{col} ({vtype})\nbatch association: {stat_label}", fontsize=fontsize)
+        ax.set_xlabel("Batch", fontsize=fontsize)
+        ax.tick_params(axis="x", rotation=45, labelsize=fontsize)
 
     for j in range(n_cov, len(axes_flat)):
         axes_flat[j].axis("off")

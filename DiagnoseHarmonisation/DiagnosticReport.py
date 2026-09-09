@@ -1826,6 +1826,7 @@ def CrossSectionalReport(
     probability_distribution: bool = True,
     levene_center: str = "median",  # or "mean"
     FK_test: bool = True,  # whether to use Fligner-Killeen test instead of Levene's test
+    fontsize: float = 10,  # default font size for plots
 ) -> StatsReporter:
     """
     Create a full cross-sectional diagnostic report for batch effects.
@@ -2588,7 +2589,7 @@ def CrossSectionalReport(
                 )
                 report.text_simple(confounding["tidy"].round(3).to_string(index=False))
                 PlotDiagnosticResults.plot_batch_covariate_confounding(
-                    confound_cov_df, batch, confounding, rep=report, show=False
+                    confound_cov_df, batch, confounding, rep=report, show=False, fontsize=fontsize,
                 )
                 if save_data:
                     save_test_results(
@@ -3078,7 +3079,7 @@ def CrossSectionalComparisonReport(
                 report.text_simple(confounding["tidy"].round(3).to_string(index=False))
                 # Captured (not logged here) so it renders alongside the other comparison plots below.
                 confounding_figs = PlotDiagnosticResults.plot_batch_covariate_confounding(
-                    confound_cov_df, batch_arr, confounding, show=False
+                    confound_cov_df, batch_arr, confounding, show=False, fontsize=fontsize
                 )
                 if save_data:
                     from DiagnoseHarmonisation.SaveDiagnosticResults import save_test_results
