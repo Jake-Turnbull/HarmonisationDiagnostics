@@ -202,6 +202,7 @@ def plot_compare_zscore_distributions(
     use_residual: bool = False,
     probability_distribution: bool = True,
     base_cmap: str = "tab10",
+    fontsize: float = 10,
 ):
     figs = []
     items = _method_items(results)
@@ -255,12 +256,12 @@ def plot_compare_zscore_distributions(
                 # KDE can fail for near-constant vectors; keep the histogram only.
                 pass
             
-        ax.set_xlim([-8, 8])
+        ax.set_xlim([-6, 6])
         ax.invert_xaxis()
         panel_suffix = "Cov_adjusted" if use_residual else "Cov_unadjusted"
-        ax.set_title(_title(f"{method} ({panel_suffix})"))
-        ax.set_xlabel("Robust z-score")
-        ax.set_ylabel("Proportion within batch" if density_mode else "Frequency")
+        ax.set_title(_title(f"{method} ({panel_suffix})"), fontsize=fontsize)
+        ax.set_xlabel("Robust z-score", fontsize=fontsize)
+        ax.set_ylabel("Proportion within batch" if density_mode else "Frequency", fontsize=fontsize)
         ax.legend(fontsize=7, frameon=False, title="Batch", title_fontsize=8)
         n_valid += 1
 
@@ -275,7 +276,7 @@ def plot_compare_zscore_distributions(
     return figs
 
 
-def plot_compare_cohens_d(results, shared_y: bool = False):
+def plot_compare_cohens_d(results, shared_y: bool = False, fontsize: float = 10):
     figs = []
     rows = []
     featurewise = []
@@ -311,8 +312,8 @@ def plot_compare_cohens_d(results, shared_y: bool = False):
     ax.bar(x + 0.25, df["prop_large_abs_d"], width=0.25, label="Prop |d| >= 0.5")
     ax.set_xticks(x)
     ax.set_xticklabels(df["method"], rotation=20, ha="right")
-    ax.set_ylabel("Value")
-    ax.set_title("Cohen's d summary")
+    ax.set_ylabel("Value", fontsize=fontsize)
+    ax.set_title("Cohen's d summary", fontsize=fontsize)
     ax.legend()
     fig.tight_layout()
     figs.append(("Comparison: Cohen's d summary", fig))
@@ -332,8 +333,8 @@ def plot_compare_cohens_d(results, shared_y: bool = False):
             if shared_y:
                 ax2.set_ylim(-0.1, shared_y_max)
             ax2.set_title(_title(method))
-            ax2.set_xlabel("Feature")
-            ax2.set_ylabel("Median |d| across comparisons")
+            ax2.set_xlabel("Feature", fontsize=fontsize)
+            ax2.set_ylabel("Median |d| across comparisons", fontsize=fontsize)
             labels, rotation = _feature_labels(vec.size)
             ax2.set_xticks(np.arange(vec.size))
             ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
@@ -346,7 +347,7 @@ def plot_compare_cohens_d(results, shared_y: bool = False):
     return figs
 
 
-def plot_compare_variance_ratios(results, shared_y: bool = False):
+def plot_compare_variance_ratios(results, shared_y: bool = False, fontsize: float = 10):
     figs = []
     rows = []
     featurewise = []
@@ -386,8 +387,8 @@ def plot_compare_variance_ratios(results, shared_y: bool = False):
     ax.bar(x + 0.15, df["median_abs_log_ratio"], width=0.3, label="Median |log ratio|")
     ax.set_xticks(x)
     ax.set_xticklabels(df["method"], rotation=20, ha="right")
-    ax.set_ylabel("Value")
-    ax.set_title("Variance-ratio summary")
+    ax.set_ylabel("Value", fontsize=fontsize)
+    ax.set_title("Variance-ratio summary", fontsize=fontsize)
     ax.legend()
     fig.tight_layout()
     figs.append(("Comparison: variance ratios summary", fig))
@@ -404,8 +405,8 @@ def plot_compare_variance_ratios(results, shared_y: bool = False):
             ax2.plot(x2, vec, "b-", linewidth=1)
             ax2.plot(x2, vec, "r.", markersize=2)
             ax2.set_title(_title(method))
-            ax2.set_xlabel("Feature")
-            ax2.set_ylabel("Median log variance ratio")
+            ax2.set_xlabel("Feature", fontsize=fontsize)
+            ax2.set_ylabel("Median log variance ratio", fontsize=fontsize)
             labels, rotation = _feature_labels(vec.size)
             ax2.set_xticks(np.arange(vec.size))
             ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
@@ -420,7 +421,7 @@ def plot_compare_variance_ratios(results, shared_y: bool = False):
     return figs
 
 
-def plot_compare_lmm_icc(results):
+def plot_compare_lmm_icc(results, fontsize: float = 10):
     figs = []
     icc_items = []
     r2_items = []
@@ -467,8 +468,8 @@ def plot_compare_lmm_icc(results):
             ax.axhline(0.5, color="black", linestyle="--", linewidth=1, alpha=0.5)
             ax.text(0.98, 0.5, "ICC=0.5", transform=ax.get_yaxis_transform(), ha="right", va="bottom", fontsize=6, color="black")
             ax.set_title(_title(method))
-            ax.set_xlabel("Feature")
-            ax.set_ylabel("ICC")
+            ax.set_xlabel("Feature", fontsize=fontsize)
+            ax.set_ylabel("ICC", fontsize=fontsize)
             ax.set_ylim(bottom=0)
             labels, rotation = _feature_labels(len(icc))
             ax.set_xticks(x)
@@ -494,8 +495,8 @@ def plot_compare_lmm_icc(results):
             ax.plot(x, r2_cov, label="Covariates R2", linewidth=1.2)
             ax.plot(x, r2_cov_batch, label="Covariates + Batch R2", linewidth=1.2)
             ax.set_title(_title(method))
-            ax.set_xlabel("Feature")
-            ax.set_ylabel("R2")
+            ax.set_xlabel("Feature", fontsize=fontsize)
+            ax.set_ylabel("R2", fontsize=fontsize)
             ax.set_ylim(bottom=0)
             labels, rotation = _feature_labels(len(r2_cov))
             ax.set_xticks(x)
@@ -508,7 +509,7 @@ def plot_compare_lmm_icc(results):
     return figs
 
 
-def plot_compare_lmm_biological_effects(results):
+def plot_compare_lmm_biological_effects(results, fontsize: float = 10):
     figs = []
     summary_rows = []
     ols_items = []
@@ -545,8 +546,8 @@ def plot_compare_lmm_biological_effects(results):
         )
         ax.set_xticks(x)
         ax.set_xticklabels(df["method"], rotation=20, ha="right")
-        ax.set_ylabel("Value")
-        ax.set_title("Biological preservation summary")
+        ax.set_ylabel("Value", fontsize=fontsize)
+        ax.set_title("Biological preservation summary", fontsize=fontsize)
         ax.legend(frameon=False)
         fig.tight_layout()
         figs.append(("Comparison: biological preservation summary", fig))
@@ -562,13 +563,15 @@ def plot_compare_lmm_biological_effects(results):
             
             # df_cov = df_cov.sort_values(by=value_col, ascending=True, na_position="last") # Commented out to keep original order
             ax.barh(df_cov["covariate"].astype(str), df_cov[value_col], color="C1" if "OLS" in caption else "C2", alpha=0.85)
-            ax.set_title(_title(method))
-            ax.set_xlabel(title)
+            ax.set_title(_title(method), fontsize=fontsize)
+            ax.set_xlabel(title, fontsize=fontsize)
             ax.grid(axis="x", alpha=0.2)
+            ax.tick_params(axis='y', labelsize=fontsize)
             # Make text for batch on axis bold if exists in covariates
             for label in ax.get_yticklabels():
                 if "batch" in label.get_text().lower():
                     label.set_fontweight("bold")
+                label.set_fontsize(fontsize)
             
 
         _hide_unused_axes(axes, len(items))
@@ -578,7 +581,7 @@ def plot_compare_lmm_biological_effects(results):
     return figs
 
 
-def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 5):
+def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 7, fontsize: float = 10):
     """
     Grid of omnibus R^2 heatmaps (metadata variable x PC) per method, built from
     each method's `pc_associations` (see `DiagnosticFunctions.calculate_pc_associations`).
@@ -607,8 +610,8 @@ def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 5):
     last_im = None
     for ax, (method, matrix, explained) in zip(axes, items):
         values = matrix.to_numpy(dtype=float)
-        last_im = ax.imshow(values, vmin=0.0, vmax=1.0, cmap="viridis", aspect="auto")
-        ax.set_title(_title(method))
+        last_im = ax.imshow(values, vmin=0.0, vmax=1.0, cmap="coolwarm", aspect="auto")
+        ax.set_title(_title(method), fontsize=fontsize)
         ax.set_xticks(np.arange(matrix.shape[1]))
         col_labels = [
             f"{col}\n({explained[i]:.1f}%)" if i < explained.shape[0] else str(col)
@@ -651,7 +654,7 @@ def plot_compare_mahalanobis(results):
     return figs
 
 
-def plot_compare_ks(results):
+def plot_compare_ks(results, fontsize: float = 10):
     figs = []
     rows = []
     featurewise = []
@@ -690,8 +693,8 @@ def plot_compare_ks(results):
     df = pd.DataFrame(rows)
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.bar(df["method"], df["prop_significant_ks"])
-    ax.set_ylabel("Proportion p < 0.05")
-    ax.set_title("KS summary")
+    ax.set_ylabel("Proportion p < 0.05", fontsize=fontsize)
+    ax.set_title("KS summary", fontsize=fontsize)
     ax.tick_params(axis="x", rotation=20)
     fig.tight_layout()
     figs.append(("Comparison: KS summary", fig))
@@ -708,8 +711,8 @@ def plot_compare_ks(results):
             ax2.axhline(sig_line, color="black", linestyle="--", linewidth=2.0)
             ax2.text(0.98, sig_line, "p = 0.05", transform=ax2.get_yaxis_transform(), ha="right", va="bottom", fontsize=6, color="black")
             ax2.set_title(_title(method))
-            ax2.set_xlabel("Feature")
-            ax2.set_ylabel("-log10(min adjusted p)")
+            ax2.set_xlabel("Feature", fontsize=fontsize)
+            ax2.set_ylabel("-log10(min adjusted p)", fontsize=fontsize)
             labels, rotation = _feature_labels(min_p.size)
             ax2.set_xticks(np.arange(min_p.size))
             ax2.set_xticklabels(labels, rotation=rotation, ha="right" if rotation else "center", fontsize=6)
@@ -722,7 +725,7 @@ def plot_compare_ks(results):
     return figs
 
 
-def plot_compare_covariance(results, batch=None):
+def plot_compare_covariance(results, batch=None, fontsize: float = 10):
     figs = []
     mats = []
     names = []
@@ -763,8 +766,8 @@ def plot_compare_covariance(results, batch=None):
     for ax, method, arr, labels in zip(axes, names, mats, batch_labels):
         im = ax.imshow(arr, vmin=0.0, vmax=vmax if vmax > 0 else None, aspect="equal")
         ax.set_title(_title(method))
-        ax.set_xlabel("Batch")
-        ax.set_ylabel("Batch")
+        ax.set_xlabel("Batch", fontsize=fontsize)
+        ax.set_ylabel("Batch", fontsize=fontsize)
         # Make the x and y ticks correspond to the batch names
         ax.set_xticks(np.arange(arr.shape[1]))
         ax.set_yticks(np.arange(arr.shape[0]))
@@ -783,7 +786,7 @@ def plot_compare_covariance(results, batch=None):
     return figs
 
 
-def plot_compare_batch_scree(results, batch):
+def plot_compare_batch_scree(results, batch, fontsize: float = 10):
     figs = []
     items = [(m, r) for m, r in _method_items(results) if isinstance(r.pca_results, dict) and "scores" in r.pca_results]
     if len(items) == 0:
@@ -808,9 +811,9 @@ def plot_compare_batch_scree(results, batch):
             denom = np.nansum(var)
             frac = var / denom if denom > 0 else np.zeros_like(var)
             ax.plot(np.arange(1, k + 1), frac, marker="o", markersize=2, linewidth=1, label=str(b))
-        ax.set_title(_title(method))
-        ax.set_xlabel("PC index")
-        ax.set_ylabel("Fraction variance")
+        ax.set_title(_title(method), fontsize=fontsize)
+        ax.set_xlabel("PC index", fontsize=fontsize)
+        ax.set_ylabel("Fraction variance", fontsize=fontsize)
         ax.grid(True, alpha=0.2)
         ax.legend(fontsize=6, frameon=False)
 
@@ -883,6 +886,7 @@ def plot_compare_pca_embeddings(
     plot_covariate_embeddings: bool = True,
     allow_many_covariates: bool = False,
     base_cmap: str = "tab10",
+    fontsize: float = 10,
 ):
     figs = []
     items = [(m, r) for m, r in _method_items(results) if isinstance(r.pca_results, dict) and "scores" in r.pca_results]
@@ -905,11 +909,11 @@ def plot_compare_pca_embeddings(
             idx = batch_arr == b
             color = batch_cmap(np.where(unique_batches == b)[0][0])
             ax.scatter(score[idx, 0], score[idx, 1], s=8, alpha=0.6, label=str(b), color=color)
-        ax.set_title(_title(method))
+        ax.set_title(_title(method), fontsize=fontsize)
         explained = np.asarray(res.pca_results.get("explained_variance", []), dtype=float)
-        ax.set_xlabel(f"PC1 ({explained[0]:.1f}%)" if explained.shape[0] > 0 else "PC1")
-        ax.set_ylabel(f"PC2 ({explained[1]:.1f}%)" if explained.shape[0] > 1 else "PC2")
-        ax.legend(fontsize=6, frameon=False, loc="best")
+        ax.set_xlabel(f"PC1 ({explained[0]:.1f}%)" if explained.shape[0] > 0 else "PC1", fontsize=fontsize)
+        ax.set_ylabel(f"PC2 ({explained[1]:.1f}%)" if explained.shape[0] > 1 else "PC2", fontsize=fontsize)
+        ax.legend(fontsize=fontsize, frameon=False, loc="best")
 
     _hide_unused_axes(axes, len(items))
     fig.subplots_adjust(left=0.07, right=0.93, bottom=0.08, top=0.92, wspace=0.30, hspace=0.35)
@@ -956,6 +960,7 @@ def Plot_compare_UMAP_embeddings(
     plot_covariate_embeddings: bool = True,
     allow_many_covariates: bool = False,
     base_cmap: str = "tab10",
+    fontsize: float = 10,
 ):
     figs = []
     try:
@@ -990,9 +995,9 @@ def Plot_compare_UMAP_embeddings(
             idx = batch_arr == b
             color = batch_cmap(np.where(unique_batches == b)[0][0])
             ax.scatter(emb[idx, 0], emb[idx, 1], s=8, alpha=0.6, label=str(b), color=color)
-        ax.set_title(_title(method))
-        ax.set_xlabel("UMAP1")
-        ax.set_ylabel("UMAP2")
+        ax.set_title(_title(method), fontsize=fontsize)
+        ax.set_xlabel("UMAP1", fontsize=fontsize)
+        ax.set_ylabel("UMAP2", fontsize=fontsize)
         ax.legend(fontsize=6, frameon=False, loc="best")
 
     _hide_unused_axes(axes, len(items))

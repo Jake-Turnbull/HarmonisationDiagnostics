@@ -352,3 +352,200 @@ def test_comparison_report_uses_global_zscore_not_per_batch(test_results_dir):
 
     assert np.allclose(observed, expected_global, equal_nan=True)
     assert not np.allclose(observed, per_batch, equal_nan=True)
+
+
+def test_cross_sectional_works_with_many_datasets(test_results_dir):
+    rng = np.random.default_rng(123)
+    n_a, n_b = 8, 24
+    n_features = 5
+
+    batch = np.array(["A"] * n_a + ["B"] * n_b)
+    raw = rng.normal(size=(n_a + n_b, n_features))
+    raw[:n_a, :] += 3.0
+
+    datasets = {"Raw": raw, "Raw_Copy": raw.copy()}
+
+    # Add a batch effect
+    harm1 = raw.copy()
+    harm2 = raw.copy()
+    harm3 = raw.copy()
+    harm4 = raw.copy()
+    # Add noisy bias to each at different levels
+    harm1[batch == "B", :] += 2.0
+    harm2[batch == "B", :] += 3.0
+    harm3[batch == "B", :] += 4.0
+    harm4[batch == "B", :] += 5.0
+
+    datasets["Harm1"] = harm1
+    datasets["Harm2"] = harm2
+    datasets["Harm3"] = harm3
+    datasets["Harm4"] = harm4
+  
+
+    report = DiagnosticReport.CrossSectionalComparisonReport(
+        datasets=datasets,
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        feature_names=[f"f{i+1}" for i in range(n_features)],
+        save_dir=test_results_dir / "cross_sectional_report_many_datasets",
+        save_data=False,
+        report_name="Comparison_Many_Datasets",
+        SaveArtifacts=False,
+        show=False,
+        timestamped_reports=False,
+        ratio_type="rest",
+        UMAP_embedding=False,
+        plot_covariate_embeddings=False,
+        allow_many_covariate_embeddings=False,
+    )
+
+    assert "Raw" in report.comparison_results
+    assert "Raw_Copy" in report.comparison_results
+    assert "Harm1" in report.comparison_results
+    assert "Harm2" in report.comparison_results
+    assert "Harm3" in report.comparison_results
+    assert "Harm4" in report.comparison_results
+
+def test_cross_sectional_many_datasets_many_batches(test_results_dir):
+    rng = np.random.default_rng(123)
+    n_a, n_b, n_c = 8, 24, 16
+    n_features = 5
+
+    batch = np.array(["A"] * n_a + ["B"] * n_b + ["C"] * n_c)
+    raw = rng.normal(size=(n_a + n_b + n_c, n_features))
+    raw[:n_a, :] += 3.0
+    raw[n_a:n_a+n_b, :] += 2.0
+    raw[n_a+n_b:, :] += 1.0
+
+    # Create five different versions of the raw data with varying batch effects
+    harm1 = raw.copy()
+    harm2 = raw.copy()
+    harm3 = raw.copy()
+    harm4 = raw.copy()
+    harm5 = raw.copy()
+
+    harm1[batch == "B", :] += 2.0
+    harm2[batch == "B", :] += 3.0
+    harm3[batch == "B", :] += 4.0
+    harm4[batch == "B", :] += 5.0
+    harm5[batch == "B", :] += 6.0
+
+    datasets = {
+        "Raw": raw,
+        "Harm1": harm1,
+        "Harm2": harm2,
+        "Harm3": harm3,
+        "Harm4": harm4,
+        "Harm5": harm5
+    }
+
+    report = DiagnosticReport.CrossSectionalComparisonReport(
+        datasets=datasets,
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        feature_names=[f"f{i+1}" for i in range(n_features)],
+        save_dir=test_results_dir / "comparison_report_many_datasets_many_batches",
+        save_data=False,
+        report_name="Comparison_Many_Datasets_Many_Batches",
+        SaveArtifacts=False,
+        show=False,
+        timestamped_reports=False,
+        ratio_type="rest",
+        UMAP_embedding=False,
+        plot_covariate_embeddings=False,
+        allow_many_covariate_embeddings=False,
+    )
+
+    assert "Raw" in report.comparison_results
+    assert "Harm1" in report.comparison_results
+    assert "Harm2" in report.comparison_results
+    assert "Harm3" in report.comparison_results
+    assert "Harm4" in report.comparison_results
+    assert "Harm5" in report.comparison_results
+
+
+def test_font_size_in_report(test_results_dir):
+    rng = np.random.default_rng(123)    
+    n_a, n_b, n_c, n_d, n_e, n_f = 8, 24, 8, 16, 12, 10
+    n_features = 5
+    batch = np.array(["A"] * n_a + ["B"] * n_b + ["C"] * n_c + ["D"] * n_d + ["E"] * n_e + ["F"] * n_f)
+    raw = rng.normal(size=(n_a + n_b + n_c + n_d + n_e + n_f, n_features))  
+    raw[:n_a, :] += 3.0
+    raw[n_a:n_a+n_b, :] += 2.0
+    raw[n_a+n_b:n_a+n_b+n_c, :] += 1.5
+    raw[n_a+n_b+n_c:n_a+n_b+n_c+n_d, :] += 1.0
+    raw[n_a+n_b+n_c+n_d:n_a+n_b+n_c+n_d+n_e, :] += 0.5
+    raw[n_a+n_b+n_c+n_d+n_e:, :] += 0.0
+
+    # duplicate the raw data to create a comparison dataset
+    raw_copy = raw.copy()
+    datasets = {
+        "Raw": raw,
+        "Raw_Copy": raw_copy+0.5,
+        "Raw_Copy_Offset": raw_copy+1.0,
+        "Raw_Copy_Offset_2": raw_copy+1.5,
+        "Raw_Copy_Offset_3": raw_copy+2.0,
+        "Raw_Copy_Offset_4": raw_copy+2.5,
+    }
+
+    # Run the report 3 times with different fontsize arguments:
+    report_default_fontsize = DiagnosticReport.CrossSectionalComparisonReport(
+        datasets=datasets,
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        feature_names=[f"f{i+1}" for i in range(n_features)],
+        save_dir=test_results_dir / "comparison_report_fontsize",
+        save_data=False,
+        report_name="Comparison_Default_Fontsize",
+        SaveArtifacts=False,
+        show=False,
+        timestamped_reports=False,
+        ratio_type="rest",
+        UMAP_embedding=False,
+        plot_covariate_embeddings=False,
+        allow_many_covariate_embeddings=False,
+    )
+
+    report_small_fontsize = DiagnosticReport.CrossSectionalComparisonReport(
+        datasets=datasets,
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        feature_names=[f"f{i+1}" for i in range(n_features)],
+        save_dir=test_results_dir / "comparison_report_fontsize",
+        save_data=False,
+        report_name="Comparison_Small_Fontsize",
+        SaveArtifacts=False,
+        show=False,
+        timestamped_reports=False,
+        ratio_type="rest",
+        UMAP_embedding=False,
+        plot_covariate_embeddings=False,
+        allow_many_covariate_embeddings=False,
+        fontsize=7,
+    )
+
+    report_large_fontsize = DiagnosticReport.CrossSectionalComparisonReport(
+        datasets=datasets,
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        feature_names=[f"f{i+1}" for i in range(n_features)],
+        save_dir=test_results_dir / "comparison_report_fontsize",
+        save_data=False,
+        report_name="Comparison_Large_Fontsize",
+        SaveArtifacts=False,
+        show=False,
+        timestamped_reports=False,
+        ratio_type="rest",
+        UMAP_embedding=False,
+        plot_covariate_embeddings=False,
+        allow_many_covariate_embeddings=False,
+        fontsize=16,
+    )
+    assert report_default_fontsize is not None
+    assert report_small_fontsize is not None
+    assert report_large_fontsize is not None

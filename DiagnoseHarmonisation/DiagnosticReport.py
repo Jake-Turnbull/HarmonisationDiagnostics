@@ -2874,6 +2874,7 @@ def CrossSectionalComparisonReport(
     probability_distribution: bool = True,
     base_cmap: str = "tab10",
     shared_y: bool = False,
+    fontsize: int | float | None = None,
 ) -> StatsReporter:
     """
     Create a comparative diagnostic report for multiple harmonisation methods.
@@ -2913,6 +2914,8 @@ def CrossSectionalComparisonReport(
         shared_y: Whether feature-wise Cohen's d and variance-ratio plots use
             a shared y-axis limit across all methods. By default, each panel
             uses Matplotlib's automatic y-axis limits.
+        fontsize: Optional font size for plots. If `None`, the default Matplotlib
+            font size is used.
 
     Returns:
         StatsReporter: Report object containing method-wise diagnostics,
@@ -3201,6 +3204,7 @@ def CrossSectionalComparisonReport(
                 use_residual=False,
                 probability_distribution=probability_distribution,
                 base_cmap=base_cmap,
+                fontsize=fontsize,
             )
         )
         _log_figures(
@@ -3210,18 +3214,19 @@ def CrossSectionalComparisonReport(
                 use_residual=True,
                 probability_distribution=probability_distribution,
                 base_cmap=base_cmap,
+                fontsize=fontsize,
             )
         )
-        _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results, shared_y=shared_y))
-        _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results, shared_y=shared_y))
-        _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results, shared_y=shared_y, fontsize=fontsize))
+        _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results, shared_y=shared_y, fontsize=fontsize))
+        _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results, fontsize=fontsize))
+        _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results, fontsize=fontsize))
         _log_figures(PlotComparisonResults.plot_compare_mahalanobis(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_ks(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_covariance(method_results, batch=batch_arr))
-        _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr))
+        _log_figures(PlotComparisonResults.plot_compare_ks(method_results, fontsize=fontsize))
+        _log_figures(PlotComparisonResults.plot_compare_covariance(method_results, batch=batch_arr, fontsize=fontsize))
+        _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr, fontsize=fontsize))
         _log_figures(confounding_figs)
-        _log_figures(PlotComparisonResults.plot_compare_pca_r2_heatmaps(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_pca_r2_heatmaps(method_results, fontsize=fontsize))
         _log_figures(
             PlotComparisonResults.plot_compare_pca_embeddings(
                 method_results,
@@ -3231,6 +3236,7 @@ def CrossSectionalComparisonReport(
                 plot_covariate_embeddings=plot_covariate_embeddings,
                 allow_many_covariates=allow_many_covariate_embeddings,
                 base_cmap=base_cmap,
+                fontsize=fontsize,
             )
         )
         if UMAP_embedding:
@@ -3243,6 +3249,7 @@ def CrossSectionalComparisonReport(
                     plot_covariate_embeddings=plot_covariate_embeddings,
                     allow_many_covariates=allow_many_covariate_embeddings,
                     base_cmap=base_cmap,
+                    fontsize=fontsize,
                 )
             )
         _log_figures(PlotComparisonResults.plot_method_scorecard(summary_df))
