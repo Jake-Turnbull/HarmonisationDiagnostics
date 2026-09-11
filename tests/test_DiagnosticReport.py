@@ -333,6 +333,51 @@ def test_full_report_runs_without_covariates(test_results_dir, monkeypatch):
     report_path = test_results_dir / "full_no_covariates" / "Full_No_Covariates.html"
     assert report_path.exists() and report_path.stat().st_size > 100
 
+
+def test_longitudinal_report_runs_with_covariates(test_results_dir, monkeypatch):
+    monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig_long_no_cov"))
+
+    from DiagnoseHarmonisation import PlotDiagnosticResults
+    monkeypatch.setattr(PlotDiagnosticResults, "clustering_analysis_all", lambda *args, **kwargs: None)
+
+    n_samples = 40
+    n_features = 10
+    rng = np.random.default_rng(123)
+    data = rng.normal(size=(n_samples, n_features))
+    # Create a list of features the same as the number of columns in the data
+    features = [f"Feature_{i}" for i in range(n_features)]
+    batch = np.array(["A"] * 20 + ["B"] * 20)
+    subject_array = np.array(["s1"] * 10 + ["s2"] * 10 + ["s3"] * 10 + ["s4"] * 10)
+    # Assign each subject to two timepoints
+    timepoints = np.array([1, 2] * 20)
+    covariates = ['Age', 'Sex']
+
+    # Covariates is a dictionary mapping covariate names to their values
+    covariates = {
+        "Age": rng.integers(20, 60, size=n_samples),
+        "Sex": np.array(["M", "F"] * (n_samples // 2))
+    }
+
+    from DiagnoseHarmonisation import DiagnosticReport
+
+    DiagnosticReport.LongitudinalReport(
+        data,
+        batch,
+        subject_array,
+        timepoints=timepoints,
+        covariates=covariates,
+        features = features,
+        covariate_names=list(covariates.keys()),
+        save_dir=str(test_results_dir / "long_no_covariates"),
+        report_name="Long_with_Covariates.html",
+        show=False,
+        save_data=False,
+        timestamped_reports=False,
+    )
+
+    report_path = test_results_dir / "long_no_covariates" / "Long_with_Covariates.html"
+    assert report_path.exists() and report_path.stat().st_size > 100
+
 def test_full_report_unbalanced_samples():
     n_samples = 1000
     n_features = 10

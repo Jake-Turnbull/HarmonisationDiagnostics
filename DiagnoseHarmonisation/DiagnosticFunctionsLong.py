@@ -225,7 +225,7 @@ from typing import Sequence, Optional
 
 def _pairwise_rpd(arr: np.ndarray) -> float:
     """
-    Mean pairwise relative percent difference (RPD) across all pairs.
+    Median pairwise relative percent difference (RPD) across all pairs.
 
     RPD(i, j) = abs(xi - xj) / ((xi + xj) / 2) * 100
 
@@ -237,7 +237,7 @@ def _pairwise_rpd(arr: np.ndarray) -> float:
     Returns
     -------
     float
-        Mean pairwise RPD in percent, or NaN if fewer than 2 valid values
+        Median pairwise RPD in percent, or NaN if fewer than 2 valid values
         or if no valid denominator is available.
     """
     arr = np.asarray(arr, dtype=float)
@@ -254,10 +254,13 @@ def _pairwise_rpd(arr: np.ndarray) -> float:
             continue
         rpds.append(abs(arr[i] - arr[j]) / denom * 100.0)
 
+    # Calculate the std of RPD as well
+    rpds_std = float(np.std(rpds)) if rpds else np.nan
+
     if len(rpds) == 0:
         return np.nan
 
-    return float(np.mean(rpds))
+    return float(np.median(rpds))
 
 
 def WithinSubjVar_long(
@@ -269,14 +272,16 @@ def WithinSubjVar_long(
     """
     Compute within-subject variability (percent) for each IDP across timepoints.
 
+    Returns both the median pairwise RPD and its standard deviation.
+
     This version uses one consistent metric for all subjects:
-    mean pairwise RPD across all available non-missing measurements.
+    median pairwise RPD across all available non-missing measurements.
 
     Output columns:
     - subject
     - n_obs
     - metric_type
-    - one column per IDP
+    - one column per IDP (each containing a tuple of median RPD and its standard deviation)
 
     Parameters
     ----------
@@ -316,19 +321,21 @@ def WithinSubjVar_long(
 
     df = pd.DataFrame(idp_matrix, columns=idp_names)
     df["subject"] = list(subjects)
-    # df["timepoint"] = list(timepoints)  # keep if you need it later
+    # df["timepoint"] = list(timepoints) 
 
     out_rows = []
+    temp = []
     for subj, g in df.groupby("subject", sort=False):
         row = {
             "subject": subj,
             "n_obs": int(len(g)),
-            "metric_type": "Pairwise RPD",
+            "metric_type": "Median Pairwise RPD",
         }
 
         for col in idp_names:
             arr = g[col].dropna().to_numpy(dtype=float)
-            row[col] = _pairwise_rpd(arr)
+            row[col] = _pairwise_rpd(arr)  
+
 
         out_rows.append(row)
 

@@ -3663,6 +3663,18 @@ def LongitudinalReport(data, batch,
             show=False,
         )
 
+        if covariates is not None:
+            PlotDiagnosticResults.plot_CovariateAdjustedBoxplotsAcrossSites(
+                raw_df,
+                batch_col="batch",
+                subject_col="subject",
+                covariates=covariates,
+                idp_cols=list(features),
+                figsize_per_panel=_plot_figsize("residuals"),
+                rep=report,
+                show=False,
+            )
+
         report.log_text("Raw IDP boxplots across sites added to report")
         report.text_simple("────────────────────────────────────────────")
 

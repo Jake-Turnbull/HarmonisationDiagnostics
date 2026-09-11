@@ -3457,6 +3457,521 @@ def plot_RawIDPBoxplotsAcrossSites(
 
 
 # ============================================================================
+# 1B.  RESIDUALISED IDP DISTRIBUTIONS ACROSS SITES
+# ============================================================================
+
+def _adjust_for_covariates_preserve_batch(
+    df,
+    idp_cols,
+    batch_col,
+    covariates=None,
+):
+    """
+    Remove covariate effects from each feature while preserving batch effects.
+
+    Fits:
+        feature ~ covariates + batch
+
+    and returns:
+        feature - fitted covariate contribution
+
+    Batch and intercept effects are retained.
+    """
+    if not covariates:
+        return df.copy()
+
+    adjusted = df.copy()
+
+    for idp in idp_cols:
+        model_df = pd.DataFrame(
+            {
+                "_y": pd.to_numeric(df[idp], errors="coerce"),
+                "_batch": df[batch_col].astype("category"),
+            },
+            index=df.index,
+        )
+
+        continuous = []
+        categorical = []
+
+        # Add covariates and retain categorical information where possible
+        for name, values in covariates.items():
+            values = pd.Series(values).reset_index(drop=True)
+            values.index = df.index
+
+            model_df[name] = values
+
+            if (
+                isinstance(values.dtype, pd.CategoricalDtype)
+                or not pd.api.types.is_numeric_dtype(values)
+            ):
+                categorical.append(name)
+            else:
+                continuous.append(name)
+
+        model_df = model_df.dropna()
+
+        if model_df.empty:
+            adjusted[idp] = np.nan
+            continue
+
+        # Continuous covariates
+        X_cov = model_df[continuous].astype(float).copy()
+
+        # Categorical covariates
+        if categorical:
+            X_cat = pd.get_dummies(
+                model_df[categorical],
+                drop_first=True,
+                dtype=float,
+            )
+            X_cov = pd.concat([X_cov, X_cat], axis=1)
+
+        # Batch is included in the model but will NOT be removed
+        X_batch = pd.get_dummies(
+            model_df["_batch"],
+            prefix="batch",
+            drop_first=True,
+            dtype=float,
+        )
+
+        intercept = pd.DataFrame(
+            {"intercept": 1.0},
+            index=model_df.index,
+        )
+
+        X = pd.concat(
+            [intercept, X_cov, X_batch],
+            axis=1,
+        ).astype(float)
+
+        y = model_df["_y"].to_numpy(dtype=float)
+
+        beta, *_ = np.linalg.lstsq(
+            X.to_numpy(),
+            y,
+            rcond=None,
+        )
+
+        beta = pd.Series(beta, index=X.columns)
+
+        # Remove ONLY covariate effects
+        if X_cov.shape[1]:
+            cov_effect = (
+                X_cov.to_numpy()
+                @ beta[X_cov.columns].to_numpy()
+            )
+        else:
+            cov_effect = 0.0
+
+        # Missing model rows should remain missing rather than raw
+        adjusted[idp] = np.nan
+        adjusted.loc[model_df.index, idp] = y - cov_effect
+
+    return adjusted
+
+def plot_CovariateAdjustedBoxplotsAcrossSites(
+    df,
+    batch_col: str = "batch",
+    subject_col: str | None = "subject",
+    covariates: dict | None = None,
+    idp_cols: list | None = None,
+    site_order: list | None = None,
+    ncols: int = 2,
+    figsize_per_panel: tuple = (6.0, 4.5),
+    show_points: bool = True,
+    point_size: float = 2.2,
+    point_alpha: float = 0.18,
+    point_jitter: float = 0.22,
+    savepath: str | None = None,
+    rep=None,
+    show: bool = False,
+    site_threshold_for_horizontal: int = 12,
+    feature_display_limit: int = 10,
+):
+    """
+    Plot covariate-adjusted IDP distributions across sites/batches.
+
+    For each IDP, covariate effects are removed using:
+
+        IDP ~ covariates + batch
+
+    Batch effects are retained, allowing site/batch differences to be
+    visualised after accounting for demographic differences.
+    """
+    apply_plot_theme()
+
+    if batch_col not in df.columns:
+        raise ValueError(
+            f"'{batch_col}' not found in dataframe columns."
+        )
+
+    if idp_cols is None:
+        idp_cols = [
+            c for c in df.columns
+            if c != batch_col and c != subject_col
+        ]
+
+    idp_cols = list(idp_cols)
+
+    if not idp_cols:
+        raise ValueError("No IDP columns found to plot.")
+
+    plot_df = df.copy()
+    plot_df[batch_col] = plot_df[batch_col].astype(str)
+
+    if subject_col is not None and subject_col in plot_df.columns:
+        plot_df[subject_col] = plot_df[subject_col].astype(str)
+    else:
+        subject_col = None
+
+    # ------------------------------------------------------------------
+    # Site ordering
+    # ------------------------------------------------------------------
+    if site_order is None:
+        site_order = sorted(
+            plot_df[batch_col]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+    else:
+        site_order = [str(s) for s in site_order]
+
+    n_sites = len(site_order)
+    use_horizontal = n_sites > site_threshold_for_horizontal
+
+    # ------------------------------------------------------------------
+    # Batch-size summary
+    # ------------------------------------------------------------------
+    batch_counts = (
+        plot_df.groupby(batch_col)
+        .size()
+        .reindex(site_order)
+        .fillna(0)
+        .astype(int)
+    )
+
+    min_batch = int(batch_counts.min()) if len(batch_counts) else 0
+    med_batch = int(batch_counts.median()) if len(batch_counts) else 0
+    max_batch = int(batch_counts.max()) if len(batch_counts) else 0
+
+    n_lt5 = int((batch_counts < 5).sum())
+    n_lt10 = int((batch_counts < 10).sum())
+    n_lt20 = int((batch_counts < 20).sum())
+
+    summary_text = (
+        f"Batch size check: min={min_batch}, "
+        f"median={med_batch}, max={max_batch}   |   "
+        f"Batches <5: {n_lt5}   "
+        f"<10: {n_lt10}   "
+        f"<20: {n_lt20}"
+    )
+
+    # ------------------------------------------------------------------
+    # Remove covariate effects while preserving batch
+    # ------------------------------------------------------------------
+    plot_df = _adjust_for_covariates_preserve_batch(
+        df=plot_df,
+        idp_cols=idp_cols,
+        batch_col=batch_col,
+        covariates=covariates,
+    )
+
+    # ------------------------------------------------------------------
+    # Rank features AFTER covariate adjustment
+    # ------------------------------------------------------------------
+    shown_idps = idp_cols
+
+    if len(idp_cols) > feature_display_limit:
+        med = plot_df.groupby(batch_col)[idp_cols].median(
+            numeric_only=True
+        )
+
+        if isinstance(med, pd.DataFrame) and not med.empty:
+            dispersion = med.max(axis=0) - med.min(axis=0)
+
+            shown_idps = (
+                dispersion
+                .sort_values(ascending=False)
+                .head(feature_display_limit)
+                .index
+                .tolist()
+            )
+        else:
+            shown_idps = idp_cols[:feature_display_limit]
+
+    n_idps = len(shown_idps)
+
+    # ------------------------------------------------------------------
+    # Figure layout
+    # ------------------------------------------------------------------
+    max_site_label_len = max(
+        (len(s) for s in site_order),
+        default=0,
+    )
+
+    left_margin = min(
+        0.42,
+        max(
+            0.22,
+            0.10 + 0.008 * max_site_label_len,
+        ),
+    )
+
+    if use_horizontal:
+        fig_w = max(
+            8.0,
+            figsize_per_panel[0] * 1.25,
+        )
+        fig_h = max(
+            4.0,
+            figsize_per_panel[1] * n_idps,
+        )
+
+        fig, axes = plt.subplots(
+            n_idps,
+            1,
+            figsize=(fig_w, fig_h),
+            squeeze=False,
+        )
+        axes = axes.flatten()
+
+    else:
+        ncols = max(
+            1,
+            min(int(ncols), n_idps),
+        )
+        nrows = int(math.ceil(n_idps / ncols))
+
+        fig_w = figsize_per_panel[0] * ncols
+        fig_h = figsize_per_panel[1] * nrows
+
+        fig, axes_grid = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(fig_w, fig_h),
+            squeeze=False,
+        )
+        axes = axes_grid.flatten()
+
+    # ------------------------------------------------------------------
+    # Batch-size note
+    # ------------------------------------------------------------------
+    fig.subplots_adjust(
+        top=0.93 if use_horizontal else 0.94
+    )
+
+    fig.text(
+        0.5,
+        0.995,
+        summary_text,
+        ha="center",
+        va="top",
+        fontsize=max(7, STYLE.TICK_SIZE - 1),
+        fontstyle="italic",
+        bbox=dict(
+            boxstyle="round,pad=0.25",
+            facecolor="white",
+            edgecolor="0.85",
+        ),
+    )
+
+    # ------------------------------------------------------------------
+    # Site palette
+    # ------------------------------------------------------------------
+    palette = sns.color_palette(
+        "Set2",
+        n_colors=max(3, len(site_order)),
+    )
+
+    site_palette = {
+        site: palette[i % len(palette)]
+        for i, site in enumerate(site_order)
+    }
+
+    # ------------------------------------------------------------------
+    # Plot each IDP
+    # ------------------------------------------------------------------
+    for i, idp in enumerate(shown_idps):
+        ax = axes[i]
+
+        if use_horizontal:
+            sns.boxplot(
+                data=plot_df,
+                y=batch_col,
+                x=idp,
+                order=site_order,
+                ax=ax,
+                palette=site_palette,
+                width=0.65,
+                fliersize=0,
+                linewidth=1.0,
+                orient="h",
+            )
+
+            if show_points:
+                sns.stripplot(
+                    data=plot_df,
+                    y=batch_col,
+                    x=idp,
+                    order=site_order,
+                    ax=ax,
+                    color="black",
+                    size=point_size,
+                    alpha=point_alpha,
+                    jitter=point_jitter,
+                    orient="h",
+                )
+
+            ax.set_title(
+                idp,
+                fontsize=STYLE.TITLE_SIZE,
+                fontweight="bold",
+                pad=12,
+            )
+
+            ax.set_xlabel(
+                "Covariate-adjusted value",
+                fontsize=STYLE.AXIS_SIZE,
+            )
+            ax.set_ylabel(
+                "Site",
+                fontsize=STYLE.AXIS_SIZE,
+            )
+
+            _set_ticklabels(
+                ax,
+                "y",
+                site_order,
+                fontsize=max(7, STYLE.TICK_SIZE - 1),
+                ha="right",
+            )
+
+            ax.tick_params(
+                axis="y",
+                pad=8,
+                labelsize=max(7, STYLE.TICK_SIZE - 1),
+            )
+            ax.tick_params(
+                axis="x",
+                labelsize=STYLE.TICK_SIZE,
+            )
+            ax.grid(
+                axis="x",
+                linestyle="--",
+                alpha=STYLE.GRID_ALPHA,
+            )
+
+        else:
+            sns.boxplot(
+                data=plot_df,
+                x=batch_col,
+                y=idp,
+                order=site_order,
+                ax=ax,
+                palette=site_palette,
+                width=0.65,
+                fliersize=0,
+                linewidth=1.0,
+            )
+
+            if show_points:
+                sns.stripplot(
+                    data=plot_df,
+                    x=batch_col,
+                    y=idp,
+                    order=site_order,
+                    ax=ax,
+                    color="black",
+                    size=point_size,
+                    alpha=point_alpha,
+                    jitter=point_jitter,
+                )
+
+            ax.set_title(
+                idp,
+                fontsize=STYLE.TITLE_SIZE,
+                fontweight="bold",
+                pad=10,
+            )
+
+            ax.set_xlabel(
+                "Site",
+                fontsize=STYLE.AXIS_SIZE,
+            )
+            ax.set_ylabel(
+                "Covariate-adjusted value",
+                fontsize=STYLE.AXIS_SIZE,
+            )
+
+            rot = _adaptive_rotation(
+                site_order,
+                threshold=7,
+                steep=45,
+                mild=30,
+            )
+
+            _set_ticklabels(
+                ax,
+                "x",
+                site_order,
+                rotation=rot,
+                ha="right" if rot else "center",
+            )
+
+            ax.tick_params(
+                axis="y",
+                labelsize=STYLE.TICK_SIZE,
+            )
+            ax.grid(
+                axis="y",
+                linestyle="--",
+                alpha=STYLE.GRID_ALPHA,
+            )
+
+        _strip_spines(ax)
+
+    # Hide unused axes
+    for j in range(n_idps, len(axes)):
+        axes[j].axis("off")
+
+    # ------------------------------------------------------------------
+    # Final layout
+    # ------------------------------------------------------------------
+    if use_horizontal:
+        fig.subplots_adjust(
+            left=left_margin,
+            right=0.98,
+            top=0.93,
+            bottom=0.06,
+            hspace=0.35,
+        )
+    else:
+        fig.subplots_adjust(
+            left=0.06,
+            right=0.98,
+            top=0.92,
+            bottom=0.06,
+            hspace=0.38,
+        )
+
+    _finalise(
+        fig,
+        "Covariate-adjusted IDP distributions across sites",
+    )
+
+    if savepath:
+        plt.savefig(
+            savepath,
+            dpi=STYLE.DPI,
+            bbox_inches="tight",
+        )
+
+    return _handle_rep_show(fig, rep, "", show)
+
+# ============================================================================
 # 1.  SUBJECT ORDER CONSISTENCY
 # ============================================================================
 
