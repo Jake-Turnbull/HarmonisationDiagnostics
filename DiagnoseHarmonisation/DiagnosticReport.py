@@ -3299,30 +3299,95 @@ def LongitudinalReport(data, batch,
                           show: bool = False,
                           timestamped_reports: bool = True):
     """
-    Create a diagnostic report for dataset differences across batches in longitudinal data.
+    Generate a diagnostic report for longitudinal data, evaluating batch effects,
+    subject-level stability, between-subject variability, and preservation of
+    biological covariate associations.
 
-    Args: 
-        data (np.ndarray): Data matrix (samples x features).
-        batch (list or np.ndarray): Batch labels for each sample.
-        subject_ids (list or np.ndarray): Subject IDs for each sample.
-        covariates (np.ndarray, optional): Covariate matrix (samples x covariates).
-        covariate_names (list of str, optional): Names of covariates.
-        save_data (bool, optional): Whether to save input data and results.
-        save_data_name (str, optional): Filename for saved data.
-        save_dir (str or os.PathLike, optional): Directory to save report and data.
-        report_name (str, optional): Name of the report file.
-        SaveArtifacts (bool, optional): Whether to save intermediate artifacts.
-        rep (StatsReporter, optional): Existing report object to use.
-        show (bool, optional): Whether to display plots interactively.
-    
-    Outputs:
-        Generates an HTML report with diagnostic plots and statistics for longitudinal data.
-        If `save_data` is True, also returns a dictionary and csv with input data and results.
-        If SaveArtifacts is True, saves intermediate plots to `save_dir`.
-    Note:
-        This function is designed for repeated data where we do not expect to see a longitudinal trent over time.
-        If need arises, we will revise this to include an additional function where we would expect to see a longitudinal trend and want to test for that explicitly.
-    
+    The function is intended for repeated-measures data where measurements are
+    available for the same subjects at multiple timepoints. It is designed for
+    test-retest/travelling-subject style analyses where a systematic longitudinal
+    trend is not the primary effect of interest.
+
+    Args:
+        data (np.ndarray):
+            Two-dimensional numeric data matrix with shape
+            (n_samples, n_features). Rows correspond to individual
+            observations/measures and columns correspond to features/IDPs.
+            The input is passed directly to the longitudinal diagnostic
+            functions and is therefore expected to already be in matrix form.
+
+        batch (array-like):
+            One-dimensional batch/site label vector with one entry per sample.
+            The number of entries must correspond to data.shape[0].
+
+        subject_ids (array-like):
+            One-dimensional subject identifier vector with one entry per sample.
+            Repeated subject identifiers are expected for longitudinal data.
+
+        timepoints (array-like):
+            One-dimensional timepoint/visit identifier vector with one entry per
+            sample. Repeated measurements for a subject should be represented
+            by multiple entries in this vector.
+
+        covariates (dict, optional):
+            Dictionary mapping covariate names to one-dimensional sequences,
+            with one value per sample. Covariates are used as biological/fixed
+            effects in the mixed-effects analyses.
+
+            Note:
+                In the current implementation, providing covariates in another
+                format is not supported reliably because the function accesses
+                covariates.keys(). When covariates are supplied, a dictionary
+                is therefore expected.
+
+        covariate_names (list of str, optional):
+            Names of the covariates. In the current implementation these are
+            inferred from covariates.keys() when covariates is provided.
+
+        features (sequence of str):
+            Feature/IDP names corresponding to the columns of data.
+            The current implementation uses features directly when constructing
+            the raw-data DataFrame and when calling the diagnostic and plotting
+            functions, and also calls len(features). A valid sequence of feature
+            names matching the number of columns in data is therefore required.
+
+        save_data (bool, optional, default=False):
+            Whether to save the input data and diagnostic results.
+
+        save_data_name (str, optional):
+            Filename/name prefix used for saved input data.
+
+        save_dir (str or os.PathLike, optional):
+            Directory in which the report and saved outputs are written.
+            Defaults to the current working directory.
+
+        report_name (str, optional):
+            Name of the HTML report. The ".html" extension is added if it is
+            not already present.
+
+        SaveArtifacts (bool, optional, default=False):
+            Whether intermediate diagnostic artifacts/plots are saved.
+
+        rep (StatsReporter, optional):
+            Existing StatsReporter instance to use. If omitted, a new reporter
+            is created internally.
+
+        show (bool, optional, default=False):
+            Whether plots should be displayed interactively. The current report
+            runner passes False to the plotting functions.
+
+        timestamped_reports (bool, optional, default=True):
+            Whether to append a timestamp to the generated report filename.
+
+    Returns:
+        StatsReporter:
+            The report object containing the generated longitudinal diagnostic
+            report and associated results.
+
+    Notes:
+        This report evaluates repeated-measures stability and batch effects.
+        It is not intended to test for an expected longitudinal biological trend
+        over time.
     """
     from pprint import pformat
     from DiagnoseHarmonisation import DiagnosticFunctionsLong
