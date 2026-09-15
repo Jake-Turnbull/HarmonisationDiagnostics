@@ -606,11 +606,17 @@ def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 7, fontsize: float = 10
     if not items:
         return figs
 
+    # Loop over the methods to find the highest R^2 value for setting a consistent color scale
+    max_r2 = 0.0
+    for _, matrix, _ in items:
+        max_r2 = max(max_r2, np.nanmax(matrix.to_numpy(dtype=float)))
+
     fig, axes, _, _ = _make_method_grid(len(items), square_size=5.8, max_cols=3)
     last_im = None
     for ax, (method, matrix, explained) in zip(axes, items):
         values = matrix.to_numpy(dtype=float)
-        last_im = ax.imshow(values, vmin=0.0, vmax=1.0, cmap="coolwarm", aspect="auto")
+        
+        last_im = ax.imshow(values, vmin=0.0, vmax=max_r2*1.1, cmap="coolwarm", aspect="auto")
         ax.set_title(_title(method), fontsize=fontsize)
         ax.set_xticks(np.arange(matrix.shape[1]))
         col_labels = [
