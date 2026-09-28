@@ -3548,7 +3548,7 @@ def LongitudinalReport(data, batch,
         report.log_section("Introduction", "Longitudinal Data Diagnostic Report Introduction")
         report.text_simple(
         """
-        Longitudinal data contain repeated measurements collected from the same individuals over time. 
+        Longitudinal/test-retest (e.g., traveling heads) data contain repeated measurements collected from the same individuals over time. 
         
         Such datasets require evaluation of measurement stability, batch-related variability, preservation of biological signal, and retention of between-subject differences.
 
@@ -3559,10 +3559,10 @@ def LongitudinalReport(data, batch,
         SUBJECT-LEVEL VARIABILITY
 
         • Subject order consistency
-        Preservation of subject ranking across visits
+        Preservation of subject ranking consistency 
 
         • Within-subject variability
-        Longitudinal stability within individual subjects
+        Within sujbect stability of measurements 
 
         ────────────────────────────────────────────────────────
 
@@ -3578,7 +3578,7 @@ def LongitudinalReport(data, batch,
         Batch-related variance differences
 
         • Multivariate batch differences
-        Mahalanobis distance from a reference distribution
+        Mahalanobis distance between batches and reference 
 
         ────────────────────────────────────────────────────────
 
@@ -3592,9 +3592,8 @@ def LongitudinalReport(data, batch,
         BIOLOGICAL VARIABILITY
 
         • Covariate significance
-        • Effect sizes (β coefficients)
-        • 95% confidence intervals
-
+        • Effect sizes (β coefficients) 
+        
         ────────────────────────────────────────────────────────
 
         Together, these diagnostics help determine whether harmonisation reduces unwanted batch effects while preserving meaningful biological and subject-specific variation.
@@ -3602,81 +3601,227 @@ def LongitudinalReport(data, batch,
         )
 
         # --------------------------------------------------------------
-        # Raw IDP distributions across sites (first plot in report)
+        # IDP distributions across batches
         # --------------------------------------------------------------
+
         report.log_section(
-            "Raw_IDP_across_sites",
-            "Raw imaging-derived phenotypes across sites"
+            "IDP_across_sites",
+            "Imaging-derived phenotype distributions across batches"
         )
 
-        site_counts = pd.Series(batch).astype(str).value_counts()
+
+        # ============================================================
+        # DATASET SUMMARY
+        # ============================================================
+
+        site_counts = (
+            pd.Series(
+                batch
+            )
+            .astype(str)
+            .value_counts()
+        )
+
+
         site_subject_counts = (
-            pd.DataFrame({
-                "batch": pd.Series(batch).astype(str),
-                "subject": pd.Series(subject_ids).astype(str),
-            })
+            pd.DataFrame(
+                {
+                    "batch":
+                        pd.Series(
+                            batch
+                        ).astype(str),
+
+                    "subject":
+                        pd.Series(
+                            subject_ids
+                        ).astype(str),
+                }
+            )
             .drop_duplicates()
-            .groupby("batch")["subject"]
+            .groupby(
+                "batch"
+            )[
+                "subject"
+            ]
             .nunique()
         )
+
+
+        # ============================================================
+        # REPORT DESCRIPTION
+        # ============================================================
+
+        if covariates is not None:
+
+            adjustment_description = (
+                "The adjusted distributions are obtained by fitting, "
+                "for each IDP, a mixed-effects model containing batch \n"
+                "and the supplied biological covariates as fixed effects "
+                "and subject as a random intercept. The covariate \n"
+                "contribution and subject random intercept are removed, "
+                "while the batch effect is retained."
+            )
+
+
+            adjusted_panel_name = (
+                "covariate- and subject-adjusted"
+            )
+
+
+        else:
+
+            adjustment_description = (
+                "The adjusted distributions are obtained by fitting, "
+                "for each IDP, a mixed-effects model containing batch "
+                "as a fixed effect and subject as a random intercept. "
+                "The subject random intercept is removed while the "
+                "batch effect is retained."
+            )
+
+
+            adjusted_panel_name = (
+                "subject-adjusted"
+            )
+
 
         report.text_simple(
             f"""
             📋 OVERVIEW
             ────────────────────────────────────────────────────────
 
-            This section shows the raw distributions of each IDP across
-            acquisition sites before harmonisation.
+            This section examines the distribution of imaging-derived
+            phenotypes across acquisition batches.
 
-            Site sample sizes:
-            • sites: {site_counts.size}
-            • datapoints per site: min={site_counts.min()}, median={int(site_counts.median())}, max={site_counts.max()}
-            • unique subjects per site: min={site_subject_counts.min()}, median={int(site_subject_counts.median())}, max={site_subject_counts.max()}
+            Because IDPs can differ substantially in their original
+            measurement scales, each IDP is robustly standardised using
+            its median and median absolute deviation (MAD). The MAD is
+            scaled by 1.4826 to provide a robust estimate comparable to
+            the standard deviation under a normal distribution.
 
-            The plot adapts automatically to the dataset:
-            • vertical boxplots when the number of sites is small
-            • horizontal boxplots when there are many sites
-            • only the top 10 most site-sensitive IDPs when there are
-              many features
-            • a PCA summary panel when the full feature set is too large
-              to display directly
+            Two distributions are shown:
+
+            • Original data:
+              robust z-scores calculated directly from the observed IDP
+              values.
+
+            • {adjusted_panel_name.capitalize()} data:
+              robust z-scores calculated after adjustment for biological
+              covariates and/or subject-level effects.
+
+            {adjustment_description}
+
+            Batch effects are deliberately retained in the adjusted data
+            so that differences between acquisition batches remain visible.
+
+            Batch sample sizes:
+
+            • batches: {site_counts.size}
+            • observations per batch:
+              min={site_counts.min()},
+              median={int(site_counts.median())},
+              max={site_counts.max()}
+            • unique subjects per batch:
+              min={site_subject_counts.min()},
+              median={int(site_subject_counts.median())},
+              max={site_subject_counts.max()}
+
 
             📈 INTERPRETATION
             ────────────────────────────────────────────────────────
 
-            Differences in medians, spread, or outliers across sites
-            suggest site-related effects in the raw data.
+            The coloured distributions represent the pooled robust
+            z-scores of the IDPs within each acquisition batch.
+
+            Greater overlap between batch distributions indicates more
+            similar multivariate feature distributions across batches.
+
+            Separation in distribution location or spread indicates that
+            systematic batch-related differences remain.
+
+            The original-data panel shows the observed batch distributions.
+
+            The adjusted panel helps assess whether apparent batch
+            differences remain after accounting for biological covariates
+            and subject-level differences.
+
+            Because batch effects are retained during adjustment, the
+            adjusted panel is intended to reveal batch-related differences
+            rather than remove them.
             """
         )
 
-        raw_df = pd.DataFrame(data, columns=features)
-        raw_df["batch"] = batch
-        raw_df["subject"] = subject_ids
 
-        PlotDiagnosticResults.plot_RawIDPBoxplotsAcrossSites(
-            raw_df,
-            batch_col="batch",
-            subject_col="subject",
-            idp_cols=list(features),
-            figsize_per_panel=_plot_figsize("raw"),
-            rep=report,
-            show=False,
+        # ============================================================
+        # PREPARE DATAFRAME
+        # ============================================================
+
+        distribution_df = pd.DataFrame(
+            data,
+            columns=features,
         )
 
-        if covariates is not None:
-            PlotDiagnosticResults.plot_CovariateAdjustedBoxplotsAcrossSites(
-                raw_df,
-                batch_col="batch",
-                subject_col="subject",
-                covariates=covariates,
-                idp_cols=list(features),
-                figsize_per_panel=_plot_figsize("residuals"),
-                rep=report,
-                show=False,
-            )
 
-        report.log_text("Raw IDP boxplots across sites added to report")
-        report.text_simple("────────────────────────────────────────────")
+        distribution_df[
+            "batch"
+        ] = (
+            pd.Series(
+                batch
+            )
+            .astype(str)
+            .to_numpy()
+        )
+
+
+        distribution_df[
+            "subject"
+        ] = (
+            pd.Series(
+                subject_ids
+            )
+            .astype(str)
+            .to_numpy()
+        )
+
+
+        # ============================================================
+        # PLOT ROBUST Z-SCORE DISTRIBUTIONS
+        # ============================================================
+
+        (
+            distribution_fig,
+            raw_z_df,
+            adjusted_z_df,_
+        ) = (
+            PlotDiagnosticResults
+            .plot_longitudinal_zscore_histograms(
+                data=data,
+                batch=batch,
+                subject=subject_ids,
+                idp_names=list(features),
+                covariates=covariates,
+                reml=True,
+                bins=80,
+                xlim=(-8, 8),
+                figsize=(16, 6),
+                batch_order=None,
+                savepath=None,
+                show=False,
+                rep=report,
+            )
+        )
+
+        # ============================================================
+        # REPORT LOG
+        # ============================================================
+
+        report.log_text(
+            "Robust IDP distributions across batches added to report"
+        )
+
+
+        report.text_simple(
+            "────────────────────────────────────────────"
+        )
 
         report.log_section(
             "subject_order_consistency",
@@ -3689,7 +3834,7 @@ def LongitudinalReport(data, batch,
         ────────────────────────────────────────────────────────
 
         This analysis evaluates whether subjects preserve their
-        relative ranking across longitudinal visits.
+        relative ranking across timepoints.
 
         ⚙️ METHOD
         ────────────────────────────────────────────────────────
@@ -3698,8 +3843,8 @@ def LongitudinalReport(data, batch,
         is computed using subjects measured at both timepoints.
 
         Statistical significance is assessed using permutation
-        testing, where subject labels are randomly shuffled to
-        generate a null distribution of correlation values.
+        testing (default 100 iterations), where subject labels are 
+        randomly shuffled to generate a null distribution of correlation values.
 
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
@@ -3725,23 +3870,28 @@ def LongitudinalReport(data, batch,
         )
         
         # Subject-level: Subject order consistency
-        subjorder = DiagnosticFunctionsLong.SubjectOrder_long(idp_matrix=data,
-                                                          subjects=subject_ids,
-                                                          timepoints=timepoints,
-                                                          idp_names=features,
-                                                          nPerm=100)
-        print("\nSUBJECT ORDER CONSISTENCY: RANK CORRELATIONS WITH PERMUTATION TESTS")
-        print(subjorder)
+        subjorder = DiagnosticFunctionsLong.SubjectOrder_long(
+            idp_matrix=data,
+            subjects=subject_ids,
+            batch=batch,
+            idp_names=features,
+            nPerm=100,
+            seed=42
+        )
+        
+        subjorder.to_csv(os.path.join(save_dir, "subject_order.csv"),index=False)
+
+        #print("\nSUBJECT ORDER CONSISTENCY: RANK CORRELATIONS WITH PERMUTATION TESTS")
+        #print(subjorder)
         report.text_simple(
             "────────────────────────────────────────────"
             )
-        PlotDiagnosticResults.plot_SubjectOrder(subjorder,                 
-                              ncols=2,
-                              figsize_per_plot=(8,6),
-                              limit_idps=None,
-                              sample_method='random',
-                              random_state=42,
-                              rep=report) 
+
+        PlotDiagnosticResults.plot_SubjectOrder(
+            subjorder,
+            summary_stat="median",
+            rep=report)
+        
         report.log_text("Subject order consistency plots added to report")
 
         # Subject-level: Within Subject Consistency 
@@ -3761,20 +3911,13 @@ def LongitudinalReport(data, batch,
         ⚙️ METHOD
         ────────────────────────────────────────────────────────
 
-        For datasets containing more than two visits,
-        within-subject variability is summarised using the
-        Coefficient of Variation (CV).
-
-            CV = standard deviation / mean
-
-        For datasets containing exactly two visits,
-        variability is summarised using the Relative Percent
-        Difference (RPD).
-
-        All variability measures are computed at the subject
-        level and subsequently summarised across subjects and
-        features.
-
+        Within-subject variability was quantified for each IDP using 
+        pairwise relative percent difference (RPD) across all available 
+        repeated measurements within each subject. 
+        
+        Pairwise RPD values were summarised using the selected 
+        summary statistic (median by default).
+        
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
 
@@ -3809,7 +3952,12 @@ def LongitudinalReport(data, batch,
             subjects=subject_ids,
             timepoints=timepoints,
             idp_names=features,
-                          )
+             )
+
+        wsv.to_csv(
+            os.path.join(save_dir, "within_subject_variability.csv"),
+            index=False
+        )
         print("\nWITHIN SUBJECT VARIABILITY: BETWEEN TIMEPOINTS")
         print(wsv)
 
@@ -3817,12 +3965,19 @@ def LongitudinalReport(data, batch,
             "────────────────────────────────────────────"
             )
         
-        PlotDiagnosticResults.plot_WithinSubjVar(
+        """ PlotDiagnosticResults.plot_WithinSubjVar(
             wsv,
             subject_col='subject',
             rep=report,
             debug=False
-            )
+            ) """
+
+        PlotDiagnosticResults.plot_WithinSubjVar(
+            wsv,
+            idp_cols=features,
+            summary_stat='median',
+            rep=report
+        )
         report.log_text("Within subject variability plots added to report")
 
         # Batch-level: Additive batch effects
@@ -3850,8 +4005,13 @@ def LongitudinalReport(data, batch,
         A Kenward–Roger F-test is then used to compare the full
         model against a nested model without the batch term.
 
-        The resulting p-value quantifies the contribution of
-        batch membership to variation in feature values.
+        The resulting p-value quantifies the contribution of batch 
+        membership to variation in feature values.
+
+        Default settings - 
+          1. p-values FDR-corrected across features.
+          2. Reponse variable and numeric covariates are z-scored.
+
 
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
@@ -3870,8 +4030,7 @@ def LongitudinalReport(data, batch,
         ⚠️ LIMITATIONS
         ────────────────────────────────────────────────────────
 
-        This analysis evaluates differences in feature means
-        only.
+        This analysis evaluates differences in feature means only.
 
         Variance differences and multivariate batch structure
         are assessed separately in subsequent analyses.
@@ -3885,28 +4044,29 @@ def LongitudinalReport(data, batch,
             batch_name=batch,
             idp_names=features,
             covariates=covariates,
-            #fix_eff=["age", "sex"],   # fixed effects
-            #ran_eff=["subjects"],            # random intercepts
-            do_zscore=True,                  # z-score predictors AND response per feature
-            reml=False,
-            verbose=True)
-        print("\nRESULTS: ADDITIVE EFFECTS")
-        print(addeff)
-        #report.log_text(pformat(model_defs_add, width=60, sort_dicts=False))
+            reml=False)
+
+        addeff.to_csv(
+                os.path.join(save_dir, "additive_batch_effect.csv"),
+                index=False
+            )
+    
         report.text_simple(
             "────────────────────────────────────────────"
             )
         
-        PlotDiagnosticResults.plot_AddMultEffects(addeff,
-                                     feature_col='Feature',
-                                     p_col='p-value',
-                                     labels=['Additive batch effect'],
-                                     p_thr=0.05,
-                                     annot_fmt="{:.3f}",
-                                     value_scale='p',
-                                     figsize=_plot_figsize("summary_hbar", len(addeff)),
-                                     rep=report)
+        PlotDiagnosticResults.plot_AddMultEffects(
+            addeff,   
+            p_col="q-value",       
+            p_thr=0.05,
+            rep=report,
+        )
         report.log_text("Additive batch effect plot added to report")
+
+        report.log_section(
+                    "Pairwise additive batch effects",
+                    "Pairwise comparison of batches from mixed-effects analysis"
+                )
         
         # Batch-level: Pairwise batch comparison
         report.text_simple(
@@ -3920,7 +4080,9 @@ def LongitudinalReport(data, batch,
 
         For each feature, the number of significant batch pairs
         is reported following multiple-comparison correction.
-
+        
+        By default, p-values are Bonferroni correction for number of pairs. 
+       
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
 
@@ -3933,8 +4095,7 @@ def LongitudinalReport(data, batch,
         between batches.
         """
         )
-
-
+        
         mf,model_defs = DiagnosticFunctionsLong.MixedEffects_long(
             idp_matrix=data,
             subjects=subject_ids,
@@ -3942,46 +4103,28 @@ def LongitudinalReport(data, batch,
             batches=batch,
             idp_names=features,
             covariates=covariates,  # optional
-            p_corr=1
-            #fix_eff=["age","sex"],   # batch is included automatically
-            #ran_eff=["subjects"],
-            #force_categorical=["sex"],
-            #force_numeric=["age"],
-            #zscore_var=["age"]
             ) 
-        print("\nMIXED EFFECTS OUTPUTS:")
+
+        mf.to_csv(
+                os.path.join(save_dir, "mixed_effects.csv"),
+                index=False
+            )
+        
+        #print("\nMIXED EFFECTS OUTPUTS:")
         pd.set_option("display.max_rows", None)
         pd.set_option("display.max_columns", None)
         pd.set_option("display.width", None)
         pd.set_option("display.max_colwidth", None)
-        print(mf) 
-        #report.log_text(pformat(model_defs, width=60, sort_dicts=False))
-
+   
         n_batches = len(np.unique(batch))
         total_pairs = n_batches * (n_batches - 1) // 2
         report.log_text(f"Total number of pairs {total_pairs} for {len(np.unique(batch))} batches")
 
-        if len(features) < 30:
-            report.text_simple(
-            "────────────────────────────────────────────"
-            )
-            PlotDiagnosticResults.plot_MixedEffectsPart1(mf,
-                        idp_col='IDP',
-                        metrics=['n_is_batchSig'],
-                        plot_type='bar',
-                        seed=123,
-                        figsize=_plot_figsize("summary_hbar", len(features)), rep=report)
-        else:
-            report.text_simple(
-            "────────────────────────────────────────────"
-            )
-            PlotDiagnosticResults.plot_MixedEffectsPart1(mf,
-                      idp_col='IDP',
-                      metrics=['n_is_batchSig'],
-                      plot_type='box',
-                      limit_idps=2,
-                      seed=123,
-                      figsize=_plot_figsize("summary_box", len(features)), rep=report)
+        PlotDiagnosticResults.plot_MixedEffectsPart1(
+            mf,
+            version="batch",
+            rep=report,
+        )
         report.log_text("Pairwise batch variability plots added to report")
 
         # Multiplicative batch effects
@@ -4016,6 +4159,10 @@ def LongitudinalReport(data, batch,
         For each feature, a p-value is computed to assess
         whether variance differs significantly between batches.
 
+        Default settings - 
+          1. p-values FDR-corrected across features.
+          2. Reponse variable and numeric covariates are z-scored.
+
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
 
@@ -4040,32 +4187,33 @@ def LongitudinalReport(data, batch,
         """
         )
 
-        muleff,model_defs_mul = DiagnosticFunctionsLong.MultiplicativeEffect_long(
+        muleff,_ = DiagnosticFunctionsLong.MultiplicativeEffect_long(
             idp_matrix=data,
             subjects=subject_ids,
             timepoints=timepoints,
             batch_name=batch,
             idp_names=features,
             covariates=covariates,
-            #fix_eff=["age", "sex"],   # fixed effects
-            #ran_eff=["subjects"],            # random intercepts
-            do_zscore=True,                  # z-score predictors AND response per feature
-            verbose=True)
-        print("\nRESULTS: MULTIPLICATIVE EFFECTS")
-        print(muleff)
+            reml=False)
+
+        muleff.to_csv(
+            os.path.join(save_dir, "multiplicative_batch_effect.csv"),
+            index=False
+        )
+        
+        #print("\nRESULTS: MULTIPLICATIVE EFFECTS")
+        #print(muleff)
         #report.log_text(pformat(model_defs_mul, width=60, sort_dicts=False))
         report.text_simple(
             "────────────────────────────────────────────"
             )
-        PlotDiagnosticResults.plot_AddMultEffects(muleff,
-                                     feature_col='Feature',
-                                     p_col='p-value',
-                                     labels=['Multiplicative batch effect'],
-                                     p_thr=0.05,
-                                     annot_fmt="{:.3f}",
-                                     value_scale='p',
-                                     figsize=_plot_figsize("summary_hbar", len(muleff)),
-                                     rep=report)
+
+        PlotDiagnosticResults.plot_AddMultEffects(
+            muleff,    
+            p_col="q-value",      
+            p_thr=0.05,
+            rep=report,
+        )
         report.log_text("Multiplicative batch effect plots added to report")
        
        # Multivariate site differences using Mahalanobis distances
@@ -4149,18 +4297,62 @@ def LongitudinalReport(data, batch,
            batch=batch,
            subject=subject_ids,
            timepoint=timepoints, 
-           idp_names=features, return_info=True)
-        print("\nMULTIVARIATE PAIRWISE SITE DIFFERENCES:")
-        print(md)
+           idp_names=features, 
+           return_info=True)
+
+        # Save in CSV: pairwise distances
+        pairwise_rows = []
+        for (batchA, batchB), raw_val in md["pairwise_raw"].items():
+            row = {
+                "batchA": batchA,
+                "batchB": batchB,
+                "raw_distance": raw_val,
+            }
+            # Add adjusted distance only if covariates were supplied
+            if md.get("pairwise_resid") is not None:
+                row["covariate_adjusted_distance"] = (
+                    md["pairwise_resid"].get((batchA, batchB), np.nan)
+                )
+
+            pairwise_rows.append(row)
+        md_pairwise_df = pd.DataFrame(pairwise_rows)
+        md_pairwise_df.to_csv(
+            os.path.join(save_dir, "multivariate_batch_pairwise.csv"),
+            index=False,
+        )
+
+        # Save in CSV: distances with centroid
+        centroid_rows = []
+        for (batch, reference), raw_val in md["centroid_raw"].items():
+            row = {
+                "batch": batch,
+                "reference": reference,
+                "raw_distance": raw_val,
+            }
+            if md.get("centroid_resid") is not None:
+                row["covariate_adjusted_distance"] = (
+                    md["centroid_resid"].get(
+                        (batch, reference),
+                        np.nan,
+                    )
+                )
+            centroid_rows.append(row)
+            md_centroid_df = pd.DataFrame(centroid_rows)
+            md_centroid_df.to_csv(
+                os.path.join(save_dir, "multivariate_batch_centroid.csv"),
+                index=False,
+            )
+        
+        #print("\nMULTIVARIATE PAIRWISE SITE DIFFERENCES:")
+        #print(md)
         report.text_simple(
             "────────────────────────────────────────────"
             )
-       
         PlotDiagnosticResults.plot_MultivariateBatchDifference(results=md,
                                                              info=md_info,
-                                                             rep=report,
                                                              annotate=True,
-                                                             show=False)
+                                                             rep=report)
+        
         report.log_text("Multivariate batch variability plots added to report")
 
 
@@ -4182,6 +4374,7 @@ def LongitudinalReport(data, batch,
         because biologically meaningful differences should remain
         detectable after harmonisation.
 
+
         ⚙️ METHOD
         ────────────────────────────────────────────────────────
 
@@ -4195,6 +4388,9 @@ def LongitudinalReport(data, batch,
 
         From these variance components, the Intra-Class
         Correlation (ICC) is computed.
+
+        Default settings:
+        - Reponse variables are z-scored.
 
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
@@ -4222,27 +4418,11 @@ def LongitudinalReport(data, batch,
         )
 
         #report.log_text(pformat(model_defs, width=60, sort_dicts=False))
-        if len(features) < 30:
-            report.text_simple(
-            "────────────────────────────────────────────"
+        PlotDiagnosticResults.plot_MixedEffectsPart1(
+                mf,
+                version="icc",
+                rep=report,
             )
-            PlotDiagnosticResults.plot_MixedEffectsPart1(mf,
-                        idp_col='IDP',
-                        metrics=['ICC'],
-                        plot_type='bar',
-                        seed=123,
-                        figsize=_plot_figsize("summary_hbar", len(features)), rep=report)
-        else:
-            report.text_simple(
-            "────────────────────────────────────────────"
-            )
-            PlotDiagnosticResults.plot_MixedEffectsPart1(mf,
-                      idp_col='IDP',
-                      metrics=['ICC'],
-                      plot_type='box',
-                      limit_idps=2,
-                      seed=123,
-                      figsize=_plot_figsize("summary_box", len(features)))
         report.log_text("ICC plot added to report")  
         
         # Biological variability
@@ -4275,7 +4455,11 @@ def LongitudinalReport(data, batch,
 
         • Statistical significance (p-value)
         • Effect size (β coefficient)
-        • 95% confidence interval
+
+        Default settings:
+        1. Reponse variables are z-scored.
+        2. Numeric covariates are not z-scored.
+        3. p-values FDR-corrected across features.
 
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
@@ -4309,12 +4493,23 @@ def LongitudinalReport(data, batch,
         report.text_simple(
             "────────────────────────────────────────────"
             )
-        PlotDiagnosticResults.plot_MixedEffectsPart2(mf,
-                      idp_col='IDP',
-                      fix_eff=inferred_fix,
-                      p_thr=0.05,
-                      figsize=_plot_figsize("biological", len(features)),
-                      rep=report)
+        """ PlotDiagnosticResults.plot_MixedEffectsPart2(
+            mf,
+            fix_eff=inferred_fix,
+            rep=report,
+        ) """
+
+        PlotDiagnosticResults.plot_long_biological_effects(
+                df=mf,
+                covariates=inferred_fix,
+                feature_col="IDP",
+                significance=0.05,
+                top_n=5,
+                plot_fdr=True,
+                rep=report,
+                show=False,
+            )
+
         report.log_text("Biological variability plots added to report")
 
         # Finalize
@@ -4599,23 +4794,33 @@ def _extract_longitudinal_summary_metrics(
                 metrics["biological_signal_score"] = float(np.nanmean(pvals < 0.05))
 
     if isinstance(result.additive_effects, pd.DataFrame) and not result.additive_effects.empty:
-        pvals = pd.to_numeric(result.additive_effects.get("p-value"), errors="coerce").to_numpy(dtype=float)
+        pvals = pd.to_numeric(result.additive_effects.get("q-value"), errors="coerce").to_numpy(dtype=float)
         if pvals.size:
             metrics["prop_additive_significant"] = float(np.nanmean(pvals < 0.05))
 
     if isinstance(result.multiplicative_effects, pd.DataFrame) and not result.multiplicative_effects.empty:
-        pvals = pd.to_numeric(result.multiplicative_effects.get("p-value"), errors="coerce").to_numpy(dtype=float)
+        pvals = pd.to_numeric(result.multiplicative_effects.get("q-value"), errors="coerce").to_numpy(dtype=float)
         if pvals.size:
             metrics["prop_multiplicative_significant"] = float(np.nanmean(pvals < 0.05))
 
-    if isinstance(result.multivariate_batch_difference, pd.DataFrame) and not result.multivariate_batch_difference.empty:
-        md_df = result.multivariate_batch_difference.copy()
-        if "batch" in md_df.columns:
-            md_df = md_df[md_df["batch"].astype(str) != "average_batch"]
-        mdv = pd.to_numeric(md_df.get("mdval"), errors="coerce").to_numpy(dtype=float)
-        if mdv.size:
-            metrics["mean_mahalanobis_distance"] = float(np.nanmean(mdv))
-
+    if isinstance(result.multivariate_batch_difference, dict):
+        centroid_raw = result.multivariate_batch_difference.get("centroid_raw")
+        if isinstance(centroid_raw, dict) and len(centroid_raw) > 0:
+            mdv = np.asarray(
+                [
+                    value
+                    for key, value in centroid_raw.items()
+                    if isinstance(key, tuple)
+                    and len(key) == 2
+                    and key[1] == "global"
+                    and np.isfinite(value)
+                ],
+                dtype=float,
+            )
+            if mdv.size > 0:
+                metrics["mean_mahalanobis_distance"] = float(
+                    np.mean(mdv)
+                )
     return metrics
 
 
@@ -4637,7 +4842,7 @@ def _run_single_longitudinal_method_diagnostics(
         result.subject_order = DiagnosticFunctionsLong.SubjectOrder_long(
             idp_matrix=data,
             subjects=subject_ids,
-            timepoints=timepoints,
+            batch=batch,
             idp_names=feature_names,
             nPerm=100,
             seed=42,
@@ -4663,12 +4868,25 @@ def _run_single_longitudinal_method_diagnostics(
             batch_name=batch,
             idp_names=feature_names,
             covariates=covariates,
-            do_zscore=True,
             reml=False,
-            verbose=False,
         )
     except Exception as exc:
         result.errors.append(f"AdditiveEffect_long failed: {exc}")
+
+    try:
+        result.multiplicative_effects, _ = (
+            DiagnosticFunctionsLong.MultiplicativeEffect_long(
+                idp_matrix=data,
+                subjects=subject_ids,
+                timepoints=timepoints,
+                batch_name=batch,
+                idp_names=feature_names,
+                covariates=covariates,
+                reml=False,
+            )
+        )
+    except Exception as exc:
+        result.errors.append(f"MultiplicativeEffect_long failed: {exc}")
 
     try:
         result.mixed_effects, _ = DiagnosticFunctionsLong.MixedEffects_long(
@@ -4678,36 +4896,27 @@ def _run_single_longitudinal_method_diagnostics(
             batches=batch,
             idp_names=feature_names,
             covariates=covariates,
-            p_corr=1,
-            reml=True,
+            reml=True
         )
     except Exception as exc:
         result.errors.append(f"MixedEffects_long failed: {exc}")
 
+    # With covariate adjustment
     try:
-        result.multiplicative_effects, _ = DiagnosticFunctionsLong.MultiplicativeEffect_long(
-            idp_matrix=data,
-            subjects=subject_ids,
-            timepoints=timepoints,
-            batch_name=batch,
-            idp_names=feature_names,
-            covariates=covariates,
-            do_zscore=True,
-            reml=False,
-            verbose=False,
+        result.multivariate_batch_difference = (
+            DiagnosticFunctionsLong
+            .MultiVariateBatchDifference_long(
+                idp_matrix=data,
+                batch=batch,
+                subject=subject_ids,
+                timepoint=timepoints,
+                idp_names=feature_names,
+                covariates=covariates,
+            )
         )
     except Exception as exc:
-        result.errors.append(f"MultiplicativeEffect_long failed: {exc}")
-
-    try:
-        result.multivariate_batch_difference = DiagnosticFunctionsLong.MultiVariateBatchDifference_long(
-            idp_matrix=data,
-            batch=batch,
-            idp_names=feature_names,
-        )
-    except Exception as exc:
-        result.errors.append(f"MultiVariateBatchDifference_long failed: {exc}")
-
+        result.errors.append("MultiVariateBatchDifference_long failed: {exc}")
+    
     result.summary_metrics = _extract_longitudinal_summary_metrics(result)
     return result
 
@@ -4953,7 +5162,7 @@ def _save_longitudinal_comparison_results(
     return saved_paths
 
 
-def _plot_longitudinal_comparison_scorecard(summary_df: pd.DataFrame):
+""" def _plot_longitudinal_comparison_scorecard(summary_df: pd.DataFrame):
     figs = []
     if summary_df is None or summary_df.empty:
         return figs
@@ -4965,7 +5174,7 @@ def _plot_longitudinal_comparison_scorecard(summary_df: pd.DataFrame):
     ax.tick_params(axis="x", rotation=20)
     fig.tight_layout()
     figs.append(("Longitudinal comparison: method scorecard", fig))
-    return figs
+    return figs """
 
 
 def LongitudinalComparisonReport(
@@ -5075,7 +5284,7 @@ def LongitudinalComparisonReport(
         report.log_section("Preamble", "Report preamble and overview")
         report.text_simple(
             "This report compares multiple harmonisation methods using longitudinal diagnostics "
-            "in the same execution order as the longitudinal single-method report."
+            "in the same execution order as the single-method report."
         )
         report.text_simple(
             "Ranking prioritises subject stability, followed by residual batch effects and biological preservation."
@@ -5170,12 +5379,617 @@ def LongitudinalComparisonReport(
                 finally:
                     plt.close(fig)
 
-        _log_figures(PlotComparisonResults.plot_compare_long_subject_order(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_within_subject_variability(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_additive_multiplicative(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_mixed_effects(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_biological_effects(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_multivariate_batch_difference(method_results))
+        # ============================================================
+        # FEATURE-DISTRIBUTION COMPARISON
+        # ============================================================
+
+        report.log_section(
+            "feature_distribution_comparison",
+            "Feature distributions across batches"
+        )
+
+
+        # ------------------------------------------------------------
+        # Description
+        # ------------------------------------------------------------
+
+        if covariates_dict:
+
+            feature_distribution_description = (
+                "This section compares robust IDP distributions across "
+                "acquisition batches for each dataset. The original \n"
+                "distributions are shown together with distributions"
+                "adjusted for the supplied biological covariates and \n"
+                "subject-level effects. Batch effects are retained during "
+                "adjustment so that remaining batch-related differences \n"
+                "remain visible."
+            )
+
+        else:
+
+            feature_distribution_description = (
+                "This section compares robust IDP distributions across "
+                "acquisition batches for each dataset. The original \n"
+                "distributions are shown together with distributions "
+                "adjusted for subject-level effects. Batch effects are \n"
+                "retained during adjustment so that remaining "
+                "batch-related differences remain visible."
+            )
+
+
+        report.text_simple(
+            feature_distribution_description
+        )
+
+
+        report.text_simple(
+            "Each IDP is robustly standardised before plotting so that "
+            "features measured on different numerical scales can be \n"
+            "displayed together. The same transformation used in the"
+            "single-dataset longitudinal diagnostic is applied \n"
+            "independently to each method."
+        )
+
+
+        report.text_simple(
+            "Greater overlap between batch distributions indicates more "
+            "similar feature distributions across acquisition batches. \n"
+            "Persistent differences in location or spread indicate "
+            "remaining batch-related structure.\n"
+        )
+
+
+        # ------------------------------------------------------------
+        # Generate comparison figure
+        #
+        # The comparison plotting function internally runs the
+        # single-dataset distribution transformation for each method.
+        #
+        # rep=None is used internally by that function so that the
+        # temporary single-method figures are not added to this report.
+        # ------------------------------------------------------------
+
+        feature_distribution_figs = (
+            PlotComparisonResults
+            .plot_compare_longitudinal_zscore_histograms(
+                datasets=normalized_datasets,
+                batch=batch_arr,
+                subjects=subject_arr,
+                covariates=covariates_dict,
+                idp_names=features,
+                probability_distribution=True,
+                draw_pdf=True,
+                bins=80,
+                xlim=(-8, 8),
+            )
+        )
+
+
+        # ------------------------------------------------------------
+        # Add comparison figure to report
+        # ------------------------------------------------------------
+
+        if feature_distribution_figs:
+
+            _log_figures(
+                feature_distribution_figs
+            )
+
+
+        else:
+
+            report.text_simple(
+                "Feature-distribution comparison could not be generated."
+            )
+
+
+        report.text_simple(
+            line_break_in_text
+        )
+        
+        # ============================================================
+        # SUBJECT-ORDER CONSISTENCY COMPARISON
+        # ============================================================
+        report.log_section(
+            "subject_order_comparison",
+            "Subject-order consistency comparison"
+        )
+        subject_order_figs, subject_order_summary = (
+            PlotComparisonResults.plot_compare_long_subject_order(
+                method_results,
+                summary_stat="median",
+            )
+        )
+        # ------------------------------------------------------------
+        # Add figures to report
+        # ------------------------------------------------------------
+        _log_figures(
+            subject_order_figs
+        )
+        # ------------------------------------------------------------
+        # Save comparison summary
+        # ------------------------------------------------------------
+        if (
+            isinstance(
+                subject_order_summary,
+                pd.DataFrame,
+            )
+            and
+            not subject_order_summary.empty
+        ):
+            subject_order_summary_path = (
+                save_dir
+                / "subject_order_comparison_summary.csv"
+            )
+            subject_order_summary.to_csv(
+                subject_order_summary_path,
+                index=False,
+            )
+            report.text_simple(
+                "Subject-order consistency comparison summary:"
+            )
+            report.text_simple(
+                subject_order_summary.to_string(
+                    index=False
+                )
+            )
+            report.text_simple(
+                "Subject-order comparison summary saved to: "
+                f"{subject_order_summary_path}"
+            )
+
+        # ============================================================
+        # WITHIN-SUBJECT VARIABILITY COMPARISON
+        # ============================================================
+
+        report.log_section(
+            "within_subject_variability_comparison",
+            "Within-subject variability comparison"
+        )
+
+
+        (
+            within_subject_variability_figs,
+            within_subject_variability_summary,
+        ) = (
+            PlotComparisonResults
+            .plot_compare_long_within_subject_variability(
+                method_results,
+                summary_stat="median",
+            )
+        )
+
+
+        # ------------------------------------------------------------
+        # Add figures to report
+        # ------------------------------------------------------------
+
+        _log_figures(
+            within_subject_variability_figs
+        )
+
+
+        # ------------------------------------------------------------
+        # Save comparison summary
+        # ------------------------------------------------------------
+
+        if (
+            isinstance(
+                within_subject_variability_summary,
+                pd.DataFrame,
+            )
+            and
+            not within_subject_variability_summary.empty
+        ):
+
+            within_subject_variability_summary_path = (
+                save_dir
+                / "within_subject_variability_comparison_summary.csv"
+            )
+
+
+            within_subject_variability_summary.to_csv(
+                within_subject_variability_summary_path,
+                index=False,
+            )
+
+
+            report.text_simple(
+                "Within-subject variability comparison summary:"
+            )
+
+
+            report.text_simple(
+                within_subject_variability_summary.to_string(
+                    index=False
+                )
+            )
+
+
+            report.text_simple(
+                "Within-subject variability comparison summary "
+                "saved to: "
+                f"{within_subject_variability_summary_path}"
+            )
+
+        # ============================================================
+        # ADDITIVE BATCH-EFFECT COMPARISON
+        # ============================================================
+
+        report.log_section(
+            "additive_batch_effect_comparison",
+            "Additive batch-effect comparison"
+        )
+
+
+        (
+            additive_figs,
+            additive_summary,
+        ) = (
+            PlotComparisonResults
+            .plot_compare_long_addmul_batch_effects(
+                method_results,
+                effect_type="additive",
+                fdr_threshold=0.05,
+                p_display_floor=0.001,
+            )
+        )
+
+
+        # ------------------------------------------------------------
+        # Add figures to report
+        # ------------------------------------------------------------
+
+        _log_figures(
+            additive_figs
+        )
+
+
+        # ------------------------------------------------------------
+        # Save comparison summary
+        # ------------------------------------------------------------
+
+        if (
+            isinstance(
+                additive_summary,
+                pd.DataFrame,
+            )
+            and
+            not additive_summary.empty
+        ):
+
+            additive_summary_path = (
+                save_dir
+                / "additive_batch_effect_comparison_summary.csv"
+            )
+
+
+            additive_summary.to_csv(
+                additive_summary_path,
+                index=False,
+            )
+
+
+            report.text_simple(
+                "Additive batch-effect comparison summary:"
+            )
+
+
+            report.text_simple(
+                additive_summary.to_string(
+                    index=False
+                )
+            )
+
+
+            report.text_simple(
+                "Additive batch-effect comparison summary "
+                "saved to: "
+                f"{additive_summary_path}"
+            )
+
+        # ============================================================
+        # MULTIPLICATIVE BATCH-EFFECT COMPARISON
+        # ============================================================
+
+        report.log_section(
+            "multiplicative_batch_effect_comparison",
+            "Multiplicative batch-effect comparison"
+        )
+
+
+        (
+            multiplicative_figs,
+            multiplicative_summary,
+        ) = (
+            PlotComparisonResults
+            .plot_compare_long_addmul_batch_effects(
+                method_results,
+                effect_type="multiplicative",
+                fdr_threshold=0.05,
+                p_display_floor=0.001,
+            )
+        )
+
+
+        # ------------------------------------------------------------
+        # Add figures to report
+        # ------------------------------------------------------------
+
+        _log_figures(
+            multiplicative_figs
+        )
+
+
+        # ------------------------------------------------------------
+        # Save comparison summary
+        # ------------------------------------------------------------
+
+        if (
+            isinstance(
+                multiplicative_summary,
+                pd.DataFrame,
+            )
+            and
+            not multiplicative_summary.empty
+        ):
+
+            multiplicative_summary_path = (
+                save_dir
+                / "multiplicative_batch_effect_comparison_summary.csv"
+            )
+
+
+            multiplicative_summary.to_csv(
+                multiplicative_summary_path,
+                index=False,
+            )
+
+
+            report.text_simple(
+                "Multiplicative batch-effect comparison summary:"
+            )
+
+
+            report.text_simple(
+                multiplicative_summary.to_string(
+                    index=False
+                )
+            )
+
+
+            report.text_simple(
+                "Multiplicative batch-effect comparison summary "
+                "saved to: "
+                f"{multiplicative_summary_path}"
+            )
+
+        # ============================================================
+        # MIXED-EFFECTS COMPARISON
+        # ============================================================
+
+        report.log_section(
+            "mixed_effects_comparison",
+            "Mixed-effects comparison"
+        )
+
+
+        (
+            mixed_effects_figs,
+            mixed_effects_summary,
+        ) = (
+            PlotComparisonResults
+            .plot_compare_long_mixed_effects(
+                method_results,
+                reference_levels=(
+                    0.50,
+                    0.75,
+                    0.90,
+                ),
+            )
+        )
+
+
+        # ------------------------------------------------------------
+        # Add figures to report
+        # ------------------------------------------------------------
+
+        _log_figures(
+            mixed_effects_figs
+        )
+
+
+        # ------------------------------------------------------------
+        # Save comparison summary
+        # ------------------------------------------------------------
+
+        if (
+            isinstance(
+                mixed_effects_summary,
+                pd.DataFrame,
+            )
+            and
+            not mixed_effects_summary.empty
+        ):
+
+            mixed_effects_summary_path = (
+                save_dir
+                / "mixed_effects_comparison_summary.csv"
+            )
+
+
+            mixed_effects_summary.to_csv(
+                mixed_effects_summary_path,
+                index=False,
+            )
+
+
+            report.text_simple(
+                "Mixed-effects comparison summary:"
+            )
+
+
+            report.text_simple(
+                mixed_effects_summary.to_string(
+                    index=False
+                )
+            )
+
+
+            report.text_simple(
+                "Mixed-effects comparison summary saved to: "
+                f"{mixed_effects_summary_path}"
+            )
+
+        # ============================================================
+        # BIOLOGICAL FIXED-EFFECT COMPARISON
+        # ============================================================
+
+        report.log_section(
+            "biological_effects_comparison",
+            "Biological fixed-effect comparison"
+        )
+
+
+        (
+            biological_effect_figs,
+            biological_effect_summary,
+        ) = (
+            PlotComparisonResults
+            .plot_compare_long_biological_effects(
+                method_results,
+                covariates=covariate_names_norm,
+                significance=0.05,
+                plot_fdr=True,
+            )
+        )
+
+
+        # ------------------------------------------------------------
+        # Add figures to report
+        # ------------------------------------------------------------
+
+        _log_figures(
+            biological_effect_figs
+        )
+
+
+        # ------------------------------------------------------------
+        # Save comparison summary
+        # ------------------------------------------------------------
+
+        if (
+            isinstance(
+                biological_effect_summary,
+                pd.DataFrame,
+            )
+            and
+            not biological_effect_summary.empty
+        ):
+
+            biological_effect_summary_path = (
+                save_dir
+                / "biological_effects_comparison_summary.csv"
+            )
+
+
+            biological_effect_summary.to_csv(
+                biological_effect_summary_path,
+                index=False,
+            )
+
+
+            report.text_simple(
+                "Biological fixed-effect comparison summary:"
+            )
+
+
+            report.text_simple(
+                biological_effect_summary.to_string(
+                    index=False
+                )
+            )
+
+
+            report.text_simple(
+                "Biological fixed-effect comparison summary "
+                "saved to: "
+                f"{biological_effect_summary_path}"
+            )
+
+        # ============================================================
+        # MULTIVARIATE BATCH-DIFFERENCE COMPARISON
+        # ============================================================
+
+        report.log_section(
+            "multivariate_batch_difference_comparison",
+            "Multivariate batch-difference comparison"
+        )
+
+
+        (
+            multivariate_figs,
+            multivariate_summary,
+        ) = (
+            PlotComparisonResults
+            .plot_compare_long_multivariate_batch_difference(
+                method_results,
+            )
+        )
+
+
+        # ------------------------------------------------------------
+        # Add figures to report
+        # ------------------------------------------------------------
+
+        _log_figures(
+            multivariate_figs
+        )
+
+
+        # ------------------------------------------------------------
+        # Save comparison summary
+        # ------------------------------------------------------------
+
+        if (
+            isinstance(
+                multivariate_summary,
+                pd.DataFrame,
+            )
+            and
+            not multivariate_summary.empty
+        ):
+
+            multivariate_summary_path = (
+                save_dir
+                / "multivariate_batch_difference_comparison_summary.csv"
+            )
+
+
+            multivariate_summary.to_csv(
+                multivariate_summary_path,
+                index=False,
+            )
+
+
+            report.text_simple(
+                "Multivariate batch-difference comparison summary:"
+            )
+
+
+            report.text_simple(
+                multivariate_summary.to_string(
+                    index=False
+                )
+            )
+
+
+            report.text_simple(
+                "Multivariate batch-difference comparison summary "
+                "saved to: "
+                f"{multivariate_summary_path}"
+            )
+
         _log_figures(PlotComparisonResults.plot_compare_longitudinal_scorecard(summary_df))
 
         if save_data and summary_df is not None and not summary_df.empty:

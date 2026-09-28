@@ -113,3 +113,6 @@ TestResults/
 *.json
 *.xlsx
 *.h5
+
+# Folders and its contents to be ignored
+/DiagnoseHarmonisation/paper_tests/
