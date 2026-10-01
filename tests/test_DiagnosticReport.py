@@ -334,6 +334,36 @@ def test_full_report_runs_without_covariates(test_results_dir, monkeypatch):
     assert report_path.exists() and report_path.stat().st_size > 100
 
 
+def test_more_features_than_samples(test_results_dir, monkeypatch):
+    monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig_more_features"))
+
+    from DiagnoseHarmonisation import PlotDiagnosticResults
+    monkeypatch.setattr(PlotDiagnosticResults, "clustering_analysis_all", lambda *args, **kwargs: None)
+
+    n_samples = 10
+    n_features = 150
+    rng = np.random.default_rng(123)
+    data = rng.normal(size=(n_samples, n_features))
+    batch = np.array(["A"] * 5 + ["B"] * 5)
+
+    from DiagnoseHarmonisation import DiagnosticReport
+
+    DiagnosticReport.CrossSectionalReport(
+        data=data,
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        save_dir=str(test_results_dir / "more_features_than_samples"),
+        report_name="More_Features_Than_Samples",
+        show=False,
+        save_data=False,
+        timestamped_reports=False,
+        UMAP_embedding=False,
+    )
+
+    report_path = test_results_dir / "more_features_than_samples" / "More_Features_Than_Samples.html"
+    assert report_path.exists() and report_path.stat().st_size > 100
+
 def test_longitudinal_report_runs_with_covariates(test_results_dir, monkeypatch):
     monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig_long_no_cov"))
 

@@ -96,7 +96,6 @@ def test_longitudinal_comparison_report_no_covariates_runs(test_results_dir):
         batch=data["batch"],
         subject_ids=data["subject_ids"],
         timepoints=data["timepoints"],
-        covariates=None,
         features=data["features"],
         save_data=False,
         save_dir=output_dir,

@@ -1082,6 +1082,7 @@ def _run_single_method_diagnostics(
     compute_umap: bool = True,
     levene_center: str = "median",
     FK_test: bool = True,
+    run_mahalanobis: bool = True,
 
 ) -> CrossSectionalDiagnosticResult:
     """Execute the full diagnostic suite for one harmonisation method.
@@ -1127,10 +1128,11 @@ def _run_single_method_diagnostics(
     except Exception as exc:
         result.errors.append(f"Cohens_D failed: {exc}")
 
-    try:
-        result.mahalanobis = DiagnosticFunctions.Mahalanobis_Distance(data, batch, covariates=covariates_numeric)
-    except Exception as exc:
-        result.errors.append(f"Mahalanobis_Distance failed: {exc}")
+    if run_mahalanobis:
+        try:  
+            result.mahalanobis = DiagnosticFunctions.Mahalanobis_Distance(data, batch, covariates=covariates_numeric)
+        except Exception as exc:
+            result.errors.append(f"Mahalanobis_Distance failed: {exc}")
 
     has_covariates = covariates_numeric is not None and np.asarray(covariates_numeric).shape[1] > 0
     if has_covariates:
@@ -2236,45 +2238,88 @@ def CrossSectionalReport(
         # Mahalanobis
         report.log_section("mahalanobis", "Mahalanobis distance test")
         logger.info("Doing Mahalanobis distance test for multivariate mean differences")
-        mahalanobis_results = DiagnosticFunctions.Mahalanobis_Distance(data, batch, covariates=covariates_numeric)
-        report.log_text("Mahalanobis distance test for multivariate mean differences completed")
-        PlotDiagnosticResults.mahalanobis_distance_plot(mahalanobis_results, rep=report)
-        report.log_text("Mahalanobis distance plot added to report")
 
-        # Summaries from mahalanobis_results
-        pairwise_distances = mahalanobis_results.get("pairwise_raw", {})
-        for (b1, b2), dist in pairwise_distances.items():
-            report.text_simple(f"Mahalanobis distance between {b1} and {b2}: {dist:.4f}")
+        # Test the size of each batch, warn if N < P for any batches:
+        batch_sizes = {}
+        for b in np.unique(batch):
+            batch_sizes[b] = (batch == b).sum()
+        num_features = data.shape[1]
+        batch_okay_for_mahal = []
+        for b, size in batch_sizes.items():
+            if size < num_features:
+                logger.warning(f"Batch {b} has fewer samples ({size}) than features ({num_features}). Mahalanobis distance may be unreliable.")
+                # Create a list of True for batches that are okay for Mahalanobis distance
+                batch_okay_for_mahal.append(False)
+            else:
+                batch_okay_for_mahal.append(True)
 
-        centroid_distances = mahalanobis_results.get("centroid_raw", {})
-        for b, dist in centroid_distances.items():
-            report.text_simple(f"Mahalanobis distance of {b} to overall centroid: {dist:.4f}")
+        for b, okay in zip(np.unique(batch), batch_okay_for_mahal):
+            if not okay:
+                # Compute the condition number of each batch
+                batch_data = data[batch == b, :]
+                batch_covariance = np.cov(batch_data, rowvar=False)
+                logger.info(f"batch size for batch {b}: {batch_data.shape}")
+                rank_number = np.linalg.matrix_rank(batch_data)
+                logger.warning(f"Matrix rank for batch {b}: {rank_number}")
+                if rank_number < num_features:
+                    logger.warning(f"Batch {b} has rank deficiency (rank {rank_number} < number of features {num_features}). Mahalanobis distance will be unreliable.")
+                # return condition number for debugging purposes
+                cond_number_covariance = np.linalg.cond(batch_covariance)
+                logger.warning(f"Condition number for batch covariance of batch {b}: {cond_number_covariance}")
 
-        centroid_resid_distance = mahalanobis_results.get("centroid_resid") or {}
-        for b, dist in centroid_resid_distance.items():
-            report.text_simple(f"Mahalanobis distance of {b} to overall centroid after residualising by covariates: {dist:.4f}")
-        data_dict = {}
-        if save_data:
+
+        # If batch rank is fewer than number of features, skip mahalanobis distance computation
+        # If rank deficient, skip mahalanobis distance computation section
+        if any(rank_number < num_features for rank_number in [np.linalg.matrix_rank(data[batch == b, :]) for b in np.unique(batch)]):
+            logger.warning("One or more batches are rank deficient. Mahalanobis distance computation will be skipped.")
+            skip_mahal = True
+        else:
+            skip_mahal = False
+
+        if skip_mahal:
+            logger.warning("Skipping Mahalanobis distance computation due to rank deficiency or high condition number.")
+            print("Skipping Mahalanobis distance computation due to rank deficiency or high condition number.")
+            mahalanobis_results = None
+        else:
+            mahalanobis_results = DiagnosticFunctions.Mahalanobis_Distance(data, batch, covariates=covariates_numeric)
+            report.log_text("Mahalanobis distance test for multivariate mean differences completed")
+            PlotDiagnosticResults.mahalanobis_distance_plot(mahalanobis_results, rep=report)
+            report.log_text("Mahalanobis distance plot added to report")
+
+            # Summaries from mahalanobis_results
+            pairwise_distances = mahalanobis_results.get("pairwise_raw", {})
+            for (b1, b2), dist in pairwise_distances.items():
+                report.text_simple(f"Mahalanobis distance between {b1} and {b2}: {dist:.4f}")
+
+            centroid_distances = mahalanobis_results.get("centroid_raw", {})
             for b, dist in centroid_distances.items():
-                data_dict[f"Mahonalobis_Centroid_Batch{b}"] = dist
+                report.text_simple(f"Mahalanobis distance of {b} to overall centroid: {dist:.4f}")
+
+            centroid_resid_distance = mahalanobis_results.get("centroid_resid") or {}
             for b, dist in centroid_resid_distance.items():
-                data_dict[f"Mahonalobis_Centroid_Resid_Batch{b}"] = dist
-        
-        save_test_results(data_dict,
-        test_name="Mahalanobis_Distance",
-        save_root=save_dir,
-        feature_names=feature_names,
-        report_date=report_date, 
-        report_name=report_name,
-        )
-        report.text_simple("Mahalanobis distance test summaries added to report and saved as csv if requested")
-        report.text_simple(line_break_in_text)
+                report.text_simple(f"Mahalanobis distance of {b} to overall centroid after residualising by covariates: {dist:.4f}")
+            data_dict = {}
+            if save_data:
+                for b, dist in centroid_distances.items():
+                    data_dict[f"Mahonalobis_Centroid_Batch{b}"] = dist
+                for b, dist in centroid_resid_distance.items():
+                    data_dict[f"Mahonalobis_Centroid_Resid_Batch{b}"] = dist
+            
+            save_test_results(data_dict,
+            test_name="Mahalanobis_Distance",
+            save_root=save_dir,
+            feature_names=feature_names,
+            report_date=report_date, 
+            report_name=report_name,
+            )
+            report.text_simple("Mahalanobis distance test summaries added to report and saved as csv if requested")
+            report.text_simple(line_break_in_text)
+
         # ---------------------
         # Mixed model tests
         # ---------------------
         logger.info("Beginning LMM diagnostics")
         report.log_section("lmm_diagnostics", "Linear mixed effects diagnostics (batch + covariates)")
-
 
         report.text_simple("This section uses three complementary statistical models to quantify the contribution of covariates and batch effects.\n"
                            "1. A covariate only OLS model (fixed effects) to quantify variance explained by covariates:\n "
@@ -3105,6 +3150,25 @@ def CrossSectionalComparisonReport(
             report.log_section(_sanitize_name(method_name), f"Diagnostics for {method_name}")
             logger.info(f"Running diagnostics for method: {method_name}")
 
+            # Compute batch ranks to check if Mahalanobis distance computation is valid for each batch, note: this is failing to converge fpr test_cross_sectional_accepts_missing_data
+            batch_ranks = {batch: np.linalg.matrix_rank(data[batch_arr == batch, :]) for batch in np.unique(batch_arr)}
+            for batch, rank in batch_ranks.items():
+                if rank < data[batch_arr == batch,:].shape[1]:
+                    logger.warning(f"Batch {batch} is rank deficient. Mahalanobis distance may be unreliable.")
+                else:
+                    logger.info(f"Batch {batch} has sufficient rank for Mahalanobis distance computation.")
+
+            # If any batch is rank deficient, skip mahalanobis distance computation
+            if any(rank < data[batch_arr == batch,:].shape[1] for batch, rank in batch_ranks.items()):
+                run_mahalanobis = False
+                logger.warning("Skipping Mahalanobis distance computation due to rank deficiency in one or more batches.")
+                # print out the batch ranks for debugging purposes
+                for batch, rank in batch_ranks.items():
+                    logger.info(f"Batch {batch} rank: {rank}")
+            else:
+                run_mahalanobis = True
+                logger.info("Mahalanobis distance computation will be performed.")
+
             method_result = _run_single_method_diagnostics(
                 method_name=method_name,
                 data=data,
@@ -3115,6 +3179,7 @@ def CrossSectionalComparisonReport(
                 feature_names=feature_names,
                 ratio_type=ratio_type,
                 compute_umap=UMAP_embedding,
+                run_mahalanobis=run_mahalanobis,
             )
             method_results[method_name] = method_result
 

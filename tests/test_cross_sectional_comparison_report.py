@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from DiagnoseHarmonisation import DiagnosticReport
 from DiagnoseHarmonisation import DiagnosticFunctions
 from DiagnoseHarmonisation import PlotComparisonResults
+from tests.conftest import test_results_dir
 
 
 def test_cross_sectional_comparison_report_generates_html(test_results_dir):
@@ -549,3 +550,31 @@ def test_font_size_in_report(test_results_dir):
     assert report_default_fontsize is not None
     assert report_small_fontsize is not None
     assert report_large_fontsize is not None
+
+def test_mahal_if_rank_deficient(test_results_dir):
+    # Create a rank-deficient dataset
+    n_samples = 100
+    n_features = 500
+    batch = np.array([0] * (n_samples // 2) + [1] * (n_samples // 2))
+    raw = np.random.randn(n_samples, n_features)
+    raw[:, -1] = raw[:, 0] + raw[:, 1]  # Make the last feature a linear combination of the first two, causing rank deficiency
+    harmonised = raw + 2
+    # Run the diagnostic report with the rank-deficient dataset
+    report = DiagnosticReport.CrossSectionalComparisonReport(
+        datasets={"RAW": raw, "HARMONISED": harmonised},
+        batch=batch,
+        covariates=None,
+        covariate_names=None,
+        feature_names=[f"f{i+1}" for i in range(n_features)],
+        save_dir=test_results_dir / "comparison_report_rank_deficient",
+        save_data=False,
+        report_name="Comparison_Rank_Deficient",
+        SaveArtifacts=False,
+        show=False,
+        timestamped_reports=False,
+        ratio_type="rest",
+        UMAP_embedding=False,
+        plot_covariate_embeddings=False,
+        allow_many_covariate_embeddings=False,
+    )
+    assert report is not None
