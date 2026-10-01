@@ -4570,519 +4570,190 @@ def plot_SubjectOrder(
 ):
     """
     Publication-style diagnostic for subject-order consistency.
-
     Panels
     ------
     A
         Mean/median subject-order consistency across acquisitions.
-
         Significance is based on feature-level acquisition-pair p-values
         corrected together using Benjamini-Hochberg FDR across the full
         family of valid Feature x unique-acquisition-pair tests.
-
         A star indicates that at least one feature-level test for that
         acquisition pair survives the global FDR correction.
-
     B
         Per-Feature mean/median subject-order consistency.
-
         Feature index is shown on the x-axis and Spearman rho on the y-axis.
-
     C
         Summary statistics across Features.
-
         For median:
             overall Feature-level median rho [IQR]
-
         For mean:
             overall Feature-level mean rho +/- SD
-
     Notes
     -----
     * Feature order is preserved.
     * Acquisition labels are encoded A1, A2, ...
     * Actual acquisition labels are shown in the acquisition mapping.
     """
-
     # ============================================================
     # VALIDATION
     # ============================================================
-
-    if summary_stat not in {
-        "median",
-        "mean",
-    }:
-        raise ValueError(
-            "summary_stat must be either 'median' or 'mean'."
-        )
-
-    if not (
-        0 < significance < 1
-    ):
-        raise ValueError(
-            "significance must be between 0 and 1."
-        )
-
-    required_cols = [
-        idp_col,
-        time_a_col,
-        time_b_col,
-        rho_col,
-        p_col,
-    ]
-
-    missing_cols = [
-        col
-        for col in required_cols
-        if col not in df.columns
-    ]
-
+    if summary_stat not in {"median", "mean"}:
+        raise ValueError("summary_stat must be either 'median' or 'mean'.")
+    if not (0 < significance < 1):
+        raise ValueError("significance must be between 0 and 1.")
+    required_cols = [idp_col, time_a_col, time_b_col, rho_col, p_col]
+    missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
-        raise ValueError(
-            "Missing required columns:\n"
-            + "\n".join(
-                missing_cols
-            )
-        )
-
+        raise ValueError("Missing required columns:\n" + "\n".join(missing_cols))
     # ============================================================
     # CLEAN DATA
     # ============================================================
-
-    data = df[
-        required_cols
-    ].copy()
-
-    data[idp_col] = (
-        data[idp_col]
-        .astype(str)
-        .str.strip()
-    )
-
-    data[rho_col] = pd.to_numeric(
-        data[rho_col],
-        errors="coerce",
-    )
-
-    data[p_col] = pd.to_numeric(
-        data[p_col],
-        errors="coerce",
-    )
-
-    data = data.dropna(
-        subset=[
-            idp_col,
-            time_a_col,
-            time_b_col,
-        ]
-    )
-
+    data = df[required_cols].copy()
+    data[idp_col] = data[idp_col].astype(str).str.strip()
+    data[rho_col] = pd.to_numeric(data[rho_col], errors="coerce")
+    data[p_col] = pd.to_numeric(data[p_col], errors="coerce")
+    data = data.dropna(subset=[idp_col, time_a_col, time_b_col])
     if data.empty:
-        raise ValueError(
-            "No usable rows remain after cleaning."
-        )
-
+        raise ValueError("No usable rows remain after cleaning.")
     # ============================================================
     # FEATURE ORDER
     # ============================================================
-
-    all_idps = list(
-        pd.unique(
-            data[idp_col]
-        )
-    )
-
+    all_idps = list(pd.unique(data[idp_col]))
     n_idps = len(all_idps)
-
     if n_idps == 0:
-        raise ValueError(
-            "No Features found."
-        )
-
+        raise ValueError("No Features found.")
     # ============================================================
     # ACQUISITION ORDER
     # ============================================================
-
     acquisitions = list(
-        pd.unique(
-            pd.concat(
-                [
-                    data[time_a_col],
-                    data[time_b_col],
-                ],
-                ignore_index=True,
-            )
-        )
+        pd.unique(pd.concat([data[time_a_col], data[time_b_col]], ignore_index=True))
     )
-
-    n_acquisitions = len(
-        acquisitions
-    )
-
+    n_acquisitions = len(acquisitions)
     if n_acquisitions < 2:
-        raise ValueError(
-            "At least two acquisition/timepoint/batch labels "
-            "are required."
-        )
-
+        raise ValueError("At least two acquisition/timepoint/batch labels " "are required.")
     # ============================================================
     # COMPACT ACQUISITION CODES
     # ============================================================
-
-    acquisition_codes = {
-        original: f"B{i + 1}"
-        for i, original in enumerate(
-            acquisitions
-        )
-    }
-
-    acquisition_display = [
-        acquisition_codes[x]
-        for x in acquisitions
-    ]
-
+    acquisition_codes = {original: f"B{i + 1}" for i, original in enumerate(acquisitions)}
+    acquisition_display = [acquisition_codes[x] for x in acquisitions]
     acquisition_mapping = [
-        {
-            "index": i + 1,
-            "code": acquisition_codes[
-                original
-            ],
-            "label": str(
-                original
-            ),
-        }
-        for i, original in enumerate(
-            acquisitions
-        )
+        {"index": i + 1, "code": acquisition_codes[original], "label": str(original)}
+        for i, original in enumerate(acquisitions)
     ]
-
     # ============================================================
     # GLOBAL PLOTTING SETTINGS
     # ============================================================
-
-    annotate_heatmaps = (
-        n_acquisitions <= 12
-    )
-
+    annotate_heatmaps = n_acquisitions <= 12
     if n_acquisitions <= 8:
-
         heatmap_tick_font = 7.5
         heatmap_annotation_font = 8.5
-
     elif n_acquisitions <= 12:
-
         heatmap_tick_font = 6.5
         heatmap_annotation_font = 7.0
-
     elif n_acquisitions <= 16:
-
         heatmap_tick_font = 5.5
         heatmap_annotation_font = 6.0
-
     else:
-
         heatmap_tick_font = 4.8
         heatmap_annotation_font = 5.5
-
-    heatmap_tick_positions = (
-        np.arange(
-            n_acquisitions,
-            dtype=float,
-        )
-        + 0.5
-    )
-
+    heatmap_tick_positions = np.arange(n_acquisitions, dtype=float) + 0.5
     cmap = "RdYlBu_r"
-
     # ============================================================
     # BUILD MATRICES
     # ============================================================
-
     rho_mats = {}
     p_mats = {}
-
     for idp in all_idps:
-
-        subset = data[
-            data[idp_col] == idp
-        ]
-
+        subset = data[data[idp_col] == idp]
         rho = subset.pivot_table(
-            index=time_a_col,
-            columns=time_b_col,
-            values=rho_col,
-            aggfunc="first",
+            index=time_a_col, columns=time_b_col, values=rho_col, aggfunc="first"
         )
-
         pmat = subset.pivot_table(
-            index=time_a_col,
-            columns=time_b_col,
-            values=p_col,
-            aggfunc="first",
+            index=time_a_col, columns=time_b_col, values=p_col, aggfunc="first"
         )
-
-        rho = rho.reindex(
-            index=acquisitions,
-            columns=acquisitions,
-        )
-
-        pmat = pmat.reindex(
-            index=acquisitions,
-            columns=acquisitions,
-        )
-
-        rho = rho.combine_first(
-            rho.T
-        )
-
-        pmat = pmat.combine_first(
-            pmat.T
-        )
-
+        rho = rho.reindex(index=acquisitions, columns=acquisitions)
+        pmat = pmat.reindex(index=acquisitions, columns=acquisitions)
+        rho = rho.combine_first(rho.T)
+        pmat = pmat.combine_first(pmat.T)
         rho = rho.astype(float)
         pmat = pmat.astype(float)
-
-        np.fill_diagonal(
-            rho.values,
-            np.nan,
-        )
-
-        np.fill_diagonal(
-            pmat.values,
-            np.nan,
-        )
-
+        np.fill_diagonal(rho.values, np.nan)
+        np.fill_diagonal(pmat.values, np.nan)
         rho_mats[idp] = rho
         p_mats[idp] = pmat
-
     # ============================================================
     # UNIQUE ACQUISITION PAIRS
     # ============================================================
-
-    pair_i, pair_j = np.triu_indices(
-        n_acquisitions,
-        k=1,
-    )
-
-    n_unique_pairs = len(
-        pair_i
-    )
-
+    pair_i, pair_j = np.triu_indices(n_acquisitions, k=1)
+    n_unique_pairs = len(pair_i)
     if n_unique_pairs == 0:
-
-        raise ValueError(
-            "No unique acquisition pairs were found."
-        )
-
+        raise ValueError("No unique acquisition pairs were found.")
     # ============================================================
     # PER-FEATURE SUMMARY
     # ============================================================
-
     idp_pairwise_values = {}
-
     idp_mean = {}
     idp_median = {}
     idp_q10 = {}
     idp_q25 = {}
     idp_q75 = {}
     idp_q90 = {}
-
     for idp in all_idps:
-
-        rho_values = (
-            rho_mats[idp]
-            .values[
-                pair_i,
-                pair_j,
-            ]
-        )
-
-        valid_rho = rho_values[
-            np.isfinite(
-                rho_values
-            )
-        ]
-
-        idp_pairwise_values[
-            idp
-        ] = valid_rho
-
+        rho_values = rho_mats[idp].values[pair_i, pair_j]
+        valid_rho = rho_values[np.isfinite(rho_values)]
+        idp_pairwise_values[idp] = valid_rho
         if len(valid_rho) == 0:
-
             idp_mean[idp] = np.nan
             idp_median[idp] = np.nan
             idp_q10[idp] = np.nan
             idp_q25[idp] = np.nan
             idp_q75[idp] = np.nan
             idp_q90[idp] = np.nan
-
             continue
-
-        idp_mean[idp] = float(
-            np.mean(
-                valid_rho
-            )
-        )
-
-        idp_median[idp] = float(
-            np.median(
-                valid_rho
-            )
-        )
-
-        idp_q10[idp] = float(
-            np.percentile(
-                valid_rho,
-                10,
-            )
-        )
-
-        idp_q25[idp] = float(
-            np.percentile(
-                valid_rho,
-                25,
-            )
-        )
-
-        idp_q75[idp] = float(
-            np.percentile(
-                valid_rho,
-                75,
-            )
-        )
-
-        idp_q90[idp] = float(
-            np.percentile(
-                valid_rho,
-                90,
-            )
-        )
-
+        idp_mean[idp] = float(np.mean(valid_rho))
+        idp_median[idp] = float(np.median(valid_rho))
+        idp_q10[idp] = float(np.percentile(valid_rho, 10))
+        idp_q25[idp] = float(np.percentile(valid_rho, 25))
+        idp_q75[idp] = float(np.percentile(valid_rho, 75))
+        idp_q90[idp] = float(np.percentile(valid_rho, 90))
     # ============================================================
     # FEATURE SUMMARY DATAFRAME
     # ============================================================
-
     idp_summary = pd.DataFrame(
         {
             "central": [
-                (
-                    idp_median[idp]
-                    if summary_stat == "median"
-                    else idp_mean[idp]
-                )
-                for idp in all_idps
+                (idp_median[idp] if summary_stat == "median" else idp_mean[idp]) for idp in all_idps
             ],
-
-            "mean": [
-                idp_mean[idp]
-                for idp in all_idps
-            ],
-
-            "median": [
-                idp_median[idp]
-                for idp in all_idps
-            ],
-
-            "q10": [
-                idp_q10[idp]
-                for idp in all_idps
-            ],
-
-            "q25": [
-                idp_q25[idp]
-                for idp in all_idps
-            ],
-
-            "q75": [
-                idp_q75[idp]
-                for idp in all_idps
-            ],
-
-            "q90": [
-                idp_q90[idp]
-                for idp in all_idps
-            ],
+            "mean": [idp_mean[idp] for idp in all_idps],
+            "median": [idp_median[idp] for idp in all_idps],
+            "q10": [idp_q10[idp] for idp in all_idps],
+            "q25": [idp_q25[idp] for idp in all_idps],
+            "q75": [idp_q75[idp] for idp in all_idps],
+            "q90": [idp_q90[idp] for idp in all_idps],
         },
         index=all_idps,
     )
-
     # ============================================================
     # STACK MATRICES
     # ============================================================
-
-    rho_stack = np.stack(
-        [
-            rho_mats[idp].values
-            for idp in all_idps
-        ],
-        axis=0,
-    )
-
-    p_stack = np.stack(
-        [
-            p_mats[idp].values
-            for idp in all_idps
-        ],
-        axis=0,
-    )
-
+    rho_stack = np.stack([rho_mats[idp].values for idp in all_idps], axis=0)
+    p_stack = np.stack([p_mats[idp].values for idp in all_idps], axis=0)
     # ============================================================
     # SUMMARY RHO MATRIX
     # ============================================================
-
-    summary_rho = np.full(
-        (
-            n_acquisitions,
-            n_acquisitions,
-        ),
-        np.nan,
-        dtype=float,
-    )
-
-    for i in range(
-        n_acquisitions
-    ):
-
-        for j in range(
-            n_acquisitions
-        ):
-
+    summary_rho = np.full((n_acquisitions, n_acquisitions), np.nan, dtype=float)
+    for i in range(n_acquisitions):
+        for j in range(n_acquisitions):
             if i == j:
                 continue
-
-            values = rho_stack[
-                :,
-                i,
-                j,
-            ]
-
-            values = values[
-                np.isfinite(
-                    values
-                )
-            ]
-
+            values = rho_stack[:, i, j]
+            values = values[np.isfinite(values)]
             if len(values) == 0:
                 continue
-
             if summary_stat == "median":
-
-                summary_rho[
-                    i,
-                    j
-                ] = np.median(
-                    values
-                )
-
+                summary_rho[i, j] = np.median(values)
             else:
-
-                summary_rho[
-                    i,
-                    j
-                ] = np.mean(
-                    values
-                )
-
+                summary_rho[i, j] = np.mean(values)
     # ============================================================
     # GLOBAL FDR CORRECTION
     #
@@ -5095,150 +4766,41 @@ def plot_SubjectOrder(
     #
     # tests.
     # ============================================================
-
     raw_global_p = []
-
     global_locations = []
-
-    for idp_idx, idp in enumerate(
-        all_idps
-    ):
-
-        p_values = (
-            p_mats[idp]
-            .values[
-                pair_i,
-                pair_j,
-            ]
-        )
-
-        for pair_idx, p_value in enumerate(
-            p_values
-        ):
-
-            if np.isfinite(
-                p_value
-            ):
-
-                raw_global_p.append(
-                    float(
-                        np.clip(
-                            p_value,
-                            0.0,
-                            1.0,
-                        )
-                    )
-                )
-
-                global_locations.append(
-                    (
-                        idp_idx,
-                        pair_idx,
-                    )
-                )
-
-    raw_global_p = np.asarray(
-        raw_global_p,
-        dtype=float,
-    )
-
-    n_global_tests = len(
-        raw_global_p
-    )
-
-    global_p_adj = np.full(
-        raw_global_p.shape,
-        np.nan,
-        dtype=float,
-    )
-
+    for idp_idx, idp in enumerate(all_idps):
+        p_values = p_mats[idp].values[pair_i, pair_j]
+        for pair_idx, p_value in enumerate(p_values):
+            if np.isfinite(p_value):
+                raw_global_p.append(float(np.clip(p_value, 0.0, 1.0)))
+                global_locations.append((idp_idx, pair_idx))
+    raw_global_p = np.asarray(raw_global_p, dtype=float)
+    n_global_tests = len(raw_global_p)
+    global_p_adj = np.full(raw_global_p.shape, np.nan, dtype=float)
     if n_global_tests > 0:
-
-        order = np.argsort(
-            raw_global_p
-        )
-
-        sorted_p = raw_global_p[
-            order
-        ]
-
-        adjusted_sorted = (
-            sorted_p
-            * n_global_tests
-            / np.arange(
-                1,
-                n_global_tests + 1,
-            )
-        )
-
-        adjusted_sorted = np.minimum.accumulate(
-            adjusted_sorted[::-1]
-        )[::-1]
-
-        adjusted_sorted = np.clip(
-            adjusted_sorted,
-            0.0,
-            1.0,
-        )
-
-        global_p_adj[
-            order
-        ] = adjusted_sorted
-
+        order = np.argsort(raw_global_p)
+        sorted_p = raw_global_p[order]
+        adjusted_sorted = sorted_p * n_global_tests / np.arange(1, n_global_tests + 1)
+        adjusted_sorted = np.minimum.accumulate(adjusted_sorted[::-1])[::-1]
+        adjusted_sorted = np.clip(adjusted_sorted, 0.0, 1.0)
+        global_p_adj[order] = adjusted_sorted
     # ============================================================
     # ADJUSTED P MATRIX FOR EACH FEATURE
     # ============================================================
-
     p_adj_mats = {
         idp: pd.DataFrame(
-            np.full(
-                (
-                    n_acquisitions,
-                    n_acquisitions,
-                ),
-                np.nan,
-                dtype=float,
-            ),
+            np.full((n_acquisitions, n_acquisitions), np.nan, dtype=float),
             index=acquisitions,
             columns=acquisitions,
         )
         for idp in all_idps
     }
-
-    for adjusted_p, (
-        idp_idx,
-        pair_idx,
-    ) in zip(
-        global_p_adj,
-        global_locations,
-    ):
-
-        idp = all_idps[
-            idp_idx
-        ]
-
-        i = pair_i[
-            pair_idx
-        ]
-
-        j = pair_j[
-            pair_idx
-        ]
-
-        p_adj_mats[
-            idp
-        ].iat[
-            i,
-            j
-        ] = adjusted_p
-
-        p_adj_mats[
-            idp
-        ].iat[
-            j,
-            i
-        ] = adjusted_p
-
+    for adjusted_p, (idp_idx, pair_idx) in zip(global_p_adj, global_locations):
+        idp = all_idps[idp_idx]
+        i = pair_i[pair_idx]
+        j = pair_j[pair_idx]
+        p_adj_mats[idp].iat[i, j] = adjusted_p
+        p_adj_mats[idp].iat[j, i] = adjusted_p
     # ============================================================
     # SUMMARY SIGNIFICANCE MATRIX
     #
@@ -5249,133 +4811,37 @@ def plot_SubjectOrder(
     # The displayed significance value is the minimum globally
     # adjusted Feature-level p-value for that acquisition pair.
     # ============================================================
-
-    summary_p_adj = np.full(
-        (
-            n_acquisitions,
-            n_acquisitions,
-        ),
-        np.nan,
-        dtype=float,
-    )
-
-    for pair_idx, (
-        i,
-        j,
-    ) in enumerate(
-        zip(
-            pair_i,
-            pair_j,
-        )
-    ):
-
+    summary_p_adj = np.full((n_acquisitions, n_acquisitions), np.nan, dtype=float)
+    for pair_idx, (i, j) in enumerate(zip(pair_i, pair_j)):
         adjusted_pair_p = []
-
         for idp in all_idps:
-
-            p_value = (
-                p_adj_mats[
-                    idp
-                ]
-                .iat[
-                    i,
-                    j
-                ]
-            )
-
-            if np.isfinite(
-                p_value
-            ):
-
-                adjusted_pair_p.append(
-                    p_value
-                )
-
-        if len(
-            adjusted_pair_p
-        ) == 0:
-
+            p_value = p_adj_mats[idp].iat[i, j]
+            if np.isfinite(p_value):
+                adjusted_pair_p.append(p_value)
+        if len(adjusted_pair_p) == 0:
             continue
-
-        pair_min_adjusted_p = float(
-            np.min(
-                adjusted_pair_p
-            )
-        )
-
-        summary_p_adj[
-            i,
-            j
-        ] = pair_min_adjusted_p
-
-        summary_p_adj[
-            j,
-            i
-        ] = pair_min_adjusted_p
+        pair_min_adjusted_p = float(np.min(adjusted_pair_p))
+        summary_p_adj[i, j] = pair_min_adjusted_p
+        summary_p_adj[j, i] = pair_min_adjusted_p
 
     # ============================================================
     # HEATMAP ANNOTATION HELPER
     # ============================================================
-
-    def make_heatmap_annotation(
-        rho_df,
-        p_df,
-    ):
-
+    def make_heatmap_annotation(rho_df, p_df):
         if not annotate_heatmaps:
             return False
-
-        annotation = np.full(
-            rho_df.shape,
-            "",
-            dtype=object,
-        )
-
-        for i in range(
-            n_acquisitions
-        ):
-
-            for j in range(
-                n_acquisitions
-            ):
-
-                value = rho_df.iat[
-                    i,
-                    j,
-                ]
-
-                p_value = p_df.iat[
-                    i,
-                    j,
-                ]
-
-                if not np.isfinite(
-                    value
-                ):
+        annotation = np.full(rho_df.shape, "", dtype=object)
+        for i in range(n_acquisitions):
+            for j in range(n_acquisitions):
+                value = rho_df.iat[i, j]
+                p_value = p_df.iat[i, j]
+                if not np.isfinite(value):
                     continue
-
-                if (
-                    np.isfinite(
-                        p_value
-                    )
-                    and p_value
-                    < significance
-                ):
-
+                if np.isfinite(p_value) and p_value < significance:
                     star = "*"
-
                 else:
-
                     star = ""
-
-                annotation[
-                    i,
-                    j
-                ] = (
-                    f"{value:.2f}"
-                    f"{star}"
-                )
-
+                annotation[i, j] = f"{value:.2f}" f"{star}"
         return annotation
 
     # ============================================================
@@ -5384,189 +4850,61 @@ def plot_SubjectOrder(
     # median -> median [Q1, Q3]
     # mean   -> mean +/- SD
     # ============================================================
-
-    valid_central = (
-        idp_summary[
-            "central"
-        ]
-        .dropna()
-        .to_numpy(
-            dtype=float
-        )
-    )
-
-    if len(
-        valid_central
-    ) == 0:
-
+    valid_central = idp_summary["central"].dropna().to_numpy(dtype=float)
+    if len(valid_central) == 0:
         overall_central = np.nan
         overall_q25 = np.nan
         overall_q75 = np.nan
         overall_sd = np.nan
-
     elif summary_stat == "median":
-
-        overall_central = float(
-            np.median(
-                valid_central
-            )
-        )
-
-        overall_q25 = float(
-            np.percentile(
-                valid_central,
-                25,
-            )
-        )
-
-        overall_q75 = float(
-            np.percentile(
-                valid_central,
-                75,
-            )
-        )
-
+        overall_central = float(np.median(valid_central))
+        overall_q25 = float(np.percentile(valid_central, 25))
+        overall_q75 = float(np.percentile(valid_central, 75))
         overall_sd = np.nan
-
     else:
-
-        overall_central = float(
-            np.mean(
-                valid_central
-            )
-        )
-
-        if len(
-            valid_central
-        ) > 1:
-
-            overall_sd = float(
-                np.std(
-                    valid_central,
-                    ddof=1,
-                )
-            )
-
+        overall_central = float(np.mean(valid_central))
+        if len(valid_central) > 1:
+            overall_sd = float(np.std(valid_central, ddof=1))
         else:
-
             overall_sd = np.nan
-
         overall_q25 = np.nan
         overall_q75 = np.nan
-
     # ============================================================
     # FORMATTED OVERALL SUMMARY
     # ============================================================
-
     if summary_stat == "median":
-
-        overall_label = (
-            "Overall Feature-level median ρ [IQR]"
-        )
-
-        if (
-            np.isfinite(
-                overall_central
-            )
-            and np.isfinite(
-                overall_q25
-            )
-            and np.isfinite(
-                overall_q75
-            )
-        ):
-
-            overall_text = (
-                f"{overall_central:.2f} "
-                f"[{overall_q25:.2f}, "
-                f"{overall_q75:.2f}]"
-            )
-
+        overall_label = "Overall Feature-level median ρ [IQR]"
+        if np.isfinite(overall_central) and np.isfinite(overall_q25) and np.isfinite(overall_q75):
+            overall_text = f"{overall_central:.2f} " f"[{overall_q25:.2f}, " f"{overall_q75:.2f}]"
         else:
-
             overall_text = "NA"
-
     else:
-
-        overall_label = (
-            "Overall Feature-level mean ρ ± SD"
-        )
-
-        if np.isfinite(
-            overall_central
-        ):
-
-            if np.isfinite(
-                overall_sd
-            ):
-
-                overall_text = (
-                    f"{overall_central:.2f} "
-                    f"± {overall_sd:.2f}"
-                )
-
+        overall_label = "Overall Feature-level mean ρ ± SD"
+        if np.isfinite(overall_central):
+            if np.isfinite(overall_sd):
+                overall_text = f"{overall_central:.2f} " f"± {overall_sd:.2f}"
             else:
-
-                overall_text = (
-                    f"{overall_central:.2f} "
-                    "± NA"
-                )
-
+                overall_text = f"{overall_central:.2f} " "± NA"
         else:
-
             overall_text = "NA"
 
     # ============================================================
     # COMMON AXIS STYLE
     # ============================================================
-
-    def clean_axis(
-        ax,
-        grid_axis="y",
-    ):
-
-        ax.spines[
-            "top"
-        ].set_visible(False)
-
-        ax.spines[
-            "right"
-        ].set_visible(False)
-
+    def clean_axis(ax, grid_axis="y"):
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
         if grid_axis is not None:
-
-            ax.grid(
-                axis=grid_axis,
-                alpha=0.18,
-                linewidth=0.8,
-            )
-
-        ax.tick_params(
-            labelsize=9
-        )
+            ax.grid(axis=grid_axis, alpha=0.18, linewidth=0.8)
+        ax.tick_params(labelsize=9)
 
     # ============================================================
     # PANEL A DRAWING
     #
     # MEAN/MEDIAN SUBJECT-ORDER CONSISTENCY ACROSS ACQUISITIONS
     # ============================================================
-
-    def draw_panel_A(
-        ax,
-        standalone=False,
-    ):
-
-        annotation = (
-            make_heatmap_annotation(
-                pd.DataFrame(
-                    summary_rho
-                ),
-                pd.DataFrame(
-                    summary_p_adj
-                ),
-            )
-        )
-
+    def draw_panel_A(ax, standalone=False):
+        annotation = make_heatmap_annotation(pd.DataFrame(summary_rho), pd.DataFrame(summary_p_adj))
         sns.heatmap(
             summary_rho,
             ax=ax,
@@ -5579,56 +4917,21 @@ def plot_SubjectOrder(
             linewidths=0.45,
             linecolor="white",
             cbar=True,
-            cbar_kws={
-                "label": "Spearman ρ",
-                "shrink": 0.80,
-            },
+            cbar_kws={"label": "Spearman ρ", "shrink": 0.80},
             square=False,
-            mask=np.isnan(
-                summary_rho
-            ),
-            annot_kws={
-                "fontsize":
-                    heatmap_annotation_font,
-            },
+            mask=np.isnan(summary_rho),
+            annot_kws={"fontsize": heatmap_annotation_font},
         )
-
-        title = (
-            f"{summary_stat.capitalize()} "
-            "subject-order consistency across acquisitions"
-        )
-
+        title = f"{summary_stat.capitalize()} " "subject-order consistency across acquisitions"
         ax.set_title(
-            title,
-            loc="left",
-            fontsize=14 if standalone else 11.5,
-            fontweight="bold",
-            pad=7,
+            title, loc="left", fontsize=14 if standalone else 11.5, fontweight="bold", pad=7
         )
-
         ax.set_xlabel("")
         ax.set_ylabel("")
-
-        ax.set_xticks(
-            heatmap_tick_positions
-        )
-
-        ax.set_yticks(
-            heatmap_tick_positions
-        )
-
-        ax.set_xticklabels(
-            acquisition_display,
-            rotation=45,
-            ha="right",
-            fontsize=heatmap_tick_font,
-        )
-
-        ax.set_yticklabels(
-            acquisition_display,
-            rotation=0,
-            fontsize=heatmap_tick_font,
-        )
+        ax.set_xticks(heatmap_tick_positions)
+        ax.set_yticks(heatmap_tick_positions)
+        ax.set_xticklabels(acquisition_display, rotation=45, ha="right", fontsize=heatmap_tick_font)
+        ax.set_yticklabels(acquisition_display, rotation=0, fontsize=heatmap_tick_font)
 
     # ============================================================
     # PANEL B DRAWING
@@ -5638,456 +4941,173 @@ def plot_SubjectOrder(
     # FEATURE INDEX = X AXIS
     # SPEARMAN RHO = Y AXIS
     # ============================================================
-
-    def draw_panel_B(
-        ax,
-        standalone=False,
-    ):
-
-        positions = np.arange(
-            1,
-            n_idps + 1,
-        )
-
+    def draw_panel_B(ax, standalone=False):
+        positions = np.arange(1, n_idps + 1)
         if n_idps <= 100:
-
             dot_size = 22
-
         elif n_idps <= 200:
-
             dot_size = 17
-
         elif n_idps <= 400:
-
             dot_size = 13
-
         elif n_idps <= 800:
-
             dot_size = 9
-
         else:
-
             dot_size = 7
-
         if n_idps <= 25:
-
             idp_step = 1
-
         elif n_idps <= 60:
-
             idp_step = 3
-
         elif n_idps <= 120:
-
             idp_step = 8
-
         elif n_idps <= 250:
-
             idp_step = 20
-
         elif n_idps <= 500:
-
             idp_step = 40
-
         else:
-
-            idp_step = max(
-                1,
-                int(
-                    np.ceil(
-                        n_idps / 12
-                    )
-                ),
-            )
-
+            idp_step = max(1, int(np.ceil(n_idps / 12)))
         ax.scatter(
             positions,
-            idp_summary[
-                "central"
-            ].to_numpy(
-                dtype=float
-            ),
+            idp_summary["central"].to_numpy(dtype=float),
             s=dot_size,
             alpha=0.85,
             edgecolors="white",
             linewidths=0.25,
             zorder=4,
         )
-
-        if np.isfinite(
-            overall_central
-        ):
-
-            ax.axhline(
-                overall_central,
-                linestyle="--",
-                linewidth=1.05,
-                alpha=0.60,
-                zorder=0,
-            )
-
-        x_ticks = positions[
-            ::idp_step
-        ]
-
-        ax.set_xticks(
-            x_ticks
-        )
-
-        ax.set_xticklabels(
-            [
-                str(
-                    int(x)
-                )
-                for x in x_ticks
-            ]
-        )
-
-        title = (
-            f"Per-Feature {summary_stat} "
-            "subject-order consistency"
-        )
-
+        if np.isfinite(overall_central):
+            ax.axhline(overall_central, linestyle="--", linewidth=1.05, alpha=0.60, zorder=0)
+        x_ticks = positions[::idp_step]
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels([str(int(x)) for x in x_ticks])
+        title = f"Per-Feature {summary_stat} " "subject-order consistency"
         ax.set_title(
-            title,
-            loc="left",
-            fontsize=14 if standalone else 11.5,
-            fontweight="bold",
-            pad=7,
+            title, loc="left", fontsize=14 if standalone else 11.5, fontweight="bold", pad=7
         )
-
         ax.text(
             0.0,
             0.975,
-            (
-                "Each point represents one Feature; "
-                "Features are shown in the order supplied."
-            ),
+            ("Each point represents one Feature; " "Features are shown in the order supplied."),
             transform=ax.transAxes,
             ha="left",
             va="bottom",
             fontsize=7.2,
             alpha=0.68,
             clip_on=False,
-        ) 
-
-        ax.set_xlabel(
-            "Feature index",
-            fontsize=10,
         )
-
-        ax.set_ylabel(
-            "Spearman ρ",
-            fontsize=10,
-        )
-
-        ax.set_ylim(
-            -1.02,
-            1.02,
-        )
-
-        ax.set_xlim(
-            0.5,
-            n_idps + 0.5,
-        )
-
-        clean_axis(
-            ax,
-            grid_axis="y",
-        )
+        ax.set_xlabel("Feature index", fontsize=10)
+        ax.set_ylabel("Spearman ρ", fontsize=10)
+        ax.set_ylim(-1.02, 1.02)
+        ax.set_xlim(0.5, n_idps + 0.5)
+        clean_axis(ax, grid_axis="y")
 
     # ============================================================
     # SUMMARY TABLE DATA
     # ============================================================
-
     summary_rows = [
-        [
-            "N Features",
-            f"{n_idps:,}",
-        ],
-        [
-            "N acquisitions",
-            f"{n_acquisitions:,}",
-        ],
-        [
-            "N unique acquisition pairs",
-            f"{n_unique_pairs:,}",
-        ],
-        [
-            "N Feature × pair tests",
-            f"{n_global_tests:,}",
-        ],
-        [
-            overall_label,
-            overall_text,
-        ],
+        ["N Features", f"{n_idps:,}"],
+        ["N acquisitions", f"{n_acquisitions:,}"],
+        ["N unique acquisition pairs", f"{n_unique_pairs:,}"],
+        ["N Feature × pair tests", f"{n_global_tests:,}"],
+        [overall_label, overall_text],
     ]
-
     # ============================================================
     # CONTENT-AWARE FIGURE SIZE
     # ============================================================
-
     if n_acquisitions <= 8:
-
         heatmap_height = 4.8
-
     elif n_acquisitions <= 12:
-
         heatmap_height = 5.2
-
     elif n_acquisitions <= 16:
-
         heatmap_height = 5.6
-
     elif n_acquisitions <= 24:
-
         heatmap_height = 6.0
-
     else:
-
         heatmap_height = 6.4
-
-    combined_height = (
-        heatmap_height
-        + 5.0
-    )
-
+    combined_height = heatmap_height + 5.0
     # ============================================================
     # CREATE COMBINED FIGURE
     # ============================================================
-
-    fig = plt.figure(
-        figsize=(
-            15,
-            combined_height,
-        ),
-        facecolor="white",
-    )
-
+    fig = plt.figure(figsize=(15, combined_height), facecolor="white")
     outer = fig.add_gridspec(
         nrows=2,
         ncols=16,
-
-        height_ratios=[
-            heatmap_height,
-            4.0,
-        ],
-
+        height_ratios=[heatmap_height, 4.0],
         hspace=0.42,
         wspace=0.0,
-
         left=0.055,
         right=0.965,
         top=0.91,
         bottom=0.09,
     )
-
     # ============================================================
     # PANEL A
     # ============================================================
-
-    axA = fig.add_subplot(
-        outer[
-            0,
-            0:7,
-        ]
-    )
-
-    draw_panel_A(
-        axA,
-        standalone=False,
-    )
-
+    axA = fig.add_subplot(outer[0, 0:7])
+    draw_panel_A(axA, standalone=False)
     # ============================================================
     # PANEL B
     # ============================================================
-
-    axB = fig.add_subplot(
-        outer[
-            0,
-            9:16,
-        ]
-    )
-
-    draw_panel_B(
-        axB,
-        standalone=False,
-    )
-
+    axB = fig.add_subplot(outer[0, 9:16])
+    draw_panel_B(axB, standalone=False)
     # ============================================================
     # PANEL C
     #
     # SUMMARY ACROSS FEATURES
     # ============================================================
-
-    axC = fig.add_subplot(
-        outer[
-            1,
-            0:7,
-        ]
-    )
-
-    axC.axis(
-        "off"
-    )
-
-    axC.set_title(
-        "Summary across Features",
-        loc="left",
-        fontsize=11.5,
-        fontweight="bold",
-        pad=5,
-    )
-
+    axC = fig.add_subplot(outer[1, 0:7])
+    axC.axis("off")
+    axC.set_title("Summary across Features", loc="left", fontsize=11.5, fontweight="bold", pad=5)
     table_C = axC.table(
         cellText=summary_rows,
-        colLabels=[
-            "Measure",
-            "Value",
-        ],
+        colLabels=["Measure", "Value"],
         cellLoc="left",
         colLoc="left",
-        bbox=[
-            0.0,
-            0.20,
-            1.0,
-            0.68,
-        ],
-        colWidths=[
-            0.72,
-            0.28,
-        ],
+        bbox=[0.0, 0.20, 1.0, 0.68],
+        colWidths=[0.72, 0.28],
     )
-
-    table_C.auto_set_font_size(
-        False
-    )
-
-    table_C.set_fontsize(
-        7.4
-    )
-
-    for (
-        (row_idx, col_idx),
-        cell,
-    ) in table_C.get_celld().items():
-
-        cell.set_edgecolor(
-            "0.85"
-        )
-
-        cell.set_linewidth(
-            0.40
-        )
-
+    table_C.auto_set_font_size(False)
+    table_C.set_fontsize(7.4)
+    for (row_idx, col_idx), cell in table_C.get_celld().items():
+        cell.set_edgecolor("0.85")
+        cell.set_linewidth(0.40)
         if row_idx == 0:
-
-            cell.set_text_props(
-                weight="bold"
-            )
-
+            cell.set_text_props(weight="bold")
         if col_idx == 1:
-
-            cell.set_text_props(
-                ha="right"
-            )
-
+            cell.set_text_props(ha="right")
     # ============================================================
     # ACQUISITION MAPPING
     # ============================================================
-
-    axD = fig.add_subplot(
-        outer[
-            1,
-            9:16,
-        ]
-    )
-
-    axD.axis(
-        "off"
-    )
-
-    axD.set_title(
-        "Batch/Site mapping",
-        loc="left",
-        fontsize=11.5,
-        fontweight="bold",
-        pad=5,
-    )
-
-    mapping_data = [
-        [
-            item["code"],
-            item["label"],
-        ]
-        for item in acquisition_mapping
-    ]
-
+    axD = fig.add_subplot(outer[1, 9:16])
+    axD.axis("off")
+    axD.set_title("Batch/Site mapping", loc="left", fontsize=11.5, fontweight="bold", pad=5)
+    mapping_data = [[item["code"], item["label"]] for item in acquisition_mapping]
     table_D = axD.table(
         cellText=mapping_data,
-        colLabels=[
-            "Code used in plots",
-            "Actual label",
-        ],
+        colLabels=["Code used in plots", "Actual label"],
         cellLoc="left",
         colLoc="left",
-        bbox=[
-            0.0,
-            0.02,
-            1.0,
-            0.86,
-        ],
-        colWidths=[
-            0.28,
-            0.72,
-        ],
+        bbox=[0.0, 0.02, 1.0, 0.86],
+        colWidths=[0.28, 0.72],
     )
-
-    table_D.auto_set_font_size(
-        False
-    )
-
-    table_D.set_fontsize(
-        7.0
-    )
-
-    for (
-        (row_idx, col_idx),
-        cell,
-    ) in table_D.get_celld().items():
-
-        cell.set_edgecolor(
-            "0.85"
-        )
-
-        cell.set_linewidth(
-            0.40
-        )
-
+    table_D.auto_set_font_size(False)
+    table_D.set_fontsize(7.0)
+    for (row_idx, col_idx), cell in table_D.get_celld().items():
+        cell.set_edgecolor("0.85")
+        cell.set_linewidth(0.40)
         if row_idx == 0:
-
-            cell.set_text_props(
-                weight="bold"
-            )
-
+            cell.set_text_props(weight="bold")
     # ============================================================
     # FIGURE TITLE
     # ============================================================
-
     fig.suptitle(
-        (
-            "Subject order consistency"
-            f"  ({n_idps:,} Features analysed)"
-        ),
+        ("Subject order consistency" f"  ({n_idps:,} Features analysed)"),
         fontsize=14.5,
         fontweight="bold",
         y=0.975,
     )
-
     # ============================================================
     # FOOTNOTE
     # ============================================================
-
     fig.text(
         0.055,
         0.018,
@@ -6102,81 +5122,26 @@ def plot_SubjectOrder(
         fontsize=7.3,
         alpha=0.65,
     )
-
     # ============================================================
     # SAVE OUTPUTS
     # ============================================================
-
     if savepath is not None:
-
-        base, ext = os.path.splitext(
-            savepath
-        )
-
+        base, ext = os.path.splitext(savepath)
         if ext == "":
             ext = ".png"
-
         # ========================================================
         # COMBINED
         # ========================================================
-
-        combined_path = (
-            f"{base}{ext}"
-        )
-
-        fig.savefig(
-            combined_path,
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
+        combined_path = f"{base}{ext}"
+        fig.savefig(combined_path, dpi=300, bbox_inches="tight", facecolor="white")
         # ========================================================
         # STANDALONE A
         # ========================================================
-
-        a_width = min(
-            10.5,
-            max(
-                7.0,
-                0.60
-                * n_acquisitions
-                + 3.0,
-            ),
-        )
-
-        a_height = min(
-            9.0,
-            max(
-                5.2,
-                0.55
-                * n_acquisitions
-                + 2.5,
-            ),
-        )
-
-        fig_A = plt.figure(
-            figsize=(
-                a_width,
-                a_height,
-            ),
-            facecolor="white",
-        )
-
-        ax_A = fig_A.add_axes(
-            [
-                0.14,
-                0.17,
-                0.70,
-                0.68,
-            ]
-        )
-
-        draw_panel_A(
-            ax_A,
-            standalone=True,
-        )
-
+        a_width = min(10.5, max(7.0, 0.60 * n_acquisitions + 3.0))
+        a_height = min(9.0, max(5.2, 0.55 * n_acquisitions + 2.5))
+        fig_A = plt.figure(figsize=(a_width, a_height), facecolor="white")
+        ax_A = fig_A.add_axes([0.14, 0.17, 0.70, 0.68])
+        draw_panel_A(ax_A, standalone=True)
         fig_A.text(
             0.14,
             0.045,
@@ -6189,350 +5154,111 @@ def plot_SubjectOrder(
             fontsize=8,
             alpha=0.65,
         )
-
-        fig_A.savefig(
-            f"{base}_A{ext}",
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
-        plt.close(
-            fig_A
-        )
-
+        fig_A.savefig(f"{base}_A{ext}", dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig_A)
         # ========================================================
         # STANDALONE B
         # ========================================================
-
-        fig_B = plt.figure(
-            figsize=(
-                10.5,
-                6.5,
-            ),
-            facecolor="white",
-        )
-
-        ax_B = fig_B.add_axes(
-            [
-                0.10,
-                0.14,
-                0.84,
-                0.72,
-            ]
-        )
-
-        draw_panel_B(
-            ax_B,
-            standalone=True,
-        )
-
+        fig_B = plt.figure(figsize=(10.5, 6.5), facecolor="white")
+        ax_B = fig_B.add_axes([0.10, 0.14, 0.84, 0.72])
+        draw_panel_B(ax_B, standalone=True)
         if summary_stat == "median":
-
             standalone_summary_text = (
                 f"Overall Feature-level median ρ = "
                 f"{overall_central:.2f} "
                 f"[IQR {overall_q25:.2f}, "
                 f"{overall_q75:.2f}]."
             )
-
         else:
-
-            if np.isfinite(
-                overall_sd
-            ):
-
+            if np.isfinite(overall_sd):
                 standalone_summary_text = (
                     f"Overall Feature-level mean ρ = "
                     f"{overall_central:.2f} "
                     f"± {overall_sd:.2f} SD."
                 )
-
             else:
-
                 standalone_summary_text = (
-                    f"Overall Feature-level mean ρ = "
-                    f"{overall_central:.2f} "
-                    "± NA SD."
+                    f"Overall Feature-level mean ρ = " f"{overall_central:.2f} " "± NA SD."
                 )
-
-        fig_B.text(
-            0.10,
-            0.035,
-            standalone_summary_text,
-            fontsize=8,
-            alpha=0.65,
-        )
-
-        fig_B.savefig(
-            f"{base}_B{ext}",
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
-        plt.close(
-            fig_B
-        )
-
+        fig_B.text(0.10, 0.035, standalone_summary_text, fontsize=8, alpha=0.65)
+        fig_B.savefig(f"{base}_B{ext}", dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig_B)
         # ========================================================
         # STANDALONE C
         # ========================================================
-
-        fig_C = plt.figure(
-            figsize=(
-                7.0,
-                5.0,
-            ),
-            facecolor="white",
-        )
-
-        ax_C = fig_C.add_axes(
-            [
-                0.10,
-                0.12,
-                0.80,
-                0.74,
-            ]
-        )
-
-        ax_C.axis(
-            "off"
-        )
-
+        fig_C = plt.figure(figsize=(7.0, 5.0), facecolor="white")
+        ax_C = fig_C.add_axes([0.10, 0.12, 0.80, 0.74])
+        ax_C.axis("off")
         ax_C.set_title(
-            "Summary across Features",
-            loc="left",
-            fontsize=14,
-            fontweight="bold",
-            pad=12,
+            "Summary across Features", loc="left", fontsize=14, fontweight="bold", pad=12
         )
-
         table_C_standalone = ax_C.table(
             cellText=summary_rows,
-            colLabels=[
-                "Measure",
-                "Value",
-            ],
+            colLabels=["Measure", "Value"],
             cellLoc="left",
             colLoc="left",
-            bbox=[
-                0.0,
-                0.18,
-                1.0,
-                0.64,
-            ],
-            colWidths=[
-                0.70,
-                0.30,
-            ],
+            bbox=[0.0, 0.18, 1.0, 0.64],
+            colWidths=[0.70, 0.30],
         )
-
-        table_C_standalone.auto_set_font_size(
-            False
-        )
-
-        table_C_standalone.set_fontsize(
-            9
-        )
-
-        for (
-            (row_idx, col_idx),
-            cell,
-        ) in table_C_standalone.get_celld().items():
-
-            cell.set_edgecolor(
-                "0.85"
-            )
-
-            cell.set_linewidth(
-                0.40
-            )
-
+        table_C_standalone.auto_set_font_size(False)
+        table_C_standalone.set_fontsize(9)
+        for (row_idx, col_idx), cell in table_C_standalone.get_celld().items():
+            cell.set_edgecolor("0.85")
+            cell.set_linewidth(0.40)
             if row_idx == 0:
-
-                cell.set_text_props(
-                    weight="bold"
-                )
-
+                cell.set_text_props(weight="bold")
             if col_idx == 1:
-
-                cell.set_text_props(
-                    ha="right"
-                )
-
-        fig_C.savefig(
-            f"{base}_C{ext}",
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
-        plt.close(
-            fig_C
-        )
-
+                cell.set_text_props(ha="right")
+        fig_C.savefig(f"{base}_C{ext}", dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig_C)
         # ========================================================
         # STANDALONE ACQUISITION MAPPING
         # ========================================================
-
-        standalone_mapping_height = max(
-            4.0,
-            min(
-                10.0,
-                2.0
-                + n_acquisitions
-                * 0.42,
-            ),
-        )
-
-        fig_D = plt.figure(
-            figsize=(
-                8.5,
-                standalone_mapping_height,
-            ),
-            facecolor="white",
-        )
-
-        ax_D = fig_D.add_axes(
-            [
-                0.08,
-                0.12,
-                0.84,
-                0.72,
-            ]
-        )
-
-        ax_D.axis(
-            "off"
-        )
-
-        ax_D.set_title(
-            "Acquisition mapping",
-            loc="left",
-            fontsize=14,
-            fontweight="bold",
-            pad=12,
-        )
-
+        standalone_mapping_height = max(4.0, min(10.0, 2.0 + n_acquisitions * 0.42))
+        fig_D = plt.figure(figsize=(8.5, standalone_mapping_height), facecolor="white")
+        ax_D = fig_D.add_axes([0.08, 0.12, 0.84, 0.72])
+        ax_D.axis("off")
+        ax_D.set_title("Acquisition mapping", loc="left", fontsize=14, fontweight="bold", pad=12)
         table_D_standalone = ax_D.table(
             cellText=mapping_data,
-            colLabels=[
-                "Code used in plots",
-                "Actual label",
-            ],
+            colLabels=["Code used in plots", "Actual label"],
             cellLoc="left",
             colLoc="left",
-            bbox=[
-                0.0,
-                0.08,
-                1.0,
-                0.74,
-            ],
-            colWidths=[
-                0.28,
-                0.72,
-            ],
+            bbox=[0.0, 0.08, 1.0, 0.74],
+            colWidths=[0.28, 0.72],
         )
-
-        table_D_standalone.auto_set_font_size(
-            False
-        )
-
-        table_D_standalone.set_fontsize(
-            9
-        )
-
-        fig_D.savefig(
-            f"{base}_D{ext}",
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
-        plt.close(
-            fig_D
-        )
-
+        table_D_standalone.auto_set_font_size(False)
+        table_D_standalone.set_fontsize(9)
+        fig_D.savefig(f"{base}_D{ext}", dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig_D)
         # ========================================================
         # REPORT OUTPUT
         # ========================================================
-
-        print(
-            "\nSaved subject-order consistency figures:"
-        )
-
-        print(
-            f"  Combined : {combined_path}"
-        )
-
-        print(
-            f"  Panel A  : {base}_A{ext}"
-        )
-
-        print(
-            f"  Panel B  : {base}_B{ext}"
-        )
-
-        print(
-            f"  Panel C  : {base}_C{ext}"
-        )
-
-        print(
-            f"  Mapping  : {base}_D{ext}"
-        )
-
-        print(
-            "\nMultiple-comparison correction:"
-        )
-
-        print(
-            f"  Features                    : {n_idps:,}"
-        )
-
-        print(
-            f"  Unique acquisition pairs    : {n_unique_pairs:,}"
-        )
-
-        print(
-            f"  Valid Feature x pair tests  : {n_global_tests:,}"
-        )
-
-        print(
-            "  Correction                  : Benjamini-Hochberg FDR"
-        )
-
-        print(
-            f"  Significance threshold      : {significance:g}"
-        )
-
-        print(
-            "\nAcquisition mapping:"
-        )
-
+        print("\nSaved subject-order consistency figures:")
+        print(f"  Combined : {combined_path}")
+        print(f"  Panel A  : {base}_A{ext}")
+        print(f"  Panel B  : {base}_B{ext}")
+        print(f"  Panel C  : {base}_C{ext}")
+        print(f"  Mapping  : {base}_D{ext}")
+        print("\nMultiple-comparison correction:")
+        print(f"  Features                    : {n_idps:,}")
+        print(f"  Unique acquisition pairs    : {n_unique_pairs:,}")
+        print(f"  Valid Feature x pair tests  : {n_global_tests:,}")
+        print("  Correction                  : Benjamini-Hochberg FDR")
+        print(f"  Significance threshold      : {significance:g}")
+        print("\nAcquisition mapping:")
         for item in acquisition_mapping:
-
-            print(
-                f"  {item['code']} = "
-                f"{item['label']}"
-            )
-
+            print(f"  {item['code']} = " f"{item['label']}")
     # ============================================================
     # SHOW
     # ============================================================
-
     if rep is not None:
-
-        rep.log_plot(
-            fig,
-            "Subject order consistency",
-        )
-
+        rep.log_plot(fig, "Subject order consistency")
     if show:
-
         plt.show()
-
     return fig
+
+
 
 # ============================================================================
 # 2.  WITHIN SUBJECT VARIABILITY
@@ -6558,118 +5284,77 @@ def plot_WithinSubjVar(
     """
     Publication-style visualization of within-subject variability
     across Features.
-
     Parameters
     ----------
     df : pandas.DataFrame
         Dataframe containing one row per subject/observation and
         numeric Feature columns containing pairwise RPD values.
-
     subject_col : str, default="subject"
         Subject identifier column.
-
     idp_cols : list or None, default=None
         Feature columns to plot.
-
         If supplied, the exact order is preserved in Panel A.
         This is important for comparing raw and harmonised results.
-
         If None, numeric Feature columns are detected automatically.
-
     summary_stat : {"median", "mean"}, default="median"
         Primary summary statistic used throughout the figure.
-
         The selected statistic determines:
             - Panel A central value
             - Panel B distribution
             - Panel C subject ranking
             - Panels D/E Feature ranking
             - Panel F primary summary
-
         Summary reporting:
             median -> median [Q1, Q3]
             mean   -> mean ± SD
-
     figsize : tuple or None, default=None
         Figure size for the combined figure.
-
         Standalone A/B/C figures use their own automatically chosen
         dimensions unless otherwise handled internally.
-
     savepath : str or None, default=None
         Path for saving the combined figure.
-
-        If supplied, standalone panels are also saved automatically:
-
-            <stem>_A.png
-            <stem>_B.png
-            <stem>_C.png
-
+        If supplied, standalone panels are also saved automatically:_A.png,_B.png,_C.png
     rep : optional
         Retained for compatibility with the existing framework.
-
     show : bool, default=False
         Display the combined figure.
-
     debug : bool, default=False
         Print diagnostic information.
-
     Returns
     -------
     fig : matplotlib.figure.Figure
         Combined A-F figure.
-
     Notes
     -----
     Panel A
         <= 40 Features:
             compact vertical boxplots.
-
         > 40 Features:
             one dot per Feature.
-
         Feature order is always preserved.
-
     Panel B
         Histogram of the selected Feature-level summary statistic.
-
     Panel C
         Ten subjects with highest selected variability.
-
         Subject labels have a dedicated axis so long subject IDs
         cannot overlap Panel B.
-
     Panel D/E
         Ten most and least variable Features.
-
     Panel F
         Summary statistics.
-
     In addition to the complete figure, Panels A, B and C are
     independently saved for manuscript use.
     """
-
     # ============================================================
     # VALIDATION
     # ============================================================
-
-    if summary_stat not in {
-        "median",
-        "mean",
-    }:
-        raise ValueError(
-            "summary_stat must be either 'median' or 'mean'."
-        )
-
+    if summary_stat not in {"median", "mean"}:
+        raise ValueError("summary_stat must be either 'median' or 'mean'.")
     if subject_col not in df.columns:
-        raise ValueError(
-            f"Subject column '{subject_col}' was not found."
-        )
-
+        raise ValueError(f"Subject column '{subject_col}' was not found.")
     # ============================================================
     # IDENTIFY FEATURE COLUMNS
     # ============================================================
-
     metadata_cols = {
         subject_col,
         "n_obs",
@@ -6681,188 +5366,67 @@ def plot_WithinSubjVar(
         "age",
         "sex",
     }
-
     if idp_cols is None:
-
         idp_cols = [
             col
             for col in df.columns
-            if (
-                col not in metadata_cols
-                and pd.api.types.is_numeric_dtype(
-                    df[col]
-                )
-            )
+            if (col not in metadata_cols and pd.api.types.is_numeric_dtype(df[col]))
         ]
-
     # Preserve exact supplied order
-    idp_cols = list(
-        idp_cols
-    )
-
+    idp_cols = list(idp_cols)
     if len(idp_cols) == 0:
-        raise ValueError(
-            "No Feature columns were found."
-        )
-
+        raise ValueError("No Feature columns were found.")
     # ============================================================
     # CHECK FEATURE COLUMNS
     # ============================================================
-
-    missing_idps = [
-        col
-        for col in idp_cols
-        if col not in df.columns
-    ]
-
+    missing_idps = [col for col in idp_cols if col not in df.columns]
     if missing_idps:
-
-        raise ValueError(
-            "The following Feature columns are missing:\n"
-            + "\n".join(missing_idps)
-        )
-
+        raise ValueError("The following Feature columns are missing:\n" + "\n".join(missing_idps))
     # ============================================================
     # WORKING DATAFRAME
     # ============================================================
-
-    work = df[
-        [subject_col] + idp_cols
-    ].copy()
-
-    work[subject_col] = (
-        work[subject_col]
-        .astype(str)
-        .str.strip()
-    )
-
-    work[idp_cols] = (
-        work[idp_cols]
-        .apply(
-            pd.to_numeric,
-            errors="coerce"
-        )
-    )
-
+    work = df[[subject_col] + idp_cols].copy()
+    work[subject_col] = work[subject_col].astype(str).str.strip()
+    work[idp_cols] = work[idp_cols].apply(pd.to_numeric, errors="coerce")
     # ============================================================
     # BASIC COUNTS
     # ============================================================
-
-    n_subjects = (
-        work[subject_col]
-        .nunique()
-    )
-
-    requested_idp_count = len(
-        idp_cols
-    )
-
+    n_subjects = work[subject_col].nunique()
+    requested_idp_count = len(idp_cols)
     # ============================================================
     # REMOVE ONLY COMPLETELY EMPTY FEATURES
     #
     # Preserve original order.
     # ============================================================
-
-    valid_idps = [
-        col
-        for col in idp_cols
-        if work[col].notna().any()
-    ]
-
-    removed_idps = [
-        col
-        for col in idp_cols
-        if col not in valid_idps
-    ]
-
+    valid_idps = [col for col in idp_cols if work[col].notna().any()]
+    removed_idps = [col for col in idp_cols if col not in valid_idps]
     idp_cols = valid_idps
-
-    n_idps = len(
-        idp_cols
-    )
-
+    n_idps = len(idp_cols)
     if n_idps == 0:
-
-        raise ValueError(
-            "No Features contain usable numeric data."
-        )
-
+        raise ValueError("No Features contain usable numeric data.")
     # ============================================================
     # DEBUG
     # ============================================================
-
     if debug:
-
         print("\n" + "=" * 70)
         print("WITHIN-SUBJECT VARIABILITY")
         print("=" * 70)
-
-        print(
-            f"Subjects               : {n_subjects:,}"
-        )
-
-        print(
-            f"Requested Features     : {requested_idp_count:,}"
-        )
-
-        print(
-            f"Valid Features         : {n_idps:,}"
-        )
-
-        print(
-            f"Removed empty Features : {len(removed_idps):,}"
-        )
-
-        print(
-            f"Primary statistic      : {summary_stat}"
-        )
-
+        print(f"Subjects               : {n_subjects:,}")
+        print(f"Requested Features     : {requested_idp_count:,}")
+        print(f"Valid Features         : {n_idps:,}")
+        print(f"Removed empty Features : {len(removed_idps):,}")
+        print(f"Primary statistic      : {summary_stat}")
     # ============================================================
     # PRIMARY STATISTIC
     # ============================================================
-
     if summary_stat == "median":
-
-        central_values = (
-            work[idp_cols]
-            .median(
-                axis=0,
-                skipna=True
-            )
-        )
-
-        subject_values = (
-            work
-            .set_index(subject_col)[idp_cols]
-            .median(
-                axis=1,
-                skipna=True
-            )
-        )
-
+        central_values = work[idp_cols].median(axis=0, skipna=True)
+        subject_values = work.set_index(subject_col)[idp_cols].median(axis=1, skipna=True)
         central_label = "Median"
-
     else:
-
-        central_values = (
-            work[idp_cols]
-            .mean(
-                axis=0,
-                skipna=True
-            )
-        )
-
-        subject_values = (
-            work
-            .set_index(subject_col)[idp_cols]
-            .mean(
-                axis=1,
-                skipna=True
-            )
-        )
-
+        central_values = work[idp_cols].mean(axis=0, skipna=True)
+        subject_values = work.set_index(subject_col)[idp_cols].mean(axis=1, skipna=True)
         central_label = "Mean"
-
     # ============================================================
     # FEATURE SUMMARY
     #
@@ -6870,335 +5434,125 @@ def plot_WithinSubjVar(
     #
     # This preserves the exact Feature order in Panel A.
     # ============================================================
-
     idp_summary = pd.DataFrame(
         {
             "central": central_values,
-
-            "mean": (
-                work[idp_cols]
-                .mean(
-                    axis=0,
-                    skipna=True
-                )
-            ),
-
-            "median": (
-                work[idp_cols]
-                .median(
-                    axis=0,
-                    skipna=True
-                )
-            ),
-
-            "q25": (
-                work[idp_cols]
-                .quantile(
-                    0.25,
-                    axis=0
-                )
-            ),
-
-            "q75": (
-                work[idp_cols]
-                .quantile(
-                    0.75,
-                    axis=0
-                )
-            ),
-
-            "n": (
-                work[idp_cols]
-                .count(
-                    axis=0
-                )
-            ),
+            "mean": (work[idp_cols].mean(axis=0, skipna=True)),
+            "median": (work[idp_cols].median(axis=0, skipna=True)),
+            "q25": (work[idp_cols].quantile(0.25, axis=0)),
+            "q75": (work[idp_cols].quantile(0.75, axis=0)),
+            "n": (work[idp_cols].count(axis=0)),
         },
         index=idp_cols,
     )
-
-    idp_summary = (
-        idp_summary
-        .dropna(
-            subset=["central"]
-        )
-    )
-
+    idp_summary = idp_summary.dropna(subset=["central"])
     # ============================================================
     # SORTED COPIES FOR D/E
     # ============================================================
-
-    top_idps = (
-        idp_summary
-        .sort_values(
-            "central",
-            ascending=False
-        )
-        .head(10)
-    )
-
-    bottom_idps = (
-        idp_summary
-        .sort_values(
-            "central",
-            ascending=True
-        )
-        .head(10)
-    )
-
+    top_idps = idp_summary.sort_values("central", ascending=False).head(10)
+    bottom_idps = idp_summary.sort_values("central", ascending=True).head(10)
     # ============================================================
     # SUBJECT SUMMARY
     # ============================================================
-
-    subject_values = (
-        subject_values
-        .dropna()
-        .sort_values(
-            ascending=False
-        )
-    )
-
-    top_subjects = (
-        subject_values
-        .head(10)
-    )
-
+    subject_values = subject_values.dropna().sort_values(ascending=False)
+    top_subjects = subject_values.head(10)
     # ============================================================
     # DISTRIBUTION
     # ============================================================
-
-    distribution = (
-        idp_summary["central"]
-        .dropna()
-        .to_numpy(
-            dtype=float
-        )
-    )
-
+    distribution = idp_summary["central"].dropna().to_numpy(dtype=float)
     if len(distribution) == 0:
-
-        raise ValueError(
-            "No valid Feature-level summary values available."
-        )
-
+        raise ValueError("No valid Feature-level summary values available.")
     # ============================================================
     # OVERALL SUMMARY
     #
     # median -> median [Q1, Q3]
     # mean   -> mean ± sample SD
     # ============================================================
-
     if summary_stat == "median":
-
-        overall_value = float(
-            np.median(
-                distribution
-            )
-        )
-
-        overall_q25 = float(
-            np.percentile(
-                distribution,
-                25
-            )
-        )
-
-        overall_q75 = float(
-            np.percentile(
-                distribution,
-                75
-            )
-        )
-
+        overall_value = float(np.median(distribution))
+        overall_q25 = float(np.percentile(distribution, 25))
+        overall_q75 = float(np.percentile(distribution, 75))
         overall_sd = np.nan
-
-        overall_summary_label = (
-            "Feature-level median [IQR]"
-        )
-
+        overall_summary_label = "Feature-level median [IQR]"
         overall_summary_text = (
-            f"{overall_value:.2f}% "
-            f"[{overall_q25:.2f}%, "
-            f"{overall_q75:.2f}%]"
+            f"{overall_value:.2f}% " f"[{overall_q25:.2f}%, " f"{overall_q75:.2f}%]"
         )
-
     else:
-
-        overall_value = float(
-            np.mean(
-                distribution
-            )
-        )
-
+        overall_value = float(np.mean(distribution))
         overall_q25 = np.nan
         overall_q75 = np.nan
-
         if len(distribution) > 1:
-
-            overall_sd = float(
-                np.std(
-                    distribution,
-                    ddof=1,
-                )
-            )
-
+            overall_sd = float(np.std(distribution, ddof=1))
         else:
-
             overall_sd = np.nan
-
-        overall_summary_label = (
-            "Feature-level mean ± SD"
-        )
-
-        if np.isfinite(
-            overall_sd
-        ):
-
-            overall_summary_text = (
-                f"{overall_value:.2f}% "
-                f"± {overall_sd:.2f}%"
-            )
-
+        overall_summary_label = "Feature-level mean ± SD"
+        if np.isfinite(overall_sd):
+            overall_summary_text = f"{overall_value:.2f}% " f"± {overall_sd:.2f}%"
         else:
-
-            overall_summary_text = (
-                f"{overall_value:.2f}% "
-                "± NA"
-            )
-
+            overall_summary_text = f"{overall_value:.2f}% " "± NA"
     # ============================================================
     # PANEL A MODE
     # ============================================================
-
-    use_boxplots = (
-        n_idps <= 40
-    )
-
-    total_observations = (
-        n_subjects * n_idps
-    )
-
-    show_fliers = (
-        total_observations <= 1500
-        and n_subjects <= 50
-        and n_idps <= 30
-    )
-
+    use_boxplots = n_idps <= 40
+    total_observations = n_subjects * n_idps
+    show_fliers = total_observations <= 1500 and n_subjects <= 50 and n_idps <= 30
     # ============================================================
     # DYNAMIC PANEL A SIZING
     # ============================================================
-
     if n_idps <= 40:
-
         marker_size = 30
         axis_font = 8.5
         box_width = 0.60
-
     elif n_idps <= 100:
-
         marker_size = 23
         axis_font = 7.5
         box_width = 0.55
-
     elif n_idps <= 200:
-
         marker_size = 19
         axis_font = 7.0
         box_width = 0.50
-
     elif n_idps <= 400:
-
         marker_size = 15
         axis_font = 6.5
         box_width = 0.47
-
     elif n_idps <= 800:
-
         marker_size = 11
         axis_font = 6.0
         box_width = 0.44
-
     else:
-
         marker_size = 8
         axis_font = 5.5
         box_width = 0.40
-
     # ============================================================
     # COMBINED FIGURE SIZE
     # ============================================================
-
     if figsize is None:
-
         if n_idps <= 50:
-
             figure_height = 11.0
-
         elif n_idps <= 100:
-
             figure_height = 12.0
-
         elif n_idps <= 200:
-
             figure_height = 13.0
-
         elif n_idps <= 400:
-
             figure_height = 14.5
-
         elif n_idps <= 800:
-
             figure_height = 16.0
-
         else:
-
             figure_height = 18.0
-
-        figsize = (
-            15,
-            figure_height
-        )
+        figsize = (15, figure_height)
 
     # ============================================================
     # COMMON STYLE
     # ============================================================
-
-    def clean_axis(
-        ax,
-        grid_axis="x",
-    ):
-
-        ax.spines[
-            "top"
-        ].set_visible(False)
-
-        ax.spines[
-            "right"
-        ].set_visible(False)
-
-        ax.grid(
-            axis=grid_axis,
-            alpha=0.18,
-            linewidth=0.8,
-        )
-
+    def clean_axis(ax, grid_axis="x"):
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(axis=grid_axis, alpha=0.18, linewidth=0.8)
         if grid_axis == "x":
-
-            ax.grid(
-                axis="y",
-                visible=False,
-            )
-
+            ax.grid(axis="y", visible=False)
         else:
-
-            ax.grid(
-                axis="x",
-                visible=False,
-            )
-
-        ax.tick_params(
-            labelsize=9
-        )
+            ax.grid(axis="x", visible=False)
+        ax.tick_params(labelsize=9)
 
     # ============================================================
     # HELPER: PANEL A CONTENT
@@ -7206,32 +5560,13 @@ def plot_WithinSubjVar(
     # FEATURE INDEX = X AXIS
     # PAIRWISE RPD = Y AXIS
     # ============================================================
-
-    def draw_panel_A(
-        ax,
-        standalone=False,
-    ):
-
-        positions = np.arange(
-            1,
-            len(idp_summary) + 1
-        )
-
+    def draw_panel_A(ax, standalone=False):
+        positions = np.arange(1, len(idp_summary) + 1)
         # --------------------------------------------------------
         # Small dataset -> vertical boxplots
         # --------------------------------------------------------
-
         if use_boxplots:
-
-            box_data = [
-                work[idp]
-                .dropna()
-                .to_numpy(
-                    dtype=float
-                )
-                for idp in idp_summary.index
-            ]
-
+            box_data = [work[idp].dropna().to_numpy(dtype=float) for idp in idp_summary.index]
             ax.boxplot(
                 box_data,
                 vert=True,
@@ -7240,25 +5575,10 @@ def plot_WithinSubjVar(
                 whis=1.5,
                 showfliers=show_fliers,
                 patch_artist=True,
-
-                boxprops=dict(
-                    alpha=0.32,
-                    linewidth=0.8,
-                ),
-
-                medianprops=dict(
-                    color="black",
-                    linewidth=1.15,
-                ),
-
-                whiskerprops=dict(
-                    linewidth=0.85,
-                ),
-
-                capprops=dict(
-                    linewidth=0.85,
-                ),
-
+                boxprops=dict(alpha=0.32, linewidth=0.8),
+                medianprops=dict(color="black", linewidth=1.15),
+                whiskerprops=dict(linewidth=0.85),
+                capprops=dict(linewidth=0.85),
                 flierprops=dict(
                     marker="o",
                     markersize=3.0,
@@ -7267,143 +5587,77 @@ def plot_WithinSubjVar(
                     alpha=0.30,
                 ),
             )
-
             # Mean dot only when mean is requested
             if summary_stat == "mean":
-
                 ax.scatter(
                     positions,
-                    idp_summary[
-                        "central"
-                    ].to_numpy(
-                        dtype=float
-                    ),
+                    idp_summary["central"].to_numpy(dtype=float),
                     s=marker_size,
                     zorder=5,
                     edgecolors="white",
                     linewidths=0.5,
                 )
-
         # --------------------------------------------------------
         # Large dataset -> dot-only
         # --------------------------------------------------------
-
         else:
-
             ax.scatter(
                 positions,
-                idp_summary[
-                    "central"
-                ].to_numpy(
-                    dtype=float
-                ),
+                idp_summary["central"].to_numpy(dtype=float),
                 s=marker_size,
                 alpha=0.85,
                 edgecolors="white",
                 linewidths=0.35,
                 zorder=4,
             )
-
         # --------------------------------------------------------
         # Overall selected statistic
         # --------------------------------------------------------
-
-        ax.axhline(
-            overall_value,
-            linestyle="--",
-            linewidth=1.05,
-            alpha=0.55,
-            zorder=0,
-        )
-
+        ax.axhline(overall_value, linestyle="--", linewidth=1.05, alpha=0.55, zorder=0)
         # --------------------------------------------------------
         # Feature index spacing
         # --------------------------------------------------------
-
         if n_idps <= 25:
-
             index_step = 1
-
         elif n_idps <= 60:
-
             index_step = 3
-
         elif n_idps <= 120:
-
             index_step = 8
-
         elif n_idps <= 250:
-
             index_step = 20
-
         elif n_idps <= 500:
-
             index_step = 40
-
         else:
-
-            index_step = max(
-                1,
-                int(
-                    np.ceil(
-                        n_idps / 12
-                    )
-                )
-            )
-
-        tick_positions = positions[
-            ::index_step
-        ]
-
-        tick_labels = [
-            str(
-                int(x)
-            )
-            for x in tick_positions
-        ]
-
-        ax.set_xticks(
-            tick_positions
-        )
-
-        ax.set_xticklabels(
-            tick_labels
-        )
-
+            index_step = max(1, int(np.ceil(n_idps / 12)))
+        tick_positions = positions[::index_step]
+        tick_labels = [str(int(x)) for x in tick_positions]
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
         # --------------------------------------------------------
         # Title
         # --------------------------------------------------------
-
         ax.set_title(
-            (
-                "Within-subject variability across Features"
-            ),
+            ("Within-subject variability across Features"),
             loc="left",
             fontsize=15 if not standalone else 15,
             fontweight="bold",
             pad=24 if not standalone else 12,
         )
-
         # --------------------------------------------------------
         # Subtitle
         # --------------------------------------------------------
-
         if use_boxplots:
-
             subtitle = (
                 f"Features are shown in the order supplied. "
                 f"The {summary_stat} is shown for each Feature; "
                 "boxes summarise values across subjects."
             )
-
         else:
-
             subtitle = (
                 f"Each dot shows the {summary_stat} "
                 "pairwise RPD for one Feature across subjects. "
                 "Features are shown in the order supplied."
             )
-
         ax.text(
             0.0,
             1.012 if standalone else 1.008,
@@ -7415,108 +5669,33 @@ def plot_WithinSubjVar(
             alpha=0.68,
             clip_on=False,
         )
-
-        ax.set_xlabel(
-            "Feature index",
-            fontsize=10,
-        )
-
-        ax.set_ylabel(
-            "Pairwise RPD (%)",
-            fontsize=11,
-        )
-
-        clean_axis(
-            ax,
-            grid_axis="y",
-        )
-
-        ax.tick_params(
-            axis="x",
-            labelsize=axis_font,
-        )
-
+        ax.set_xlabel("Feature index", fontsize=10)
+        ax.set_ylabel("Pairwise RPD (%)", fontsize=11)
+        clean_axis(ax, grid_axis="y")
+        ax.tick_params(axis="x", labelsize=axis_font)
         # --------------------------------------------------------
         # Minimal legend
         # --------------------------------------------------------
-
         if use_boxplots:
-
             if summary_stat == "median":
-
                 handles = [
-
+                    Line2D([0], [0], color="black", linewidth=1.15, label="Median"),
+                    Line2D([0], [0], color="0.35", linewidth=5, alpha=0.32, label="25–75% (IQR)"),
                     Line2D(
-                        [0],
-                        [0],
-                        color="black",
-                        linewidth=1.15,
-                        label="Median",
-                    ),
-
-                    Line2D(
-                        [0],
-                        [0],
-                        color="0.35",
-                        linewidth=5,
-                        alpha=0.32,
-                        label="25–75% (IQR)",
-                    ),
-
-                    Line2D(
-                        [0],
-                        [0],
-                        linestyle="--",
-                        linewidth=1.05,
-                        alpha=0.55,
-                        label="Overall median",
+                        [0], [0], linestyle="--", linewidth=1.05, alpha=0.55, label="Overall median"
                     ),
                 ]
-
             else:
-
                 handles = [
-
+                    Line2D([0], [0], marker="o", linestyle="None", markersize=5.5, label="Mean"),
+                    Line2D([0], [0], color="black", linewidth=1.15, label="Median"),
+                    Line2D([0], [0], color="0.35", linewidth=5, alpha=0.32, label="25–75% (IQR)"),
                     Line2D(
-                        [0],
-                        [0],
-                        marker="o",
-                        linestyle="None",
-                        markersize=5.5,
-                        label="Mean",
-                    ),
-
-                    Line2D(
-                        [0],
-                        [0],
-                        color="black",
-                        linewidth=1.15,
-                        label="Median",
-                    ),
-
-                    Line2D(
-                        [0],
-                        [0],
-                        color="0.35",
-                        linewidth=5,
-                        alpha=0.32,
-                        label="25–75% (IQR)",
-                    ),
-
-                    Line2D(
-                        [0],
-                        [0],
-                        linestyle="--",
-                        linewidth=1.05,
-                        alpha=0.55,
-                        label="Overall mean",
+                        [0], [0], linestyle="--", linewidth=1.05, alpha=0.55, label="Overall mean"
                     ),
                 ]
-
         else:
-
             handles = [
-
                 Line2D(
                     [0],
                     [0],
@@ -7525,7 +5704,6 @@ def plot_WithinSubjVar(
                     markersize=5.5,
                     label=f"Feature {summary_stat}",
                 ),
-
                 Line2D(
                     [0],
                     [0],
@@ -7535,14 +5713,10 @@ def plot_WithinSubjVar(
                     label=f"Overall {summary_stat}",
                 ),
             ]
-
         ax.legend(
             handles=handles,
             loc="upper right",
-            bbox_to_anchor=(
-                1.0,
-                1.015
-            ),
+            bbox_to_anchor=(1.0, 1.015),
             frameon=False,
             fontsize=8.0,
             ncol=len(handles),
@@ -7551,165 +5725,57 @@ def plot_WithinSubjVar(
     # ============================================================
     # HELPER: PANEL B CONTENT
     # ============================================================
-
-    def draw_panel_B(
-        ax,
-        standalone=False,
-    ):
-
+    def draw_panel_B(ax, standalone=False):
         x = distribution
-
         # --------------------------------------------------------
         # Automatic binning
         # --------------------------------------------------------
-
         if len(x) >= 2:
-
-            q25_b = np.percentile(
-                x,
-                25
-            )
-
-            q75_b = np.percentile(
-                x,
-                75
-            )
-
+            q25_b = np.percentile(x, 25)
+            q75_b = np.percentile(x, 75)
             iqr_b = q75_b - q25_b
-
-            data_range_b = (
-                np.max(x)
-                - np.min(x)
-            )
-
-            if (
-                iqr_b > 0
-                and data_range_b > 0
-            ):
-
-                bin_width_b = (
-                    2
-                    * iqr_b
-                    / (
-                        len(x)
-                        ** (1 / 3)
-                    )
-                )
-
+            data_range_b = np.max(x) - np.min(x)
+            if iqr_b > 0 and data_range_b > 0:
+                bin_width_b = 2 * iqr_b / (len(x) ** (1 / 3))
                 if bin_width_b > 0:
-
-                    n_bins_b = int(
-                        np.ceil(
-                            data_range_b
-                            / bin_width_b
-                        )
-                    )
-
+                    n_bins_b = int(np.ceil(data_range_b / bin_width_b))
                 else:
-
                     n_bins_b = 12
-
             else:
-
                 n_bins_b = 12
-
         else:
-
             n_bins_b = 8
-
-        n_bins_b = int(
-            np.clip(
-                n_bins_b,
-                8,
-                25
-            )
-        )
-
+        n_bins_b = int(np.clip(n_bins_b, 8, 25))
         counts, bins, patches = ax.hist(
-            x,
-            bins=n_bins_b,
-            alpha=0.70,
-            edgecolor="white",
-            linewidth=0.6,
+            x, bins=n_bins_b, alpha=0.70, edgecolor="white", linewidth=0.6
         )
-
         # --------------------------------------------------------
         # Contained x-axis
         # --------------------------------------------------------
-
-        x_min = float(
-            np.min(x)
-        )
-
-        x_max = float(
-            np.max(x)
-        )
-
-        x_range = (
-            x_max - x_min
-        )
-
+        x_min = float(np.min(x))
+        x_max = float(np.max(x))
+        x_range = x_max - x_min
         if x_range > 0:
-
-            x_padding = (
-                0.06
-                * x_range
-            )
-
+            x_padding = 0.06 * x_range
         else:
-
-            x_padding = max(
-                0.5,
-                abs(x_max) * 0.06
-            )
-
-        ax.set_xlim(
-            x_min - x_padding,
-            x_max + x_padding
-        )
-
+            x_padding = max(0.5, abs(x_max) * 0.06)
+        ax.set_xlim(x_min - x_padding, x_max + x_padding)
         # --------------------------------------------------------
         # Reference line
         # --------------------------------------------------------
-
-        ax.axvline(
-            overall_value,
-            linestyle="--",
-            linewidth=1.05,
-            alpha=0.60,
-            zorder=3,
-        )
-
+        ax.axvline(overall_value, linestyle="--", linewidth=1.05, alpha=0.60, zorder=3)
         # --------------------------------------------------------
         # Summary label
         # --------------------------------------------------------
-
         if summary_stat == "median":
-
             panel_b_summary = (
-                f"Median: {overall_value:.2f}% "
-                f"[IQR {overall_q25:.2f}%, "
-                f"{overall_q75:.2f}%]"
+                f"Median: {overall_value:.2f}% " f"[IQR {overall_q25:.2f}%, " f"{overall_q75:.2f}%]"
             )
-
         else:
-
-            if np.isfinite(
-                overall_sd
-            ):
-
-                panel_b_summary = (
-                    f"Mean: {overall_value:.2f}% "
-                    f"± {overall_sd:.2f}% SD"
-                )
-
+            if np.isfinite(overall_sd):
+                panel_b_summary = f"Mean: {overall_value:.2f}% " f"± {overall_sd:.2f}% SD"
             else:
-
-                panel_b_summary = (
-                    f"Mean: {overall_value:.2f}% "
-                    "± NA SD"
-                )
-
+                panel_b_summary = f"Mean: {overall_value:.2f}% " "± NA SD"
         ax.text(
             0.50,
             0.92,
@@ -7720,91 +5786,43 @@ def plot_WithinSubjVar(
             fontsize=8.2,
             clip_on=True,
         )
-
         # --------------------------------------------------------
         # Title
         # --------------------------------------------------------
-
         ax.set_title(
-            (
-                f"Distribution of Feature-level "
-                f"{summary_stat} pairwise RPD"
-            ),
+            (f"Distribution of Feature-level " f"{summary_stat} pairwise RPD"),
             loc="left",
             fontsize=13,
             fontweight="bold",
             pad=10,
         )
-
-        ax.set_xlabel(
-            f"{central_label} pairwise RPD (%)",
-            fontsize=10,
-        )
-
-        ax.set_ylabel(
-            "Number of Features",
-            fontsize=10,
-        )
-
-        clean_axis(
-            ax
-        )
+        ax.set_xlabel(f"{central_label} pairwise RPD (%)", fontsize=10)
+        ax.set_ylabel("Number of Features", fontsize=10)
+        clean_axis(ax)
 
     # ============================================================
     # HELPER: PANEL C CONTENT
     # ============================================================
-
-    def draw_panel_C(
-        ax_labels,
-        ax_plot,
-        standalone=False,
-    ):
-
-        subject_positions = np.arange(
-            len(top_subjects)
-        )
-
-        subject_values_top = (
-            top_subjects
-            .to_numpy(
-                dtype=float
-            )
-        )
-
+    def draw_panel_C(ax_labels, ax_plot, standalone=False):
+        subject_positions = np.arange(len(top_subjects))
+        subject_values_top = top_subjects.to_numpy(dtype=float)
         # --------------------------------------------------------
         # Bars
         # --------------------------------------------------------
-
         bars = ax_plot.barh(
-            subject_positions,
-            subject_values_top,
-            height=0.62,
-            alpha=0.75,
-            edgecolor="none",
+            subject_positions, subject_values_top, height=0.62, alpha=0.75, edgecolor="none"
         )
-
         ax_plot.invert_yaxis()
-
         # No y-axis labels on bar panel
         ax_plot.set_yticks([])
-
-        ax_plot.tick_params(
-            axis="y",
-            left=False,
-            labelleft=False,
-        )
-
+        ax_plot.tick_params(axis="y", left=False, labelleft=False)
         # --------------------------------------------------------
         # Title
         # --------------------------------------------------------
-
         ax_labels.text(
             0.0,
             1.10 if not standalone else 1.06,
-            (
-                f"Subjects with highest "
-                f"{summary_stat} within-subject variability"
-            ),
+            (f"Subjects with highest " f"{summary_stat} within-subject variability"),
             transform=ax_labels.transAxes,
             ha="left",
             va="bottom",
@@ -7812,115 +5830,50 @@ def plot_WithinSubjVar(
             fontweight="bold",
             clip_on=False,
         )
-
         # --------------------------------------------------------
         # Dedicated label axis
         # --------------------------------------------------------
-
-        ax_labels.set_xlim(
-            0,
-            1
-        )
-
-        ax_labels.set_ylim(
-            ax_plot.get_ylim()
-        )
-
-        ax_labels.axis(
-            "off"
-        )
-
+        ax_labels.set_xlim(0, 1)
+        ax_labels.set_ylim(ax_plot.get_ylim())
+        ax_labels.axis("off")
         # --------------------------------------------------------
         # n per subject
         # --------------------------------------------------------
-
         if "n_obs" in df.columns:
-
-            n_map = (
-                df
-                .groupby(subject_col)["n_obs"]
-                .first()
-                .to_dict()
-            )
-
+            n_map = df.groupby(subject_col)["n_obs"].first().to_dict()
         else:
-
             n_map = {}
-
         # --------------------------------------------------------
         # Dynamic wrapping
         # --------------------------------------------------------
-
         if figsize is not None:
-
-            label_width_fraction = (
-                3 / 16
-            )
-
-            approximate_label_inches = (
-                figsize[0]
-                * label_width_fraction
-            )
-
+            label_width_fraction = 3 / 16
+            approximate_label_inches = figsize[0] * label_width_fraction
         else:
-
             approximate_label_inches = 2.5
-
         if approximate_label_inches >= 3.0:
-
             wrap_width = 30
-
         elif approximate_label_inches >= 2.5:
-
             wrap_width = 25
-
         elif approximate_label_inches >= 2.0:
-
             wrap_width = 20
-
         else:
-
             wrap_width = 16
-
         # --------------------------------------------------------
         # Draw labels
         # --------------------------------------------------------
-
-        for i, subject in enumerate(
-            top_subjects.index
-        ):
-
-            subject = str(
-                subject
-            )
-
+        for i, subject in enumerate(top_subjects.index):
+            subject = str(subject)
             if subject in n_map:
-
                 try:
-
-                    label = (
-                        f"{subject} "
-                        f"(n={int(n_map[subject])})"
-                    )
-
-                except (
-                    ValueError,
-                    TypeError
-                ):
-
+                    label = f"{subject} " f"(n={int(n_map[subject])})"
+                except (ValueError, TypeError):
                     label = subject
-
             else:
-
                 label = subject
-
             label = textwrap.fill(
-                label,
-                width=wrap_width,
-                break_long_words=True,
-                break_on_hyphens=False,
+                label, width=wrap_width, break_long_words=True, break_on_hyphens=False
             )
-
             ax_labels.text(
                 0.98,
                 i,
@@ -7931,366 +5884,130 @@ def plot_WithinSubjVar(
                 fontsize=8.5 if standalone else 8,
                 clip_on=True,
             )
-
         # --------------------------------------------------------
         # x-axis
         # --------------------------------------------------------
-
-        ax_plot.set_xlabel(
-            (
-                f"{central_label} pairwise RPD "
-                "across Features (%)"
-            ),
-            fontsize=10,
-        )
-
-        clean_axis(
-            ax_plot
-        )
-
-        ax_plot.tick_params(
-            axis="y",
-            left=False,
-            labelleft=False,
-        )
-
+        ax_plot.set_xlabel((f"{central_label} pairwise RPD " "across Features (%)"), fontsize=10)
+        clean_axis(ax_plot)
+        ax_plot.tick_params(axis="y", left=False, labelleft=False)
         # --------------------------------------------------------
         # Bar values
         # --------------------------------------------------------
-
         if len(subject_values_top) > 0:
-
-            max_subject = np.max(
-                subject_values_top
-            )
-
-            for (
-                bar,
-                value
-            ) in zip(
-                bars,
-                subject_values_top
-            ):
-
+            max_subject = np.max(subject_values_top)
+            for bar, value in zip(bars, subject_values_top):
                 ax_plot.text(
-                    bar.get_width()
-                    + max_subject * 0.012,
-                    bar.get_y()
-                    + bar.get_height() / 2,
+                    bar.get_width() + max_subject * 0.012,
+                    bar.get_y() + bar.get_height() / 2,
                     f"{value:.1f}",
                     va="center",
                     fontsize=8.5,
                     clip_on=True,
                 )
-
-            ax_plot.set_xlim(
-                0,
-                max_subject * 1.10
-            )
+            ax_plot.set_xlim(0, max_subject * 1.10)
 
     # ============================================================
     # HELPER: FEATURE TABLE
     # ============================================================
-
-    def add_idp_table(
-        ax,
-        summary,
-        title,
-    ):
-
-        ax.axis(
-            "off"
-        )
-
+    def add_idp_table(ax, summary, title):
+        ax.axis("off")
         table_data = []
-
-        for rank, (
-            idp,
-            row
-        ) in enumerate(
-            summary.iterrows(),
-            start=1
-        ):
-
-            table_data.append(
-                [
-                    rank,
-                    str(idp),
-                    f"{row['central']:.2f}",
-                ]
-            )
-
-        column_labels = [
-            "#",
-            "Feature",
-            f"{central_label} RPD (%)",
-        ]
-
+        for rank, (idp, row) in enumerate(summary.iterrows(), start=1):
+            table_data.append([rank, str(idp), f"{row['central']:.2f}"])
+        column_labels = ["#", "Feature", f"{central_label} RPD (%)"]
         if not table_data:
-
-            ax.text(
-                0.02,
-                0.5,
-                "No data available",
-                fontsize=9,
-                va="center",
-            )
-
+            ax.text(0.02, 0.5, "No data available", fontsize=9, va="center")
             return
-
         table = ax.table(
             cellText=table_data,
             colLabels=column_labels,
             cellLoc="left",
             colLoc="left",
             loc="center",
-            colWidths=[
-                0.08,
-                0.67,
-                0.25,
-            ],
+            colWidths=[0.08, 0.67, 0.25],
         )
-
-        table.auto_set_font_size(
-            False
-        )
-
-        table.set_fontsize(
-            7.2
-        )
-
-        table.scale(
-            1,
-            1.20
-        )
-
-        for (
-            (row_idx, col_idx),
-            cell
-        ) in table.get_celld().items():
-
-            cell.set_edgecolor(
-                "0.85"
-            )
-
-            cell.set_linewidth(
-                0.45
-            )
-
+        table.auto_set_font_size(False)
+        table.set_fontsize(7.2)
+        table.scale(1, 1.20)
+        for (row_idx, col_idx), cell in table.get_celld().items():
+            cell.set_edgecolor("0.85")
+            cell.set_linewidth(0.45)
             if row_idx == 0:
-
-                cell.set_text_props(
-                    weight="bold"
-                )
-
+                cell.set_text_props(weight="bold")
             if col_idx == 2:
-
-                cell.set_text_props(
-                    ha="right"
-                )
-
-        ax.set_title(
-            title,
-            loc="left",
-            fontsize=10.5,
-            fontweight="bold",
-            pad=7,
-        )
+                cell.set_text_props(ha="right")
+        ax.set_title(title, loc="left", fontsize=10.5, fontweight="bold", pad=7)
 
     # ============================================================
     # COMBINED FIGURE
     # ============================================================
-
-    fig = plt.figure(
-        figsize=figsize,
-        facecolor="white",
-    )
-
+    fig = plt.figure(figsize=figsize, facecolor="white")
     # ------------------------------------------------------------
     # Combined figure grid
     # ------------------------------------------------------------
-
     gs = fig.add_gridspec(
         nrows=3,
         ncols=16,
-
-        height_ratios=[
-            4.8,
-            2.25,
-            2.65,
-        ],
-
+        height_ratios=[4.8, 2.25, 2.65],
         wspace=0.25,
         hspace=0.82,
-
         left=0.055,
         right=0.985,
         top=0.915,
         bottom=0.085,
     )
-
-    axA = fig.add_subplot(
-        gs[0, :]
-    )
-
-    axB = fig.add_subplot(
-        gs[1, 0:7]
-    )
-
-    axC_labels = fig.add_subplot(
-        gs[1, 7:10]
-    )
-
-    axC = fig.add_subplot(
-        gs[1, 10:16]
-    )
-
-    axD = fig.add_subplot(
-        gs[2, 0:5]
-    )
-
-    axE = fig.add_subplot(
-        gs[2, 5:10]
-    )
-
-    axF = fig.add_subplot(
-        gs[2, 10:16]
-    )
-
+    axA = fig.add_subplot(gs[0, :])
+    axB = fig.add_subplot(gs[1, 0:7])
+    axC_labels = fig.add_subplot(gs[1, 7:10])
+    axC = fig.add_subplot(gs[1, 10:16])
+    axD = fig.add_subplot(gs[2, 0:5])
+    axE = fig.add_subplot(gs[2, 5:10])
+    axF = fig.add_subplot(gs[2, 10:16])
     # ------------------------------------------------------------
     # Draw combined panels
     # ------------------------------------------------------------
-
-    draw_panel_A(
-        axA,
-        standalone=False,
-    )
-
-    draw_panel_B(
-        axB,
-        standalone=False,
-    )
-
-    draw_panel_C(
-        axC_labels,
-        axC,
-        standalone=False,
-    )
-
+    draw_panel_A(axA, standalone=False)
+    draw_panel_B(axB, standalone=False)
+    draw_panel_C(axC_labels, axC, standalone=False)
     # ------------------------------------------------------------
     # D
     # ------------------------------------------------------------
-
-    add_idp_table(
-        axD,
-        top_idps,
-        (
-            f"10 most variable Features "
-            f"(by {summary_stat})"
-        ),
-    )
-
+    add_idp_table(axD, top_idps, (f"10 most variable Features " f"(by {summary_stat})"))
     # ------------------------------------------------------------
     # E
     # ------------------------------------------------------------
-
-    add_idp_table(
-        axE,
-        bottom_idps,
-        (
-            f"10 least variable Features "
-            f"(by {summary_stat})"
-        ),
-    )
-
+    add_idp_table(axE, bottom_idps, (f"10 least variable Features " f"(by {summary_stat})"))
     # ------------------------------------------------------------
     # F
     # ------------------------------------------------------------
-
-    axF.axis(
-        "off"
-    )
-
-    axF.set_title(
-        "Summary statistics",
-        loc="left",
-        fontsize=10.5,
-        fontweight="bold",
-        pad=7,
-    )
-
+    axF.axis("off")
+    axF.set_title("Summary statistics", loc="left", fontsize=10.5, fontweight="bold", pad=7)
     summary_rows = [
-        [
-            "N subjects",
-            f"{n_subjects:,}",
-        ],
-        [
-            "N Features",
-            f"{n_idps:,}",
-        ],
-        [
-            overall_summary_label,
-            overall_summary_text,
-        ],
+        ["N subjects", f"{n_subjects:,}"],
+        ["N Features", f"{n_idps:,}"],
+        [overall_summary_label, overall_summary_text],
     ]
-
     summary_table = axF.table(
         cellText=summary_rows,
-        colLabels=[
-            "Measure",
-            "Value",
-        ],
-        colWidths=[
-            0.68,
-            0.32,
-        ],
+        colLabels=["Measure", "Value"],
+        colWidths=[0.68, 0.32],
         cellLoc="left",
         colLoc="left",
         loc="center",
     )
-
-    summary_table.auto_set_font_size(
-        False
-    )
-
-    summary_table.set_fontsize(
-        8.0
-    )
-
-    summary_table.scale(
-        1,
-        1.32,
-    )
-
-    for (
-        (row_idx, col_idx),
-        cell,
-    ) in summary_table.get_celld().items():
-
-        cell.set_edgecolor(
-            "0.85"
-        )
-
-        cell.set_linewidth(
-            0.45
-        )
-
+    summary_table.auto_set_font_size(False)
+    summary_table.set_fontsize(8.0)
+    summary_table.scale(1, 1.32)
+    for (row_idx, col_idx), cell in summary_table.get_celld().items():
+        cell.set_edgecolor("0.85")
+        cell.set_linewidth(0.45)
         if row_idx == 0:
-
-            cell.set_text_props(
-                weight="bold"
-            )
-
+            cell.set_text_props(weight="bold")
         if col_idx == 1:
-
-            cell.set_text_props(
-                ha="right"
-            )
-
+            cell.set_text_props(ha="right")
     # ============================================================
     # FOOTNOTE
     # ============================================================
-
     fig.text(
         0.055,
         0.025,
@@ -8303,235 +6020,77 @@ def plot_WithinSubjVar(
         fontsize=8,
         alpha=0.65,
     )
-
     # ============================================================
     # SAVE COMBINED FIGURE
     # ============================================================
-
     if savepath is not None:
-
-        fig.savefig(
-            savepath,
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
+        fig.savefig(savepath, dpi=300, bbox_inches="tight", facecolor="white")
     # ============================================================
     # SAVE STANDALONE PANELS A, B, C
     # ============================================================
-
     if savepath is not None:
-
         # --------------------------------------------------------
         # Derive filenames
         # --------------------------------------------------------
-
-        base, ext = os.path.splitext(
-            savepath
-        )
-
+        base, ext = os.path.splitext(savepath)
         if ext == "":
             ext = ".png"
-
-        panel_a_path = (
-            f"{base}_A{ext}"
-        )
-
-        panel_b_path = (
-            f"{base}_B{ext}"
-        )
-
-        panel_c_path = (
-            f"{base}_C{ext}"
-        )
-
+        panel_a_path = f"{base}_A{ext}"
+        panel_b_path = f"{base}_B{ext}"
+        panel_c_path = f"{base}_C{ext}"
         # ========================================================
         # STANDALONE PANEL A
         # ========================================================
-
         # Reversed orientation means Feature count controls width
         # rather than height.
-
         if n_idps <= 40:
-
-            standalone_a_width = max(
-                8.5,
-                min(
-                    16,
-                    6.5
-                    + n_idps * 0.18
-                )
-            )
-
+            standalone_a_width = max(8.5, min(16, 6.5 + n_idps * 0.18))
         else:
-
-            standalone_a_width = max(
-                10.5,
-                min(
-                    18,
-                    9.5
-                    + n_idps * 0.008
-                )
-            )
-
-        figA = plt.figure(
-            figsize=(
-                standalone_a_width,
-                6.5
-            ),
-            facecolor="white",
-        )
-
-        axA_standalone = figA.add_axes(
-            [
-                0.10,
-                0.15,
-                0.85,
-                0.70,
-            ]
-        )
-
-        draw_panel_A(
-            axA_standalone,
-            standalone=True,
-        )
-
-        figA.savefig(
-            panel_a_path,
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
-        plt.close(
-            figA
-        )
-
+            standalone_a_width = max(10.5, min(18, 9.5 + n_idps * 0.008))
+        figA = plt.figure(figsize=(standalone_a_width, 6.5), facecolor="white")
+        axA_standalone = figA.add_axes([0.10, 0.15, 0.85, 0.70])
+        draw_panel_A(axA_standalone, standalone=True)
+        figA.savefig(panel_a_path, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(figA)
         # ========================================================
         # STANDALONE PANEL B
         # ========================================================
-
-        figB = plt.figure(
-            figsize=(
-                8.5,
-                5.5
-            ),
-            facecolor="white",
-        )
-
-        axB_standalone = figB.add_axes(
-            [
-                0.12,
-                0.15,
-                0.82,
-                0.70,
-            ]
-        )
-
-        draw_panel_B(
-            axB_standalone,
-            standalone=True,
-        )
-
-        figB.savefig(
-            panel_b_path,
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
-        plt.close(
-            figB
-        )
-
+        figB = plt.figure(figsize=(8.5, 5.5), facecolor="white")
+        axB_standalone = figB.add_axes([0.12, 0.15, 0.82, 0.70])
+        draw_panel_B(axB_standalone, standalone=True)
+        figB.savefig(panel_b_path, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(figB)
         # ========================================================
         # STANDALONE PANEL C
         # ========================================================
-
-        figC = plt.figure(
-            figsize=(
-                10.5,
-                5.5
-            ),
-            facecolor="white",
-        )
-
+        figC = plt.figure(figsize=(10.5, 5.5), facecolor="white")
         gsC = figC.add_gridspec(
-            nrows=1,
-            ncols=10,
-            wspace=0.05,
-            left=0.05,
-            right=0.98,
-            top=0.82,
-            bottom=0.17,
+            nrows=1, ncols=10, wspace=0.05, left=0.05, right=0.98, top=0.82, bottom=0.17
         )
-
-        axC_labels_standalone = figC.add_subplot(
-            gsC[0, 0:4]
-        )
-
-        axC_plot_standalone = figC.add_subplot(
-            gsC[0, 4:10]
-        )
-
-        draw_panel_C(
-            axC_labels_standalone,
-            axC_plot_standalone,
-            standalone=True,
-        )
-
-        figC.savefig(
-            panel_c_path,
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
-        plt.close(
-            figC
-        )
-
+        axC_labels_standalone = figC.add_subplot(gsC[0, 0:4])
+        axC_plot_standalone = figC.add_subplot(gsC[0, 4:10])
+        draw_panel_C(axC_labels_standalone, axC_plot_standalone, standalone=True)
+        figC.savefig(panel_c_path, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(figC)
         # --------------------------------------------------------
         # Debug output
         # --------------------------------------------------------
-
         if debug:
-
             print("\nSaved figures:")
-
-            print(
-                f"  Combined : {savepath}"
-            )
-
-            print(
-                f"  Panel A  : {panel_a_path}"
-            )
-
-            print(
-                f"  Panel B  : {panel_b_path}"
-            )
-
-            print(
-                f"  Panel C  : {panel_c_path}"
-            )
-
+            print(f"  Combined : {savepath}")
+            print(f"  Panel A  : {panel_a_path}")
+            print(f"  Panel B  : {panel_b_path}")
+            print(f"  Panel C  : {panel_c_path}")
     # ============================================================
     # SHOW
     # ============================================================
-
     if rep is not None:
-
-        rep.log_plot(
-            fig,
-            "Within Subject variability",
-        )
-
+        rep.log_plot(fig, "Within Subject variability")
     if show:
-
         plt.show()
-
     return fig
+
+
 
 # ============================================================================
 # 3.  MULTIVARIATE BATCH DIFFERENCE (MAHALANOBIS)
@@ -8547,192 +6106,94 @@ def plot_MultivariateBatchDifference(
 ):
     """
     Plot Mahalanobis distances from the longitudinal Mahalanobis function.
-
     Produces one figure containing:
       - Heatmap of pairwise RAW Mahalanobis distances
       - Heatmap of pairwise RESIDUAL Mahalanobis distances (if available)
       - Bar chart of centroid-to-global distances (raw vs residual)
-
     Parameters
     ----------
     results : dict
         Output from MultiVariateBatchDifference_long(...).
-
     rep : optional
         Optional DiagnosticReport/report object. If supplied, the figure
         is logged using rep.log_plot(...).
-
     info : dict, optional
         Optional diagnostics dictionary returned by
         MultiVariateBatchDifference_long(..., return_info=True).
         Used to display the detected longitudinal analysis mode.
-
     annotate : bool
         Annotate heatmap cells and bars with numeric values.
-
     figsize : tuple
         Matplotlib figure size.
-
     cmap : str
         Matplotlib colormap for heatmaps.
-
     show : bool
         If True, display the figure using plt.show().
-
     Returns
     -------
     fig, axes
         Matplotlib Figure and dictionary of Axes.
     """
-
     import numpy as np
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
-
-    # ============================================================
     # Validation
-    # ============================================================
-
     if not isinstance(results, dict):
         raise ValueError(
             "results must be a dictionary produced by "
             "MultiVariateBatchDifference_long(...)."
         )
-
-    required = [
-        "pairwise_raw",
-        "centroid_raw",
-        "batches",
-    ]
-
+    required = ["pairwise_raw", "centroid_raw", "batches"]
     for key in required:
         if key not in results:
-            raise ValueError(
-                f"Missing required key '{key}' in results."
-            )
-
+            raise ValueError(f"Missing required key '{key}' in results.")
     pairwise_raw = results["pairwise_raw"]
-    pairwise_resid = results.get(
-        "pairwise_resid",
-        None,
-    )
-
+    pairwise_resid = results.get("pairwise_resid", None)
     centroid_raw = results["centroid_raw"]
-    centroid_resid = results.get(
-        "centroid_resid",
-        None,
-    )
-
+    centroid_resid = results.get("centroid_resid", None)
     batches = results["batches"]
-
-    if isinstance(
-        batches,
-        np.ndarray,
-    ):
+    if isinstance(batches, np.ndarray):
         batches = batches.tolist()
-
     batches = list(batches)
-
     n = len(batches)
-
     if n < 2:
-        raise ValueError(
-            "Need at least two batches to plot distances."
-        )
-
-    # ============================================================
+        raise ValueError("Need at least two batches to plot distances.")
     # Helpers
-    # ============================================================
-
-    def build_matrix(
-        pairwise_dict,
-    ):
-        M = np.full(
-            (n, n),
-            np.nan,
-            dtype=float,
-        )
-
+    def build_matrix(pairwise_dict):
+        M = np.full((n, n), np.nan, dtype=float)
         # Distance of batch to itself = 0
-        np.fill_diagonal(
-            M,
-            0.0,
-        )
-
+        np.fill_diagonal(M, 0.0)
         if pairwise_dict is None:
             return M
-
         for (b1, b2), distance in pairwise_dict.items():
-
             if b1 not in batches:
                 continue
-
             if b2 not in batches:
                 continue
-
             i = batches.index(b1)
             j = batches.index(b2)
-
-            M[i, j] = float(
-                distance
-            )
-            M[j, i] = float(
-                distance
-            )
-
+            M[i, j] = float(distance)
+            M[j, i] = float(distance)
         return M
-
-    def centroid_array(
-        centroid_dict,
-    ):
+    def centroid_array(centroid_dict):
         if centroid_dict is None:
             return None
-
         values = []
-
         for batch_name in batches:
-
             key = (
                 batch_name,
                 "global",
             )
-
             if key in centroid_dict:
-
-                values.append(
-                    float(
-                        centroid_dict[key]
-                    )
-                )
-
+                values.append(float(centroid_dict[key]))
             else:
-
-                values.append(
-                    np.nan
-                )
-
-        return np.asarray(
-            values,
-            dtype=float,
-        )
-
-    def annotate_heatmap(
-        ax,
-        M,
-    ):
-
-        for i in range(
-            M.shape[0]
-        ):
-
-            for j in range(
-                M.shape[1]
-            ):
-
+                values.append(np.nan)
+        return np.asarray(values, dtype=float)
+    def annotate_heatmap(ax, M):
+        for i in range(M.shape[0]):
+            for j in range(M.shape[1]):
                 value = M[i, j]
-
                 if np.isfinite(value):
-
                     ax.text(
                         j,
                         i,
@@ -8741,245 +6202,118 @@ def plot_MultivariateBatchDifference(
                         va="center",
                         fontsize=8,
                     )
-
-    def format_batch_labels(
-        ax,
-    ):
-
-        ax.set_xticks(
-            np.arange(n)
-        )
-        ax.set_yticks(
-            np.arange(n)
-        )
-
+    def format_batch_labels(ax):
+        ax.set_xticks(np.arange(n))
+        ax.set_yticks(np.arange(n))
         ax.set_xticklabels(
             batches,
             rotation=45,
             ha="right",
         )
-
         ax.set_yticklabels(
             batches,
             rotation=45,
             ha="right",
         )
-
-        ax.set_xlabel(
-            "Batch"
-        )
-
-        ax.set_ylabel(
-            "Batch"
-        )
-
-    # ============================================================
+        ax.set_xlabel("Batch")
+        ax.set_ylabel("Batch")
     # Prepare matrices
-    # ============================================================
-
-    M_raw = build_matrix(
-        pairwise_raw
-    )
-
+    M_raw = build_matrix(pairwise_raw)
     M_resid = None
-
     if pairwise_resid is not None:
-
-        M_resid = build_matrix(
-            pairwise_resid
-        )
-
-    c_raw = centroid_array(
-        centroid_raw
-    )
-
-    c_resid = centroid_array(
-        centroid_resid
-    )
-
-    has_residual = (
-        M_resid is not None
-        and c_resid is not None
-    )
-
-    # ============================================================
+        M_resid = build_matrix(pairwise_resid)
+    c_raw = centroid_array(centroid_raw)
+    c_resid = centroid_array(centroid_resid)
+    has_residual = M_resid is not None and c_resid is not None
     # Shared heatmap scale
-    # ============================================================
-
     max_values = []
-
-    finite_raw = M_raw[
-        np.isfinite(M_raw)
-    ]
-
+    finite_raw = M_raw[np.isfinite(M_raw)]
     if finite_raw.size > 0:
-        max_values.append(
-            np.max(finite_raw)
-        )
-
+        max_values.append(np.max(finite_raw))
     if M_resid is not None:
-
-        finite_resid = M_resid[
-            np.isfinite(M_resid)
-        ]
-
+        finite_resid = M_resid[np.isfinite(M_resid)]
         if finite_resid.size > 0:
-            max_values.append(
-                np.max(finite_resid)
-            )
-
+            max_values.append(np.max(finite_resid))
     if len(max_values) == 0:
         vmax = 1.0
     else:
-        vmax = max(
-            max_values
-        )
-
+        vmax = max(max_values)
     # Avoid an invalid colour scale if all values are zero.
     if vmax <= 0:
         vmax = 1.0
-
     vmin = 0.0
-
-    # ============================================================
     # Figure title
-    # ============================================================
-
     if info is not None:
-
         mode = info.get(
             "mode",
             None,
         )
-
         longitudinal_case = info.get(
             "longitudinal_case",
             None,
         )
-
-        if longitudinal_case == (
-            "batch_constant_within_subject"
-        ):
-
-            subtitle = (
-                "Longitudinal: batch constant within subject"
-            )
-
-        elif longitudinal_case == (
-            "batch_varies_within_subject"
-        ):
-
-            subtitle = (
-                "Longitudinal: batch varies within subject"
-            )
-
+        if longitudinal_case == ("batch_constant_within_subject"):
+            subtitle = "Longitudinal: batch constant within subject"
+        elif longitudinal_case == ("batch_varies_within_subject"):
+            subtitle = "Longitudinal: batch varies within subject"
         elif mode == "regular":
-
             subtitle = "Regular"
-
         else:
-
             subtitle = ""
-
     else:
-
         subtitle = ""
-
-    # ============================================================
     # Figure layout
-    # ============================================================
-
     if has_residual:
-
         num_cols = 3
-
         width_ratios = [
             1.0,
             1.0,
             0.95,
         ]
-
     else:
-
         num_cols = 2
-
         width_ratios = [
             1.0,
             0.95,
         ]
-
-    fig = plt.figure(
-        figsize=figsize
-    )
-
+    fig = plt.figure(figsize=figsize)
     gs = GridSpec(
         1,
         num_cols,
         figure=fig,
         width_ratios=width_ratios,
     )
-
-    # ============================================================
     # Raw heatmap
-    # ============================================================
-
-    ax_raw = fig.add_subplot(
-        gs[0, 0]
-    )
-
+    ax_raw = fig.add_subplot(gs[0, 0])
     im_raw = ax_raw.imshow(
         M_raw,
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
     )
-
-    ax_raw.set_title(
-        "Pairwise Mahalanobis (Raw)"
-    )
-
-    format_batch_labels(
-        ax_raw
-    )
-
+    ax_raw.set_title("Pairwise Mahalanobis (Raw)")
+    format_batch_labels(ax_raw)
     if annotate:
         annotate_heatmap(
             ax_raw,
             M_raw,
         )
-
-    # ============================================================
     # Residual heatmap
-    # ============================================================
-
     if has_residual:
-
-        ax_resid = fig.add_subplot(
-            gs[0, 1]
-        )
-
+        ax_resid = fig.add_subplot(gs[0, 1])
         im_resid = ax_resid.imshow(
             M_resid,
             cmap=cmap,
             vmin=vmin,
             vmax=vmax,
         )
-
-        ax_resid.set_title(
-            "Pairwise Mahalanobis (Residual)"
-        )
-
-        format_batch_labels(
-            ax_resid
-        )
-
+        ax_resid.set_title("Pairwise Mahalanobis (Residual)")
+        format_batch_labels(ax_resid)
         if annotate:
-
             annotate_heatmap(
                 ax_resid,
                 M_resid,
             )
-
         # Shared colourbar
         cbar = fig.colorbar(
             im_resid,
@@ -8992,159 +6326,86 @@ def plot_MultivariateBatchDifference(
             orientation="horizontal",
             location="top",
         )
-
-        cbar.set_label(
-            "Mahalanobis distance"
-        )
-
+        cbar.set_label("Mahalanobis distance")
     else:
-
         ax_resid = None
-
         cbar = fig.colorbar(
             im_raw,
             ax=ax_raw,
             fraction=0.046,
             pad=0.04,
         )
-
-        cbar.set_label(
-            "Mahalanobis distance"
-        )
-
-    # ============================================================
+        cbar.set_label("Mahalanobis distance")
     # Centroid bar plot
-    # ============================================================
-
     if has_residual:
-
-        ax_bar = fig.add_subplot(
-            gs[0, 2]
-        )
-
+        ax_bar = fig.add_subplot(gs[0, 2])
     else:
-
-        ax_bar = fig.add_subplot(
-            gs[0, 1]
-        )
-
+        ax_bar = fig.add_subplot(gs[0, 1])
     x = np.arange(n)
-
     if c_resid is None:
-
         width = 0.6
-
         bars = ax_bar.bar(
             x,
             c_raw,
             width,
             label="Raw",
         )
-
         if annotate:
-
             for bar in bars:
-
                 height = bar.get_height()
-
-                if np.isfinite(
-                    height
-                ):
-
+                if np.isfinite(height):
                     ax_bar.text(
-                        bar.get_x()
-                        + bar.get_width()
-                        / 2.0,
+                        bar.get_x() + bar.get_width() / 2.0,
                         height,
                         f"{height:.1f}",
                         ha="center",
                         va="bottom",
                         fontsize=8,
                     )
-
-        ax_bar.set_title(
-            "Centroid → Global"
-        )
-
+        ax_bar.set_title("Centroid → Global")
         ax_bar.legend()
-
     else:
-
         width = 0.38
-
         bars_raw = ax_bar.bar(
             x - width / 2,
             c_raw,
             width,
             label="Raw",
         )
-
         bars_res = ax_bar.bar(
             x + width / 2,
             c_resid,
             width,
             label="Residual",
         )
-
         if annotate:
-
-            for bar in (
-                list(bars_raw)
-                + list(bars_res)
-            ):
-
+            for bar in list(bars_raw) + list(bars_res):
                 height = bar.get_height()
-
-                if np.isfinite(
-                    height
-                ):
-
+                if np.isfinite(height):
                     ax_bar.text(
-                        bar.get_x()
-                        + bar.get_width()
-                        / 2.0,
+                        bar.get_x() + bar.get_width() / 2.0,
                         height,
                         f"{height:.1f}",
                         ha="center",
                         va="bottom",
                         fontsize=8,
                     )
-
-        ax_bar.set_title(
-            "Centroid → Global (Raw vs Residual)"
-        )
-
+        ax_bar.set_title("Centroid → Global (Raw vs Residual)")
         ax_bar.legend()
-
-    ax_bar.set_xticks(
-        x
-    )
-
+    ax_bar.set_xticks(x)
     ax_bar.set_xticklabels(
         batches,
         rotation=45,
         ha="right",
     )
-
-    ax_bar.set_ylabel(
-        "Mahalanobis distance"
-    )
-
-    ax_bar.set_xlabel(
-        "Batch"
-    )
-
-    # ============================================================
+    ax_bar.set_ylabel("Mahalanobis distance")
+    ax_bar.set_xlabel("Batch")
     # Overall figure title
-    # ============================================================
-
     if subtitle:
-
         fig.suptitle(
             f"Mahalanobis Batch Differences\n{subtitle}",
             fontsize=13,
         )
-
         fig.tight_layout(
             rect=[
                 0,
@@ -9153,14 +6414,11 @@ def plot_MultivariateBatchDifference(
                 0.92,
             ]
         )
-
     else:
-
         fig.suptitle(
             "Mahalanobis Batch Differences",
             fontsize=13,
         )
-
         fig.tight_layout(
             rect=[
                 0,
@@ -9169,37 +6427,22 @@ def plot_MultivariateBatchDifference(
                 0.94,
             ]
         )
-
-    # ============================================================
     # Report integration
-    # ============================================================
-
     axes = {
         "heatmap_raw": ax_raw,
         "bars": ax_bar,
     }
-
     if ax_resid is not None:
-
-        axes[
-            "heatmap_resid"
-        ] = ax_resid
-
+        axes["heatmap_resid"] = ax_resid
     if rep is not None:
-
         rep.log_plot(
             fig,
             "Mahalanobis distances (raw vs residual)",
         )
-
         plt.close(fig)
-
         return None, None
-
     if show:
-
         plt.show()
-
     return fig, axes
     
 # ============================================================================
@@ -9217,14 +6460,11 @@ def plot_MixedEffectsPart1(
 ):
     """
     Scalable mixed-effects diagnostic.
-
     Two independent report versions are available.
-
     version="icc"
         Displays:
             A. ICC dot plot across IDPs
             B. ICC summary statistics
-
     version="batch"
         Displays:
             A. Distribution of significant pairwise batch/site
@@ -9232,81 +6472,57 @@ def plot_MixedEffectsPart1(
             B. Pairwise batch/site significance heatmap
             C. Batch/site code mapping
             D. Summary statistics for pairwise differences
-
     The two versions are intentionally independent because they
     answer different diagnostic questions.
-
     Important
     ---------
     IDPs are NEVER ranked in the ICC or batch-distribution plots.
-
     IDP index follows the exact row order of df.
-
     The pairwise heatmap uses the `sig_bonf` field from
     `pairwise_site_tests`.
-
     Pairwise significance therefore refers to the Bonferroni-adjusted
     significance stored in that field.
-
     Parameters
     ----------
     df : pandas.DataFrame
         Mixed-effects result dataframe.
-
     idp_col : str, default="IDP"
         Column containing IDP names.
-
     version : {"icc", "batch"}, default="icc"
         Which diagnostic to generate.
-
         "icc":
             ICC plot + ICC summary.
-
         "batch":
             significant-pair histogram + pairwise heatmap +
             batch/site mapping + pairwise summary.
-
     figsize : tuple, default=(11, 7)
         Figure size. It does not scale with the number of IDPs.
-
     savepath : str or None
         Output path.
-
         For example:
-
             savepath="mixed_effects_icc.png"
-
         or:
-
             savepath="mixed_effects_batch.png"
-
     rep : optional
         Existing report object supporting rep.log_plot().
-
     show : bool, default=False
         Display the figure.
-
     Returns
     -------
     fig : matplotlib.figure.Figure
         Generated figure.
-
     axes : dict
         Axes for the selected diagnostic.
-
     Examples
     --------
     ICC version:
-
         fig, axes = plot_MixedEffectsPart1(
             df,
             version="icc",
             savepath="mixed_effects_icc.png",
             show=True,
         )
-
     Batch version:
-
         fig, axes = plot_MixedEffectsPart1(
             df,
             version="batch",
@@ -9314,289 +6530,107 @@ def plot_MixedEffectsPart1(
             show=True,
         )
     """
-
-    # ============================================================
     # IMPORTS
-    # ============================================================
-
     import os
     import warnings
-
     import numpy as np
     import pandas as pd
     import matplotlib.pyplot as plt
-
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
     from matplotlib.colors import ListedColormap
 
-    # ============================================================
     # THEME
-    # ============================================================
-
     apply_plot_theme()
-
-    # ============================================================
     # STYLE
-    # ============================================================
-
     TITLE_SIZE = 14
     SECTION_TITLE_SIZE = 12
     AXIS_SIZE = 10
     TICK_SIZE = 8
     NOTE_SIZE = 8
-
-    # ============================================================
     # VALIDATION
-    # ============================================================
-
-    if not isinstance(
-        df,
-        pd.DataFrame,
-    ):
-        raise TypeError(
-            "df must be a pandas DataFrame."
-        )
-
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("df must be a pandas DataFrame.")
     if idp_col not in df.columns:
-
-        raise ValueError(
-            f"IDP column {idp_col!r} was not found in df."
-        )
-
-    version = str(
-        version
-    ).lower().strip()
-
-    if version not in (
-        "icc",
-        "batch",
-    ):
-
-        raise ValueError(
-            "version must be either 'icc' or 'batch'."
-        )
-
-    # ============================================================
+        raise ValueError(f"IDP column {idp_col!r} was not found in df.")
+    version = str(version).lower().strip()
+    if version not in ("icc", "batch"):
+        raise ValueError("version must be either 'icc' or 'batch'.")
     # PRESERVE IDP ORDER
-    # ============================================================
-
-    idps = (
-        df[idp_col]
-        .astype(str)
-        .str.strip()
-        .tolist()
-    )
-
-    n_idps = len(
-        idps
-    )
-
+    idps = df[idp_col].astype(str).str.strip().tolist()
+    n_idps = len(idps)
     if n_idps == 0:
-
-        raise ValueError(
-            "No IDPs were found."
-        )
-
+        raise ValueError("No IDPs were found.")
     # No sorting / ranking.
-    idp_index = np.arange(
-        1,
-        n_idps + 1,
-        dtype=float,
-    )
+    idp_index = np.arange(1, n_idps + 1, dtype=float)
 
-    # ============================================================
     # COMMON IDP TICKS
-    # ============================================================
-
     def _adaptive_idp_ticks():
-
         if n_idps <= 12:
             step = 1
-
         elif n_idps <= 50:
             step = 5
-
         elif n_idps <= 100:
             step = 10
-
         elif n_idps <= 250:
             step = 25
-
         elif n_idps <= 500:
             step = 50
-
         elif n_idps <= 1000:
             step = 100
-
         else:
-            step = max(
-                1,
-                int(
-                    np.ceil(
-                        n_idps / 10
-                    )
-                ),
-            )
-
-        ticks = np.arange(
-            1,
-            n_idps + 1,
-            step,
-        )
-
-        if (
-            len(ticks) == 0
-            or ticks[-1] != n_idps
-        ):
-
-            ticks = np.append(
-                ticks,
-                n_idps,
-            )
-
-        return np.unique(
-            ticks
-        )
+            step = max(1, int(np.ceil(n_idps / 10)))
+        ticks = np.arange(1, n_idps + 1, step)
+        if len(ticks) == 0 or ticks[-1] != n_idps:
+            ticks = np.append(ticks, n_idps)
+        return np.unique(ticks)
 
     y_ticks = _adaptive_idp_ticks()
 
-    # ============================================================
     # COMMON AXIS STYLE
-    # ============================================================
+    def _style_axis(ax, grid_axis="x"):
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.tick_params(axis="both", which="both", labelsize=TICK_SIZE)
+        ax.grid(axis=grid_axis, alpha=0.18, linewidth=0.8)
 
-    def _style_axis(
-        ax,
-        grid_axis="x",
-    ):
-
-        ax.spines[
-            "top"
-        ].set_visible(False)
-
-        ax.spines[
-            "right"
-        ].set_visible(False)
-
-        ax.tick_params(
-            axis="both",
-            which="both",
-            labelsize=TICK_SIZE,
-        )
-
-        ax.grid(
-            axis=grid_axis,
-            alpha=0.18,
-            linewidth=0.8,
-        )
-
-    # ============================================================
-    # ============================================================
     # VERSION 1: ICC
-    # ============================================================
-    # ============================================================
-
     if version == "icc":
-
-        # --------------------------------------------------------
         # Validation
-        # --------------------------------------------------------
-
         if "ICC" not in df.columns:
-
-            raise ValueError(
-                "'ICC' column was not found in df."
-            )
-
-        # --------------------------------------------------------
+            raise ValueError("'ICC' column was not found in df.")
         # Extract ICC
-        # --------------------------------------------------------
-
-        icc = pd.to_numeric(
-            df["ICC"],
-            errors="coerce",
-        ).to_numpy(
-            dtype=float
-        )
-
-        valid = np.isfinite(
-            icc
-        )
-
-        if not np.any(
-            valid
-        ):
-
-            raise ValueError(
-                "No valid ICC values were found."
-            )
-
-        # --------------------------------------------------------
+        icc = pd.to_numeric(df["ICC"], errors="coerce").to_numpy(dtype=float)
+        valid = np.isfinite(icc)
+        if not np.any(valid):
+            raise ValueError("No valid ICC values were found.")
         # Reversed plot orientation
         #
         # x = IDP index
         # y = ICC
-        # --------------------------------------------------------
-
-        x = idp_index[
-            valid
-        ]
-
-        y = icc[
-            valid
-        ]
-
-        # --------------------------------------------------------
+        x = idp_index[valid]
+        y = icc[valid]
         # Figure
-        # --------------------------------------------------------
-
         fig = plt.figure(
-            figsize=(
-                max(
-                    8.0,
-                    float(
-                        figsize[0]
-                    ),
-                ),
-                max(
-                    6.0,
-                    float(
-                        figsize[1]
-                    ),
-                ),
-            ),
+            figsize=(max(8.0, float(figsize[0])), max(6.0, float(figsize[1]))),
             facecolor="white",
         )
-
-        # --------------------------------------------------------
         # Layout
         #
         # Top: ICC plot
         # Bottom: summary
-        # --------------------------------------------------------
-
         outer = fig.add_gridspec(
             nrows=2,
             ncols=1,
-            height_ratios=[
-                2.0,
-                0.75,
-            ],
+            height_ratios=[2.0, 0.75],
             hspace=0.55,
             left=0.10,
             right=0.96,
             top=0.88,
             bottom=0.11,
         )
-
-        # --------------------------------------------------------
         # ICC axis
-        # --------------------------------------------------------
-
-        axA = fig.add_subplot(
-            outer[0, 0]
-        )
-
+        axA = fig.add_subplot(outer[0, 0])
         axA.scatter(
             x,
             y,
@@ -9607,17 +6641,8 @@ def plot_MixedEffectsPart1(
             linewidths=0.35,
             zorder=3,
         )
-
-        # --------------------------------------------------------
         # ICC reference lines
-        # --------------------------------------------------------
-
-        for threshold in (
-            0.50,
-            0.75,
-            0.90,
-        ):
-
+        for threshold in (0.50, 0.75, 0.90):
             axA.axhline(
                 threshold,
                 linestyle="--",
@@ -9626,90 +6651,29 @@ def plot_MixedEffectsPart1(
                 alpha=0.38,
                 zorder=1,
             )
-
             axA.text(
                 0.985,
                 threshold,
                 f"{threshold:.2f}",
-                transform=(
-                    axA.get_yaxis_transform()
-                ),
+                transform=(axA.get_yaxis_transform()),
                 ha="right",
                 va="bottom",
                 fontsize=7,
                 alpha=0.55,
             )
-
-        # --------------------------------------------------------
         # ICC limits
-        # --------------------------------------------------------
-
-        ymin = min(
-            -0.02,
-            float(
-                np.nanmin(y)
-            ) - 0.05,
-        )
-
-        ymax = max(
-            1.02,
-            float(
-                np.nanmax(y)
-            ) + 0.05,
-        )
-
-        ymin = max(
-            -1.05,
-            ymin,
-        )
-
-        ymax = min(
-            1.05,
-            ymax,
-        )
-
-        axA.set_ylim(
-            ymin,
-            ymax,
-        )
-
-        # --------------------------------------------------------
+        ymin = min(-0.02, float(np.nanmin(y)) - 0.05)
+        ymax = max(1.02, float(np.nanmax(y)) + 0.05)
+        ymin = max(-1.05, ymin)
+        ymax = min(1.05, ymax)
+        axA.set_ylim(ymin, ymax)
         # IDP index x-axis
-        # --------------------------------------------------------
-
-        axA.set_xlim(
-            0.5,
-            n_idps + 0.5,
-        )
-
-        axA.set_xticks(
-            y_ticks
-        )
-
-        axA.set_xticklabels(
-            [
-                str(
-                    int(v)
-                )
-                for v in y_ticks
-            ],
-            fontsize=TICK_SIZE,
-        )
-
-        axA.set_xlabel(
-            "Feature index",
-            fontsize=AXIS_SIZE,
-        )
-
-        # --------------------------------------------------------
+        axA.set_xlim(0.5, n_idps + 0.5)
+        axA.set_xticks(y_ticks)
+        axA.set_xticklabels([str(int(v)) for v in y_ticks], fontsize=TICK_SIZE)
+        axA.set_xlabel("Feature index", fontsize=AXIS_SIZE)
         # ICC y-axis
-        # --------------------------------------------------------
-
-        axA.set_ylabel(
-            "Intraclass correlation (ICC)",
-            fontsize=AXIS_SIZE,
-        )
-
+        axA.set_ylabel("Intraclass correlation (ICC)", fontsize=AXIS_SIZE)
         axA.set_title(
             "Between-subject reliability",
             loc="left",
@@ -9717,154 +6681,49 @@ def plot_MixedEffectsPart1(
             fontweight="bold",
             pad=8,
         )
-
-        _style_axis(
-            axA,
-            grid_axis="y",
-        )
-
-        # --------------------------------------------------------
+        _style_axis(axA, grid_axis="y")
         # Summary
-        # --------------------------------------------------------
-
-        axB = fig.add_subplot(
-            outer[1, 0]
-        )
-
-        axB.axis(
-            "off"
-        )
-
-        # --------------------------------------------------------
+        axB = fig.add_subplot(outer[1, 0])
+        axB.axis("off")
         # Summary statistics
-        # --------------------------------------------------------
-
-        mean_icc = float(
-            np.mean(y)
-        )
-
-        sd_icc = (
-            float(
-                np.std(
-                    y,
-                    ddof=1,
-                )
-            )
-            if len(y) > 1
-            else np.nan
-        )
-
-        median_icc = float(
-            np.median(y)
-        )
-
-        q25_icc = float(
-            np.percentile(
-                y,
-                25,
-            )
-        )
-
-        q75_icc = float(
-            np.percentile(
-                y,
-                75,
-            )
-        )
-
-        min_icc = float(
-            np.min(y)
-        )
-
-        max_icc = float(
-            np.max(y)
-        )
-
-        # --------------------------------------------------------
+        mean_icc = float(np.mean(y))
+        sd_icc = float(np.std(y, ddof=1)) if len(y) > 1 else np.nan
+        median_icc = float(np.median(y))
+        q25_icc = float(np.percentile(y, 25))
+        q75_icc = float(np.percentile(y, 75))
+        min_icc = float(np.min(y))
+        max_icc = float(np.max(y))
         # Vertical summary table
-        # --------------------------------------------------------
-
         summary_rows = [
             [
                 "Mean ± SD",
                 (
                     f"{mean_icc:.2f} ± {sd_icc:.2f}"
-                    if np.isfinite(
-                        sd_icc
-                    )
+                    if np.isfinite(sd_icc)
                     else f"{mean_icc:.2f} ± NA"
                 ),
             ],
-            [
-                "Median [IQR]",
-                (
-                    f"{median_icc:.2f} "
-                    f"[{q25_icc:.2f}, {q75_icc:.2f}]"
-                ),
-            ],
-            [
-                "Minimum",
-                f"{min_icc:.2f}",
-            ],
-            [
-                "Maximum",
-                f"{max_icc:.2f}",
-            ],
+            ["Median [IQR]", (f"{median_icc:.2f} " f"[{q25_icc:.2f}, {q75_icc:.2f}]")],
+            ["Minimum", f"{min_icc:.2f}"],
+            ["Maximum", f"{max_icc:.2f}"],
         ]
-
         table = axB.table(
             cellText=summary_rows,
-            colLabels=[
-                "Measure",
-                "ICC",
-            ],
+            colLabels=["Measure", "ICC"],
             cellLoc="left",
             colLoc="left",
-            bbox=[
-                0.0,
-                0.02,
-                0.55,
-                0.78,
-            ],
-            colWidths=[
-                0.55,
-                0.45,
-            ],
+            bbox=[0.0, 0.02, 0.55, 0.78],
+            colWidths=[0.55, 0.45],
         )
-
-        table.auto_set_font_size(
-            False
-        )
-
-        table.set_fontsize(
-            8
-        )
-
-        for (
-            (row_i, col_i),
-            cell,
-        ) in table.get_celld().items():
-
-            cell.set_edgecolor(
-                "0.85"
-            )
-
-            cell.set_linewidth(
-                0.4
-            )
-
+        table.auto_set_font_size(False)
+        table.set_fontsize(8)
+        for (row_i, col_i), cell in table.get_celld().items():
+            cell.set_edgecolor("0.85")
+            cell.set_linewidth(0.4)
             if row_i == 0:
-
-                cell.set_text_props(
-                    weight="bold"
-                )
-
+                cell.set_text_props(weight="bold")
             if col_i > 0:
-
-                cell.set_text_props(
-                    ha="right"
-                )
-
+                cell.set_text_props(ha="right")
         axB.set_title(
             "Summary across IDPs",
             loc="left",
@@ -9872,182 +6731,60 @@ def plot_MixedEffectsPart1(
             fontweight="bold",
             pad=8,
         )
-
-        # --------------------------------------------------------
         # Global title
-        # --------------------------------------------------------
-
         fig.suptitle(
-            (
-                "Mixed-effects: between-subject reliability"
-                f"  ({n_idps:,} IDPs)"
-            ),
+            ("Mixed-effects: between-subject reliability" f"  ({n_idps:,} IDPs)"),
             fontsize=14.5,
             fontweight="bold",
             y=0.95,
         )
-
         fig.text(
             0.10,
             0.035,
-            (
-                "IDPs are shown in the order supplied; "
-                "no IDP ranking is applied."
-            ),
+            ("IDPs are shown in the order supplied; " "no IDP ranking is applied."),
             fontsize=NOTE_SIZE,
             alpha=0.65,
         )
-
-        # --------------------------------------------------------
         # Save
-        # --------------------------------------------------------
-
         if savepath is not None:
-
-            fig.savefig(
-                savepath,
-                dpi=300,
-                bbox_inches="tight",
-                facecolor="white",
-            )
-
-            print(
-                "\nSaved mixed-effects ICC diagnostic:"
-            )
-
-            print(
-                f"  {savepath}"
-            )
-
-        # --------------------------------------------------------
+            fig.savefig(savepath, dpi=300, bbox_inches="tight", facecolor="white")
+            print("\nSaved mixed-effects ICC diagnostic:")
+            print(f"  {savepath}")
         # Report
-        # --------------------------------------------------------
-
         if rep is not None:
-
             try:
-
-                rep.log_plot(
-                    fig,
-                    "Mixed-effects ICC diagnostic",
-                )
-
+                rep.log_plot(fig, "Mixed-effects ICC diagnostic")
             except Exception as exc:
-
-                warnings.warn(
-                    "Could not log ICC diagnostic: "
-                    f"{exc}"
-                )
-
+                warnings.warn("Could not log ICC diagnostic: " f"{exc}")
         if show:
-
             plt.show()
-
-        return (
-            fig,
-            {
-                "ICC": axA,
-                "summary": axB,
-            },
-        )
-
-    # ============================================================
-    # ============================================================
+        return (fig, {"ICC": axA, "summary": axB})
     # VERSION 2: BATCH
-    # ============================================================
-    # ============================================================
-
-    # ------------------------------------------------------------
     # Validation
-    # ------------------------------------------------------------
-
-    required_batch_columns = [
-        "n_is_batchSig",
-        "pairwise_site_tests",
-    ]
-
-    missing = [
-        c
-        for c in required_batch_columns
-        if c not in df.columns
-    ]
-
+    required_batch_columns = ["n_is_batchSig", "pairwise_site_tests"]
+    missing = [c for c in required_batch_columns if c not in df.columns]
     if missing:
-
         raise ValueError(
-            "Batch diagnostic requires the following columns: "
-            + ", ".join(
-                missing
-            )
+            "Batch diagnostic requires the following columns: " + ", ".join(missing)
         )
-
-    # ============================================================
     # PANEL A: HISTOGRAM
-    # ============================================================
-
-    n_sig_values = pd.to_numeric(
-        df["n_is_batchSig"],
-        errors="coerce",
-    ).to_numpy(
+    n_sig_values = pd.to_numeric(df["n_is_batchSig"], errors="coerce").to_numpy(
         dtype=float
     )
+    n_sig_values = n_sig_values[np.isfinite(n_sig_values)]
+    if len(n_sig_values) == 0:
+        raise ValueError("No valid n_is_batchSig values were found.")
+    n_sig_values = np.maximum(n_sig_values, 0)
+    n_sig_int = np.rint(n_sig_values).astype(int)
+    max_count = int(np.max(n_sig_int))
 
-    n_sig_values = n_sig_values[
-        np.isfinite(
-            n_sig_values
-        )
-    ]
-
-    if len(
-        n_sig_values
-    ) == 0:
-
-        raise ValueError(
-            "No valid n_is_batchSig values were found."
-        )
-
-    n_sig_values = np.maximum(
-        n_sig_values,
-        0,
-    )
-
-    n_sig_int = np.rint(
-        n_sig_values
-    ).astype(
-        int
-    )
-
-    max_count = int(
-        np.max(
-            n_sig_int
-        )
-    )
-
-    # ============================================================
     # PAIRWISE DATA
-    # ============================================================
-
-    def _get_dict_value(
-        d,
-        keys,
-        default=None,
-    ):
-
-        if not isinstance(
-            d,
-            dict,
-        ):
-
+    def _get_dict_value(d, keys, default=None):
+        if not isinstance(d, dict):
             return default
-
         for key in keys:
-
             if key in d:
-
-                return d[
-                    key
-                ]
-
+                return d[key]
         return default
 
     site_a_keys = [
@@ -10065,7 +6802,6 @@ def plot_MixedEffectsPart1(
         "group_1",
         "A",
     ]
-
     site_b_keys = [
         "site_b",
         "siteB",
@@ -10081,7 +6817,6 @@ def plot_MixedEffectsPart1(
         "group_2",
         "B",
     ]
-
     sig_keys = [
         "sig_bonf",
         "significant_bonf",
@@ -10090,377 +6825,101 @@ def plot_MixedEffectsPart1(
         "significant",
     ]
 
-    def _extract_sig(
-        value,
-    ):
+    def _extract_sig(value):
+        if isinstance(value, dict):
+            return bool(_get_dict_value(value, sig_keys, default=False))
+        return bool(value)
 
-        if isinstance(
-            value,
-            dict,
-        ):
-
-            return bool(
-                _get_dict_value(
-                    value,
-                    sig_keys,
-                    default=False,
-                )
-            )
-
-        return bool(
-            value
-        )
-
-    def _parse_pair(
-        key,
-        value,
-    ):
-
-        # --------------------------------------------------------
+    def _parse_pair(key, value):
         # Tuple/list dictionary key:
         #
         #   {(site1, site2): {...}}
-        # --------------------------------------------------------
-
-        if (
-            isinstance(
-                key,
-                (
-                    tuple,
-                    list,
-                ),
-            )
-            and len(key) == 2
-        ):
-
-            return (
-                str(
-                    key[0]
-                ),
-                str(
-                    key[1]
-                ),
-                _extract_sig(
-                    value
-                ),
-            )
-
-        # --------------------------------------------------------
+        if isinstance(key, (tuple, list)) and len(key) == 2:
+            return (str(key[0]), str(key[1]), _extract_sig(value))
         # Dictionary containing explicit fields
-        # --------------------------------------------------------
-
-        if isinstance(
-            value,
-            dict,
-        ):
-
-            a = _get_dict_value(
-                value,
-                site_a_keys,
-                default=None,
-            )
-
-            b = _get_dict_value(
-                value,
-                site_b_keys,
-                default=None,
-            )
-
-            if (
-                a is not None
-                and b is not None
-            ):
-
-                return (
-                    str(a),
-                    str(b),
-                    _extract_sig(
-                        value
-                    ),
-                )
-
+        if isinstance(value, dict):
+            a = _get_dict_value(value, site_a_keys, default=None)
+            b = _get_dict_value(value, site_b_keys, default=None)
+            if a is not None and b is not None:
+                return (str(a), str(b), _extract_sig(value))
         return None
 
-    def _walk_pairwise(
-        obj,
-        output,
-    ):
-
+    def _walk_pairwise(obj, output):
         if obj is None:
-
             return
-
-        # --------------------------------------------------------
         # Dictionary
-        # --------------------------------------------------------
-
-        if isinstance(
-            obj,
-            dict,
-        ):
-
+        if isinstance(obj, dict):
             found_direct = False
-
             for key, value in obj.items():
-
-                parsed = _parse_pair(
-                    key,
-                    value,
-                )
-
+                parsed = _parse_pair(key, value)
                 if parsed is not None:
-
-                    output.append(
-                        parsed
-                    )
-
+                    output.append(parsed)
                     found_direct = True
-
-            # ----------------------------------------------------
             # Explicit pair record
-            # ----------------------------------------------------
-
             if not found_direct:
-
-                parsed = _parse_pair(
-                    None,
-                    obj,
-                )
-
+                parsed = _parse_pair(None, obj)
                 if parsed is not None:
-
-                    output.append(
-                        parsed
-                    )
-
+                    output.append(parsed)
                     return
-
-                # ------------------------------------------------
                 # Nested structures
-                # ------------------------------------------------
-
                 for value in obj.values():
-
-                    _walk_pairwise(
-                        value,
-                        output
-                    )
-
+                    _walk_pairwise(value, output)
             return
-
-        # --------------------------------------------------------
         # List / tuple
-        # --------------------------------------------------------
-
-        if isinstance(
-            obj,
-            (
-                list,
-                tuple,
-            ),
-        ):
-
+        if isinstance(obj, (list, tuple)):
             for item in obj:
-
-                parsed = _parse_pair(
-                    None,
-                    item,
-                )
-
+                parsed = _parse_pair(None, item)
                 if parsed is not None:
-
-                    output.append(
-                        parsed
-                    )
-
+                    output.append(parsed)
                 else:
-
-                    _walk_pairwise(
-                        item,
-                        output
-                    )
+                    _walk_pairwise(item, output)
 
     def _build_pairwise_data():
-
-        records = (
-            df[
-                "pairwise_site_tests"
-            ]
-            .tolist()
-        )
-
+        records = df["pairwise_site_tests"].tolist()
         ordered_sites = []
-
         row_pairs = []
-
-        # --------------------------------------------------------
         # Discover pairs/sites
-        # --------------------------------------------------------
-
         for record in records:
-
             parsed = []
-
-            _walk_pairwise(
-                record,
-                parsed,
-            )
-
+            _walk_pairwise(record, parsed)
             row_seen = set()
-
             clean = []
-
             for a, b, sig in parsed:
-
                 a = str(a)
                 b = str(b)
-
                 if a == b:
                     continue
-
-                canonical = tuple(
-                    sorted(
-                        (
-                            a,
-                            b,
-                        )
-                    )
-                )
-
+                canonical = tuple(sorted((a, b)))
                 if canonical in row_seen:
                     continue
-
-                row_seen.add(
-                    canonical
-                )
-
+                row_seen.add(canonical)
                 if a not in ordered_sites:
-
-                    ordered_sites.append(
-                        a
-                    )
-
+                    ordered_sites.append(a)
                 if b not in ordered_sites:
-
-                    ordered_sites.append(
-                        b
-                    )
-
-                clean.append(
-                    (
-                        a,
-                        b,
-                        sig,
-                    )
-                )
-
-            row_pairs.append(
-                clean
-            )
-
-        if len(
-            ordered_sites
-        ) < 2:
-
+                    ordered_sites.append(b)
+                clean.append((a, b, sig))
+            row_pairs.append(clean)
+        if len(ordered_sites) < 2:
             return None
-
-        # --------------------------------------------------------
         # Generate every unique site pair in the discovered site
         # order.
-        # --------------------------------------------------------
-
         pair_list = []
-
-        for i in range(
-            len(
-                ordered_sites
-            ) - 1
-        ):
-
-            for j in range(
-                i + 1,
-                len(
-                    ordered_sites
-                ),
-            ):
-
-                pair_list.append(
-                    (
-                        ordered_sites[i],
-                        ordered_sites[j],
-                    )
-                )
-
-        pair_to_col = {
-            pair: i
-            for i, pair in enumerate(
-                pair_list
-            )
-        }
-
-        matrix = np.zeros(
-            (
-                n_idps,
-                len(pair_list),
-            ),
-            dtype=float,
-        )
-
-        # --------------------------------------------------------
+        for i in range(len(ordered_sites) - 1):
+            for j in range(i + 1, len(ordered_sites)):
+                pair_list.append((ordered_sites[i], ordered_sites[j]))
+        pair_to_col = {pair: i for i, pair in enumerate(pair_list)}
+        matrix = np.zeros((n_idps, len(pair_list)), dtype=float)
         # Fill the IDP x pair matrix
-        # --------------------------------------------------------
-
-        for row_i, clean in enumerate(
-            row_pairs
-        ):
-
+        for row_i, clean in enumerate(row_pairs):
             for a, b, sig in clean:
-
-                canonical = tuple(
-                    sorted(
-                        (
-                            a,
-                            b,
-                        )
-                    )
-                )
-
+                canonical = tuple(sorted((a, b)))
                 if canonical not in pair_to_col:
-
                     continue
-
-                col_i = pair_to_col[
-                    canonical
-                ]
-
-                matrix[
-                    row_i,
-                    col_i
-                ] = (
-                    1.0
-                    if sig
-                    else 0.0
-                )
-
-        # --------------------------------------------------------
+                col_i = pair_to_col[canonical]
+                matrix[row_i, col_i] = 1.0 if sig else 0.0
         # Compact codes
-        # --------------------------------------------------------
-
-        code_map = {
-            site:
-                f"B{i + 1}"
-            for i, site in enumerate(
-                ordered_sites
-            )
-        }
-
-        pair_labels = [
-            (
-                f"{code_map[a]}-{code_map[b]}"
-            )
-            for a, b in pair_list
-        ]
-
+        code_map = {site: f"B{i + 1}" for i, site in enumerate(ordered_sites)}
+        pair_labels = [(f"{code_map[a]}-{code_map[b]}") for a, b in pair_list]
         return {
             "matrix": matrix,
             "pair_labels": pair_labels,
@@ -10469,55 +6928,24 @@ def plot_MixedEffectsPart1(
             "code_map": code_map,
         }
 
-    pairwise_data = (
-        _build_pairwise_data()
-    )
-
-    # ============================================================
+    pairwise_data = _build_pairwise_data()
     # FIGURE
-    # ============================================================
-
     # Figure height remains stable regardless of IDP count.
     fig = plt.figure(
-        figsize=(
-            max(
-                10.5,
-                float(
-                    figsize[0]
-                ),
-            ),
-            max(
-                9.5,
-                float(
-                    figsize[1]
-                ),
-            ),
-        ),
+        figsize=(max(10.5, float(figsize[0])), max(9.5, float(figsize[1]))),
         facecolor="white",
     )
-
-    # ============================================================
     # BATCH VERSION LAYOUT
     #
     # A: histogram
     # B: heatmap
     # C: mapping
     # D: summary
-    # ============================================================
-
     outer = fig.add_gridspec(
         nrows=4,
         ncols=2,
-        height_ratios=[
-            1.05,
-            2.15,
-            0.90,
-            0.22,
-        ],
-        width_ratios=[
-            1,
-            1,
-        ],
+        height_ratios=[1.05, 2.15, 0.90, 0.22],
+        width_ratios=[1, 1],
         hspace=0.95,
         wspace=0.30,
         left=0.08,
@@ -10525,25 +6953,10 @@ def plot_MixedEffectsPart1(
         top=0.88,
         bottom=0.09,
     )
-
-    # ============================================================
     # PANEL A
     # HISTOGRAM
-    # ============================================================
-
-    axA = fig.add_subplot(
-        outer[
-            0,
-            0
-        ]
-    )
-
-    bins = np.arange(
-        -0.5,
-        max_count + 1.5,
-        1,
-    )
-
+    axA = fig.add_subplot(outer[0, 0])
+    bins = np.arange(-0.5, max_count + 1.5, 1)
     axA.hist(
         n_sig_int,
         bins=bins,
@@ -10553,44 +6966,12 @@ def plot_MixedEffectsPart1(
         edgecolor="white",
         linewidth=0.4,
     )
-
-    mean_count = float(
-        np.mean(
-            n_sig_int
-        )
-    )
-
-    median_count = float(
-        np.median(
-            n_sig_int
-        )
-    )
-
-    axA.axvline(
-        mean_count,
-        linestyle="--",
-        linewidth=1.0,
-        color="gray",
-        alpha=0.72,
-    )
-
-    axA.axvline(
-        median_count,
-        linestyle=":",
-        linewidth=1.2,
-        color="gray",
-        alpha=0.72,
-    )
-
-    ymax = axA.get_ylim()[
-        1
-    ]
-
-    if np.isclose(
-        mean_count,
-        median_count,
-    ):
-
+    mean_count = float(np.mean(n_sig_int))
+    median_count = float(np.median(n_sig_int))
+    axA.axvline(mean_count, linestyle="--", linewidth=1.0, color="gray", alpha=0.72)
+    axA.axvline(median_count, linestyle=":", linewidth=1.2, color="gray", alpha=0.72)
+    ymax = axA.get_ylim()[1]
+    if np.isclose(mean_count, median_count):
         axA.text(
             mean_count,
             ymax * 0.90,
@@ -10601,9 +6982,7 @@ def plot_MixedEffectsPart1(
             fontsize=7,
             alpha=0.75,
         )
-
     else:
-
         axA.text(
             mean_count,
             ymax * 0.90,
@@ -10614,7 +6993,6 @@ def plot_MixedEffectsPart1(
             fontsize=7,
             alpha=0.75,
         )
-
         axA.text(
             median_count,
             ymax * 0.90,
@@ -10625,46 +7003,15 @@ def plot_MixedEffectsPart1(
             fontsize=7,
             alpha=0.75,
         )
-
     if max_count <= 20:
-
-        axA.set_xticks(
-            np.arange(
-                0,
-                max_count + 1,
-                1,
-            )
-        )
-
+        axA.set_xticks(np.arange(0, max_count + 1, 1))
     else:
-
-        step = max(
-            1,
-            int(
-                np.ceil(
-                    max_count / 10
-                )
-            ),
-        )
-
-        axA.set_xticks(
-            np.arange(
-                0,
-                max_count + 1,
-                step,
-            )
-        )
-
+        step = max(1, int(np.ceil(max_count / 10)))
+        axA.set_xticks(np.arange(0, max_count + 1, step))
     axA.set_xlabel(
-        "Significant pairwise batch/site differences per feature",
-        fontsize=AXIS_SIZE,
+        "Significant pairwise batch/site differences per feature", fontsize=AXIS_SIZE
     )
-
-    axA.set_ylabel(
-        "Number of IDPs",
-        fontsize=AXIS_SIZE,
-    )
-
+    axA.set_ylabel("Number of IDPs", fontsize=AXIS_SIZE)
     axA.set_title(
         "Distribution of significant pairwise batch/site differences",
         loc="left",
@@ -10672,32 +7019,13 @@ def plot_MixedEffectsPart1(
         fontweight="bold",
         pad=8,
     )
-
-    _style_axis(
-        axA
-    )
-
-    # ============================================================
+    _style_axis(axA)
     # PANEL B
     # PAIRWISE HEATMAP
-    # ============================================================
-
-    axB = fig.add_subplot(
-        outer[
-            0,
-            1
-        ]
-    )
-
-    # ------------------------------------------------------------
+    axB = fig.add_subplot(outer[0, 1])
     # Keep panel B dedicated to the histogram, while the heatmap
     # gets the large row below.
-    # ------------------------------------------------------------
-
-    axB.axis(
-        "off"
-    )
-
+    axB.axis("off")
     """ axB.text(
         0.0,
         0.95,
@@ -10711,24 +7039,10 @@ def plot_MixedEffectsPart1(
         fontsize=NOTE_SIZE,
         alpha=0.68,
     ) """
-
-    # ============================================================
     # ACTUAL HEATMAP AXIS
-    # ============================================================
-
-    ax_heat = fig.add_subplot(
-        outer[
-            1,
-            :
-        ]
-    )
-
+    ax_heat = fig.add_subplot(outer[1, :])
     if pairwise_data is None:
-
-        ax_heat.axis(
-            "off"
-        )
-
+        ax_heat.axis("off")
         ax_heat.text(
             0.5,
             0.5,
@@ -10742,28 +7056,11 @@ def plot_MixedEffectsPart1(
             fontsize=9,
             alpha=0.70,
         )
-
     else:
-
-        matrix = pairwise_data[
-            "matrix"
-        ]
-
-        pair_labels = pairwise_data[
-            "pair_labels"
-        ]
-
-        n_pairs = len(
-            pair_labels
-        )
-
-        cmap = ListedColormap(
-            [
-                "white",
-                STYLE.PRIMARY,
-            ]
-        )
-
+        matrix = pairwise_data["matrix"]
+        pair_labels = pairwise_data["pair_labels"]
+        n_pairs = len(pair_labels)
+        cmap = ListedColormap(["white", STYLE.PRIMARY])
         image = ax_heat.imshow(
             matrix,
             aspect="auto",
@@ -10773,93 +7070,28 @@ def plot_MixedEffectsPart1(
             vmin=0,
             vmax=1,
         )
-
-        # --------------------------------------------------------
         # X-axis pair labels
-        # --------------------------------------------------------
-
         if n_pairs <= 28:
-
-            x_positions = np.arange(
-                n_pairs
-            )
-
+            x_positions = np.arange(n_pairs)
         elif n_pairs <= 60:
-
-            x_positions = np.arange(
-                0,
-                n_pairs,
-                2,
-            )
-
+            x_positions = np.arange(0, n_pairs, 2)
         else:
-
-            step = max(
-                1,
-                int(
-                    np.ceil(
-                        n_pairs / 18
-                    )
-                ),
-            )
-
-            x_positions = np.arange(
-                0,
-                n_pairs,
-                step,
-            )
-
-        ax_heat.set_xticks(
-            x_positions
-        )
-
+            step = max(1, int(np.ceil(n_pairs / 18)))
+            x_positions = np.arange(0, n_pairs, step)
+        ax_heat.set_xticks(x_positions)
         ax_heat.set_xticklabels(
-            [
-                pair_labels[
-                    i
-                ]
-                for i in x_positions
-            ],
+            [pair_labels[i] for i in x_positions],
             rotation=45,
             ha="right",
             rotation_mode="anchor",
             fontsize=7,
         )
-
-        ax_heat.tick_params(
-            axis="x",
-            pad=5,
-        )
-
-        ax_heat.set_xlabel(
-            "Batch/site pair",
-            fontsize=AXIS_SIZE,
-            labelpad=7,
-        )
-
-        # --------------------------------------------------------
+        ax_heat.tick_params(axis="x", pad=5)
+        ax_heat.set_xlabel("Batch/site pair", fontsize=AXIS_SIZE, labelpad=7)
         # Y-axis IDP indices
-        # --------------------------------------------------------
-
-        ax_heat.set_yticks(
-            y_ticks - 1
-        )
-
-        ax_heat.set_yticklabels(
-            [
-                str(
-                    int(v)
-                )
-                for v in y_ticks
-            ],
-            fontsize=TICK_SIZE,
-        )
-
-        ax_heat.set_ylabel(
-            "IDP index",
-            fontsize=AXIS_SIZE,
-        )
-
+        ax_heat.set_yticks(y_ticks - 1)
+        ax_heat.set_yticklabels([str(int(v)) for v in y_ticks], fontsize=TICK_SIZE)
+        ax_heat.set_ylabel("IDP index", fontsize=AXIS_SIZE)
         ax_heat.set_title(
             "Pairwise batch/site significance",
             loc="left",
@@ -10867,21 +7099,12 @@ def plot_MixedEffectsPart1(
             fontweight="bold",
             pad=9,
         )
-
-        # --------------------------------------------------------
         # Simple significance legend
-        # --------------------------------------------------------
-
         legend_handle = Patch(
-            facecolor=STYLE.PRIMARY,
-            edgecolor="none",
-            label="Bonferroni-significant",
+            facecolor=STYLE.PRIMARY, edgecolor="none", label="Bonferroni-significant"
         )
-
         ax_heat.legend(
-            handles=[
-                legend_handle
-            ],
+            handles=[legend_handle],
             frameon=False,
             fontsize=7.5,
             loc="upper right",
@@ -10889,11 +7112,7 @@ def plot_MixedEffectsPart1(
             handlelength=1.0,
             handletextpad=0.5,
         )
-
-        # --------------------------------------------------------
         # Explanation below heatmap
-        # --------------------------------------------------------
-
         """ ax_heat.text(
             0.0,
             -0.18,
@@ -10909,31 +7128,12 @@ def plot_MixedEffectsPart1(
             fontsize=NOTE_SIZE,
             alpha=0.68,
         ) """
-
-        ax_heat.spines[
-            "top"
-        ].set_visible(False)
-
-        ax_heat.spines[
-            "right"
-        ].set_visible(False)
-
-    # ============================================================
+        ax_heat.spines["top"].set_visible(False)
+        ax_heat.spines["right"].set_visible(False)
     # PANEL C
     # BATCH/SITE MAPPING
-    # ============================================================
-
-    axC = fig.add_subplot(
-        outer[
-            2,
-            0
-        ]
-    )
-
-    axC.axis(
-        "off"
-    )
-
+    axC = fig.add_subplot(outer[2, 0])
+    axC.axis("off")
     axC.set_title(
         "Batch/site mapping",
         loc="left",
@@ -10941,9 +7141,7 @@ def plot_MixedEffectsPart1(
         fontweight="bold",
         pad=8,
     )
-
     if pairwise_data is None:
-
         axC.text(
             0.5,
             0.5,
@@ -10953,106 +7151,35 @@ def plot_MixedEffectsPart1(
             va="center",
             fontsize=9,
         )
-
     else:
-
-        code_map = pairwise_data[
-            "code_map"
-        ]
-
-        ordered_sites = pairwise_data[
-            "ordered_sites"
-        ]
-
-        mapping_rows = [
-            [
-                code_map[
-                    site
-                ],
-                site,
-            ]
-            for site in ordered_sites
-        ]
-
+        code_map = pairwise_data["code_map"]
+        ordered_sites = pairwise_data["ordered_sites"]
+        mapping_rows = [[code_map[site], site] for site in ordered_sites]
         table_C = axC.table(
             cellText=mapping_rows,
-            colLabels=[
-                "Code",
-                "Actual batch/site",
-            ],
+            colLabels=["Code", "Actual batch/site"],
             cellLoc="left",
             colLoc="left",
-            bbox=[
-                0.0,
-                -0.02,
-                1.0,
-                0.95,
-            ],
-            colWidths=[
-                0.28,
-                0.72,
-            ],
+            bbox=[0.0, -0.02, 1.0, 0.95],
+            colWidths=[0.28, 0.72],
         )
-
-        table_C.auto_set_font_size(
-            False
-        )
-
-        if len(
-            mapping_rows
-        ) <= 10:
-
+        table_C.auto_set_font_size(False)
+        if len(mapping_rows) <= 10:
             font_size = 8
-
-        elif len(
-            mapping_rows
-        ) <= 20:
-
+        elif len(mapping_rows) <= 20:
             font_size = 7
-
         else:
-
             font_size = 6
-
-        table_C.set_fontsize(
-            font_size
-        )
-
-        for (
-            (row_i, col_i),
-            cell,
-        ) in table_C.get_celld().items():
-
-            cell.set_edgecolor(
-                "0.85"
-            )
-
-            cell.set_linewidth(
-                0.4
-            )
-
+        table_C.set_fontsize(font_size)
+        for (row_i, col_i), cell in table_C.get_celld().items():
+            cell.set_edgecolor("0.85")
+            cell.set_linewidth(0.4)
             if row_i == 0:
-
-                cell.set_text_props(
-                    weight="bold"
-                )
-
-    # ============================================================
+                cell.set_text_props(weight="bold")
     # PANEL D
     # SUMMARY
-    # ============================================================
-
-    axD = fig.add_subplot(
-        outer[
-            2,
-            1
-        ]
-    )
-
-    axD.axis(
-        "off"
-    )
-
+    axD = fig.add_subplot(outer[2, 1])
+    axD.axis("off")
     axD.set_title(
         "Summary across IDPs",
         loc="left",
@@ -11060,7 +7187,6 @@ def plot_MixedEffectsPart1(
         fontweight="bold",
         pad=8,
     )
-
     summary_rows = [
         [
             "Significant batch/site pairs per feature",
@@ -11070,107 +7196,36 @@ def plot_MixedEffectsPart1(
             f"{np.max(n_sig_int):.0f}",
         ]
     ]
-
     table_D = axD.table(
         cellText=summary_rows,
-        colLabels=[
-            "Measure",
-            "Mean",
-            "Median",
-            "Minimum",
-            "Maximum",
-        ],
+        colLabels=["Measure", "Mean", "Median", "Minimum", "Maximum"],
         cellLoc="left",
         colLoc="left",
-        bbox=[
-            0.0,
-            0.12,
-            1.0,
-            0.62,
-        ],
-        colWidths=[
-            0.48,
-            0.13,
-            0.13,
-            0.13,
-            0.13,
-        ],
+        bbox=[0.0, 0.12, 1.0, 0.62],
+        colWidths=[0.48, 0.13, 0.13, 0.13, 0.13],
     )
-
-    table_D.auto_set_font_size(
-        False
-    )
-
-    table_D.set_fontsize(
-        8
-    )
-
-    for (
-        (row_i, col_i),
-        cell,
-    ) in table_D.get_celld().items():
-
-        cell.set_edgecolor(
-            "0.85"
-        )
-
-        cell.set_linewidth(
-            0.4
-        )
-
+    table_D.auto_set_font_size(False)
+    table_D.set_fontsize(8)
+    for (row_i, col_i), cell in table_D.get_celld().items():
+        cell.set_edgecolor("0.85")
+        cell.set_linewidth(0.4)
         if row_i == 0:
-
-            cell.set_text_props(
-                weight="bold"
-            )
-
+            cell.set_text_props(weight="bold")
         if col_i > 0:
-
-            cell.set_text_props(
-                ha="right"
-            )
-
-    # ============================================================
+            cell.set_text_props(ha="right")
     # EMPTY FOOTER ROW
-    # ============================================================
-
-    ax_empty_left = fig.add_subplot(
-        outer[
-            3,
-            0
-        ]
-    )
-
-    ax_empty_left.axis(
-        "off"
-    )
-
-    ax_empty_right = fig.add_subplot(
-        outer[
-            3,
-            1
-        ]
-    )
-
-    ax_empty_right.axis(
-        "off"
-    )
-
-    # ============================================================
+    ax_empty_left = fig.add_subplot(outer[3, 0])
+    ax_empty_left.axis("off")
+    ax_empty_right = fig.add_subplot(outer[3, 1])
+    ax_empty_right.axis("off")
     # MAIN TITLE
-    # ============================================================
-
     fig.suptitle(
-            f"Mixed-effects diagnostics across features ({n_idps:,} features analysed)",
-            fontsize=14.5,
-            fontweight="bold",
-            y=0.95,
-        )
-
-    # ============================================================
+        f"Mixed-effects diagnostics across features ({n_idps:,} features analysed)",
+        fontsize=14.5,
+        fontweight="bold",
+        y=0.95,
+    )
     # FOOTNOTE
-    # ============================================================
-
     fig.text(
         0.08,
         0.035,
@@ -11182,68 +7237,24 @@ def plot_MixedEffectsPart1(
         fontsize=7.5,
         alpha=0.65,
     )
-
-    # ============================================================
     # SAVE
-    # ============================================================
-
     if savepath is not None:
-
-        fig.savefig(
-            savepath,
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="white",
-        )
-
-        print(
-            "\nSaved mixed-effects batch diagnostic:"
-        )
-
-        print(
-            f"  {savepath}"
-        )
-
-    # ============================================================
+        fig.savefig(savepath, dpi=300, bbox_inches="tight", facecolor="white")
+        print("\nSaved mixed-effects batch diagnostic:")
+        print(f"  {savepath}")
     # REPORT
-    # ============================================================
-
     if rep is not None:
-
         try:
-
-            rep.log_plot(
-                fig,
-                "Mixed-effects batch/site diagnostic",
-            )
-
+            rep.log_plot(fig, "Mixed-effects batch/site diagnostic")
         except Exception as exc:
-
-            warnings.warn(
-                "Could not log batch diagnostic: "
-                f"{exc}"
-            )
-
-    # ============================================================
+            warnings.warn("Could not log batch diagnostic: " f"{exc}")
     # SHOW
-    # ============================================================
-
     if show:
-
         plt.show()
-
-    # ============================================================
     # RETURN
-    # ============================================================
-
     return (
         fig,
-        {
-            "histogram": axA,
-            "pairwise_heatmap": ax_heat,
-            "mapping": axC,
-            "summary": axD,
-        },
+        {"histogram": axA, "pairwise_heatmap": ax_heat, "mapping": axC, "summary": axD},
     )
 
 def plot_PairwiseSiteDifferencesHeatmap(
@@ -11356,50 +7367,30 @@ def plot_long_biological_effects(
 ):
     """
     Plot biological fixed-effect results for one dataset.
-
     Two combined figures are produced.
-
     Figure 1
     --------
-    Fixed-effect distributions across Features.
-
-    Covariates are arranged in a two-column layout.
-
-    Each point represents one Feature.
-    Significant Features are filled.
-    Non-significant Features are open.
+    Fixed-effect distributions across Features. Covariates are arranged in a two-column layout. Each point represents one Feature.
+    Significant Features are filled. Non-significant Features are open.
 
     Figure 2
     --------
     Left:
-        Horizontal bar plot showing the proportion of
-        significant Features for each covariate.
-
+        Horizontal bar plot showing the proportion of significant Features for each covariate.
     Right:
-        Table containing the top Features ranked separately
-        within each covariate by absolute effect size.
-
-        Columns:
-
-            Covariate
-            Feature
-            |beta|
+        Table containing the top Features ranked separately within each covariate by absolute effect size.
+        Columns: Covariate, Feature, |beta|
 
     Expected columns
     ----------------
     For each covariate:
-
         <covariate>_est
         <covariate>_pval
 
     Parameters
     ----------
-    df : pd.DataFrame
-        Mixed-effects result dataframe.
-
-    covariates : sequence of str
-        Biological covariates.
-
+    df : pd.DataFrame, Mixed-effects result dataframe.
+    covariates : sequence of str, Biological covariates.
     feature_col : str
         Column containing Feature names.
 
@@ -11450,10 +7441,7 @@ def plot_long_biological_effects(
             |beta|
     """
 
-    # ============================================================
-    # IMPORTS
-    # ============================================================
-
+    # Imports
     import os
     import re
 
@@ -11464,653 +7452,232 @@ def plot_long_biological_effects(
     from matplotlib.lines import Line2D
     from statsmodels.stats.multitest import multipletests
 
-    # ============================================================
-    # VALIDATION
-    # ============================================================
-
-    if not isinstance(
-        df,
-        pd.DataFrame,
-    ):
-        raise TypeError(
-            "df must be a pandas DataFrame."
-        )
+    # Validation
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("df must be a pandas DataFrame.")
 
     if df.empty:
-        raise ValueError(
-            "df is empty."
-        )
+        raise ValueError("df is empty.")
 
     if feature_col not in df.columns:
-        raise ValueError(
-            f"Feature column '{feature_col}' was not found."
-        )
+        raise ValueError(f"Feature column '{feature_col}' was not found.")
 
     if not covariates:
-        raise ValueError(
-            "covariates must contain at least one covariate."
-        )
+        raise ValueError("covariates must contain at least one covariate.")
 
-    if not (
-        0 < significance < 1
-    ):
-        raise ValueError(
-            "significance must be between 0 and 1."
-        )
+    if not (0 < significance < 1):
+        raise ValueError("significance must be between 0 and 1.")
 
     if jitter_width <= 0:
-        raise ValueError(
-            "jitter_width must be greater than 0."
-        )
+        raise ValueError("jitter_width must be greater than 0.")
 
-    if (
-        not isinstance(
-            top_n,
-            int,
-        )
-        or
-        top_n < 1
-    ):
-        raise ValueError(
-            "top_n must be an integer >= 1."
-        )
+    if not isinstance(top_n, int) or top_n < 1:
+        raise ValueError("top_n must be an integer >= 1.")
 
-    covariates = list(
-        covariates
-    )
+    covariates = list(covariates)
 
-    # ============================================================
-    # FEATURE NAMES
-    # ============================================================
+    # Feature names
+    feature_names = df[feature_col].astype(str).str.strip().to_numpy()
+    n_idps = len(feature_names)
 
-    feature_names = (
-        df[
-            feature_col
-        ]
-        .astype(str)
-        .str.strip()
-        .to_numpy()
-    )
-
-    n_idps = len(
-        feature_names
-    )
-
-    # ============================================================
-    # STORAGE
-    # ============================================================
-
+    # Storage
     figs = []
-
     summary_rows = []
-
     top_idp_rows = []
-
     covariate_results = {}
 
-    # ============================================================
-    # SHARED JITTER
-    # ============================================================
+    # Shared jitter
+    rng = np.random.default_rng(random_seed)
+    feature_jitter = rng.uniform(-jitter_width, jitter_width, size=n_idps)
 
-    rng = np.random.default_rng(
-        random_seed
-    )
+    # Safe filename
+    def _safe_filename(value):
+        value = str(value).strip()
+        value = re.sub(r"[^A-Za-z0-9._-]+", "_", value)
+        return value.strip("_")
 
-    feature_jitter = rng.uniform(
-        -jitter_width,
-        jitter_width,
-        size=n_idps,
-    )
-
-    # ============================================================
-    # SAFE FILENAME
-    # ============================================================
-
-    def _safe_filename(
-        value,
-    ):
-
-        value = str(
-            value
-        ).strip()
-
-        value = re.sub(
-            r"[^A-Za-z0-9._-]+",
-            "_",
-            value,
-        )
-
-        return value.strip(
-            "_"
-        )
-
-    # ============================================================
-    # PREPARE RESULTS FOR EACH COVARIATE
-    # ============================================================
-
+    # Prepare results for each covariate
     for covariate in covariates:
+        est_col = f"{covariate}_est"
+        pval_col = f"{covariate}_pval"
 
-        est_col = (
-            f"{covariate}_est"
-        )
-
-        pval_col = (
-            f"{covariate}_pval"
-        )
-
-        # --------------------------------------------------------
         # Required columns
-        # --------------------------------------------------------
-
-        if (
-            est_col not in df.columns
-            or
-            pval_col not in df.columns
-        ):
+        if est_col not in df.columns or pval_col not in df.columns:
             continue
 
-        # --------------------------------------------------------
         # Effect estimates
-        # --------------------------------------------------------
+        estimates = pd.to_numeric(df[est_col], errors="coerce").to_numpy(dtype=float)
 
-        estimates = pd.to_numeric(
-            df[
-                est_col
-            ],
-            errors="coerce",
-        ).to_numpy(
-            dtype=float
-        )
-
-        # --------------------------------------------------------
         # P-values
-        # --------------------------------------------------------
+        pvals = pd.to_numeric(df[pval_col], errors="coerce").to_numpy(dtype=float)
 
-        pvals = pd.to_numeric(
-            df[
-                pval_col
-            ],
-            errors="coerce",
-        ).to_numpy(
-            dtype=float
-        )
+        valid_est = np.isfinite(estimates)
 
-        valid_est = np.isfinite(
-            estimates
-        )
-
-        # ========================================================
-        # SIGNIFICANCE
-        # ========================================================
-
+        # Significance
         if plot_fdr:
+            valid_p = np.isfinite(pvals)
+            qvals = np.full(len(pvals), np.nan, dtype=float)
 
-            valid_p = np.isfinite(
-                pvals
-            )
-
-            qvals = np.full(
-                len(
-                    pvals
-                ),
-                np.nan,
-                dtype=float,
-            )
-
-            if np.any(
-                valid_p
-            ):
-
-                (
-                    _,
-                    qvals_valid,
-                    _,
-                    _,
-                ) = multipletests(
-                    pvals[
-                        valid_p
-                    ],
+            if np.any(valid_p):
+                _, qvals_valid, _, _ = multipletests(
+                    pvals[valid_p],
                     alpha=significance,
                     method="fdr_bh",
                 )
-
-                qvals[
-                    valid_p
-                ] = qvals_valid
+                qvals[valid_p] = qvals_valid
 
             significant_mask = (
-                valid_est
-                &
-                np.isfinite(
-                    qvals
-                )
-                &
-                (
-                    qvals
-                    < significance
-                )
+                valid_est & np.isfinite(qvals) & (qvals < significance)
             )
 
-            significance_label = (
-                rf"$p_{{\mathrm{{FDR}}}} < "
-                rf"{significance:g}$"
-            )
-
+            significance_label = rf"$p_{{\mathrm{{FDR}}}} < {significance:g}$"
             nonsignificance_label = (
-                rf"$p_{{\mathrm{{FDR}}}} \geq "
-                rf"{significance:g}$"
+                rf"$p_{{\mathrm{{FDR}}}} \geq {significance:g}$"
             )
-
-            correction_name = (
-                "BH-FDR"
-            )
+            correction_name = "BH-FDR"
 
         else:
-
-            qvals = np.full(
-                len(
-                    pvals
-                ),
-                np.nan,
-                dtype=float,
-            )
+            qvals = np.full(len(pvals), np.nan, dtype=float)
 
             significant_mask = (
-                valid_est
-                &
-                np.isfinite(
-                    pvals
-                )
-                &
-                (
-                    pvals
-                    < significance
-                )
+                valid_est & np.isfinite(pvals) & (pvals < significance)
             )
 
-            significance_label = (
-                f"p < {significance:g}"
-            )
+            significance_label = f"p < {significance:g}"
+            nonsignificance_label = f"p >= {significance:g}"
+            correction_name = "None"
 
-            nonsignificance_label = (
-                f"p >= {significance:g}"
-            )
+        nonsignificant_mask = valid_est & ~significant_mask
 
-            correction_name = (
-                "None"
-            )
-
-        nonsignificant_mask = (
-            valid_est
-            &
-            ~significant_mask
-        )
-
-        valid_values = estimates[
-            valid_est
-        ]
+        valid_values = estimates[valid_est]
 
         if valid_values.size == 0:
             continue
 
-        # ========================================================
-        # SUMMARY STATISTICS
-        # ========================================================
+        # Summary statistics
+        n_valid = int(np.sum(valid_est))
+        n_significant = int(np.sum(significant_mask))
 
-        n_valid = int(
-            np.sum(
-                valid_est
-            )
-        )
+        prop_significant = float(n_significant / n_valid) if n_valid > 0 else np.nan
 
-        n_significant = int(
-            np.sum(
-                significant_mask
-            )
-        )
-
-        prop_significant = (
-            float(
-                n_significant
-                / n_valid
-            )
-            if n_valid > 0
-            else np.nan
-        )
-
-        median_estimate = float(
-            np.median(
-                valid_values
-            )
-        )
-
-        q1_estimate = float(
-            np.percentile(
-                valid_values,
-                25,
-            )
-        )
-
-        q3_estimate = float(
-            np.percentile(
-                valid_values,
-                75,
-            )
-        )
-
-        mean_estimate = float(
-            np.mean(
-                valid_values
-            )
-        )
+        median_estimate = float(np.median(valid_values))
+        q1_estimate = float(np.percentile(valid_values, 25))
+        q3_estimate = float(np.percentile(valid_values, 75))
+        mean_estimate = float(np.mean(valid_values))
 
         sd_estimate = (
-            float(
-                np.std(
-                    valid_values,
-                    ddof=1,
-                )
-            )
-            if valid_values.size > 1
-            else np.nan
+            float(np.std(valid_values, ddof=1)) if valid_values.size > 1 else np.nan
         )
 
         summary_rows.append(
             {
-                "Covariate":
-                    covariate,
-
-                "N Features":
-                    int(
-                        len(df)
-                    ),
-
-                "N valid estimates":
-                    n_valid,
-
-                "Median estimate":
-                    median_estimate,
-
-                "Q1 estimate":
-                    q1_estimate,
-
-                "Q3 estimate":
-                    q3_estimate,
-
-                "IQR estimate":
-                    (
-                        q3_estimate
-                        - q1_estimate
-                    ),
-
-                "Mean estimate":
-                    mean_estimate,
-
-                "SD estimate":
-                    sd_estimate,
-
-                "N significant Features":
-                    n_significant,
-
-                "Proportion significant":
-                    prop_significant,
-
-                "Correction":
-                    correction_name,
+                "Covariate": covariate,
+                "N Features": int(len(df)),
+                "N valid estimates": n_valid,
+                "Median estimate": median_estimate,
+                "Q1 estimate": q1_estimate,
+                "Q3 estimate": q3_estimate,
+                "IQR estimate": q3_estimate - q1_estimate,
+                "Mean estimate": mean_estimate,
+                "SD estimate": sd_estimate,
+                "N significant Features": n_significant,
+                "Proportion significant": prop_significant,
+                "Correction": correction_name,
             }
         )
 
-        # ========================================================
-        # STORE COVARIATE RESULTS
-        # ========================================================
-
-        covariate_results[
-            covariate
-        ] = {
-            "estimates":
-                estimates,
-
-            "pvalues":
-                pvals,
-
-            "qvalues":
-                qvals,
-
-            "valid":
-                valid_est,
-
-            "significant":
-                significant_mask,
-
-            "nonsignificant":
-                nonsignificant_mask,
-
-            "n_valid":
-                n_valid,
-
-            "n_significant":
-                n_significant,
-
-            "prop_significant":
-                prop_significant,
-
-            "significance_label":
-                significance_label,
-
-            "nonsignificance_label":
-                nonsignificance_label,
-
-            "correction":
-                correction_name,
+        # Store covariate results
+        covariate_results[covariate] = {
+            "estimates": estimates,
+            "pvalues": pvals,
+            "qvalues": qvals,
+            "valid": valid_est,
+            "significant": significant_mask,
+            "nonsignificant": nonsignificant_mask,
+            "n_valid": n_valid,
+            "n_significant": n_significant,
+            "prop_significant": prop_significant,
+            "significance_label": significance_label,
+            "nonsignificance_label": nonsignificance_label,
+            "correction": correction_name,
         }
 
-        # ========================================================
-        # TOP FEATURES
-        #
-        # Rank separately within each covariate by |beta|.
-        # ========================================================
-
+        # Top Features: rank separately within each covariate by |beta|
         top_df = pd.DataFrame(
             {
-                "Covariate":
-                    np.repeat(
-                        covariate,
-                        len(
-                            feature_names
-                        ),
-                    ),
-
-                "Feature":
-                    feature_names,
-
-                "|beta|":
-                    np.abs(
-                        estimates
-                    ),
+                "Covariate": np.repeat(covariate, len(feature_names)),
+                "Feature": feature_names,
+                "|beta|": np.abs(estimates),
             }
         )
 
         top_df = (
-            top_df[
-                np.isfinite(
-                    top_df[
-                        "|beta|"
-                    ]
-                )
-            ]
-            .sort_values(
-                "|beta|",
-                ascending=False,
-                kind="stable",
-            )
-            .head(
-                top_n
-            )
-            .reset_index(
-                drop=True
-            )
+            top_df[np.isfinite(top_df["|beta|"])]
+            .sort_values("|beta|", ascending=False, kind="stable")
+            .head(top_n)
+            .reset_index(drop=True)
         )
 
-        top_idp_rows.extend(
-            top_df.to_dict(
-                orient="records"
-            )
-        )
+        top_idp_rows.extend(top_df.to_dict(orient="records"))
 
-    # ============================================================
-    # CHECK USABLE COVARIATES
-    # ============================================================
-
-    if len(
-        covariate_results
-    ) == 0:
-
+    # Check usable covariates
+    if len(covariate_results) == 0:
         return (
             [],
             pd.DataFrame(),
-            pd.DataFrame(
-                columns=[
-                    "Covariate",
-                    "Feature",
-                    "|beta|",
-                ]
-            ),
+            pd.DataFrame(columns=["Covariate", "Feature", "|beta|"]),
         )
 
-    valid_covariates = list(
-        covariate_results.keys()
-    )
+    valid_covariates = list(covariate_results.keys())
 
-    # ============================================================
-    # FIGURE 1
-    #
-    # BIOLOGICAL EFFECT DISTRIBUTIONS
-    #
-    # Two-column layout
-    # ============================================================
-
-    n_covariates = len(
-        valid_covariates
-    )
-
-    n_cols = min(
-        2,
-        n_covariates,
-    )
-
-    n_rows = int(
-        np.ceil(
-            n_covariates
-            / n_cols
-        )
-    )
+    # Figure 1: biological effect distributions (two-column layout)
+    n_covariates = len(valid_covariates)
+    n_cols = min(2, n_covariates)
+    n_rows = int(np.ceil(n_covariates / n_cols))
 
     fig_effects, axes = plt.subplots(
         n_rows,
         n_cols,
-        figsize=(
-            figsize_per_panel[0]
-            * n_cols,
-            figsize_per_panel[1]
-            * n_rows,
-        ),
+        figsize=(figsize_per_panel[0] * n_cols, figsize_per_panel[1] * n_rows),
         squeeze=False,
         facecolor="white",
     )
 
     axes = axes.flatten()
 
-    # ============================================================
-    # EFFECT-DISTRIBUTION PANELS
-    # ============================================================
+    # Effect-distribution panels
+    for ax, covariate in zip(axes, valid_covariates):
+        result = covariate_results[covariate]
 
-    for ax, covariate in zip(
-        axes,
-        valid_covariates,
-    ):
+        estimates = result["estimates"]
+        valid_est = result["valid"]
+        significant_mask = result["significant"]
+        nonsignificant_mask = result["nonsignificant"]
+        valid_values = estimates[valid_est]
+        n_valid = result["n_valid"]
+        n_significant = result["n_significant"]
+        prop_significant = result["prop_significant"]
 
-        result = covariate_results[
-            covariate
-        ]
-
-        estimates = result[
-            "estimates"
-        ]
-
-        valid_est = result[
-            "valid"
-        ]
-
-        significant_mask = result[
-            "significant"
-        ]
-
-        nonsignificant_mask = result[
-            "nonsignificant"
-        ]
-
-        valid_values = estimates[
-            valid_est
-        ]
-
-        n_valid = result[
-            "n_valid"
-        ]
-
-        n_significant = result[
-            "n_significant"
-        ]
-
-        prop_significant = result[
-            "prop_significant"
-        ]
-
-        # --------------------------------------------------------
         # Boxplot
-        # --------------------------------------------------------
-
         ax.boxplot(
             valid_values,
             vert=False,
-            positions=[
-                0
-            ],
+            positions=[0],
             widths=0.32,
             patch_artist=True,
             showfliers=False,
-            boxprops=dict(
-                alpha=0.25,
-            ),
-            medianprops=dict(
-                linewidth=1.5,
-            ),
-            whiskerprops=dict(
-                linewidth=1.0,
-            ),
-            capprops=dict(
-                linewidth=1.0,
-            ),
-            flierprops=dict(
-                marker="",
-                markersize=0,
-            ),
+            boxprops=dict(alpha=0.25),
+            medianprops=dict(linewidth=1.5),
+            whiskerprops=dict(linewidth=1.0),
+            capprops=dict(linewidth=1.0),
+            flierprops=dict(marker="", markersize=0),
         )
 
-        # --------------------------------------------------------
         # Non-significant Features
-        # --------------------------------------------------------
-
-        if np.any(
-            nonsignificant_mask
-        ):
-
+        if np.any(nonsignificant_mask):
             ax.scatter(
-                estimates[
-                    nonsignificant_mask
-                ],
-                feature_jitter[
-                    nonsignificant_mask
-                ],
+                estimates[nonsignificant_mask],
+                feature_jitter[nonsignificant_mask],
                 s=22,
                 facecolors="white",
                 edgecolors="black",
@@ -12119,21 +7686,11 @@ def plot_long_biological_effects(
                 zorder=3,
             )
 
-        # --------------------------------------------------------
         # Significant Features
-        # --------------------------------------------------------
-
-        if np.any(
-            significant_mask
-        ):
-
+        if np.any(significant_mask):
             ax.scatter(
-                estimates[
-                    significant_mask
-                ],
-                feature_jitter[
-                    significant_mask
-                ],
+                estimates[significant_mask],
+                feature_jitter[significant_mask],
                 s=24,
                 facecolors="C3",
                 edgecolors="black",
@@ -12142,62 +7699,23 @@ def plot_long_biological_effects(
                 zorder=4,
             )
 
-        # --------------------------------------------------------
         # Zero-effect line
-        # --------------------------------------------------------
+        ax.axvline(0.0, linestyle="--", linewidth=1.0)
 
-        ax.axvline(
-            0.0,
-            linestyle="--",
-            linewidth=1.0,
-        )
-
-        # --------------------------------------------------------
         # X-axis limits
-        # --------------------------------------------------------
+        xmin = min(float(np.min(valid_values)), 0.0)
+        xmax = max(float(np.max(valid_values)), 0.0)
 
-        xmin = min(
-            float(
-                np.min(
-                    valid_values
-                )
-            ),
-            0.0,
-        )
-
-        xmax = max(
-            float(
-                np.max(
-                    valid_values
-                )
-            ),
-            0.0,
-        )
-
-        span = (
-            xmax
-            - xmin
-        )
+        span = xmax - xmin
 
         if span == 0:
             span = 1.0
 
-        padding = (
-            0.08
-            * span
-        )
+        padding = 0.08 * span
 
-        ax.set_xlim(
-            xmin
-            - padding,
-            xmax
-            + padding,
-        )
+        ax.set_xlim(xmin - padding, xmax + padding)
 
-        # --------------------------------------------------------
         # Significance summary
-        # --------------------------------------------------------
-
         ax.text(
             0.02,
             0.94,
@@ -12214,98 +7732,40 @@ def plot_long_biological_effects(
             fontsize=10,
         )
 
-        # --------------------------------------------------------
         # Axes
-        # --------------------------------------------------------
+        ax.set_xlabel(rf"{covariate} effect estimate ($\beta$)")
+        ax.set_ylabel("Features")
+        ax.set_ylim(-0.55, 0.55)
+        ax.set_yticks([0])
+        ax.set_yticklabels([])
+        ax.grid(axis="x", alpha=0.20)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
-        ax.set_xlabel(
-            rf"{covariate} effect estimate ($\beta$)"
-        )
-
-        ax.set_ylabel(
-            "Features"
-        )
-
-        ax.set_ylim(
-            -0.55,
-            0.55,
-        )
-
-        ax.set_yticks(
-            [
-                0
-            ]
-        )
-
-        ax.set_yticklabels(
-            []
-        )
-
-        ax.grid(
-            axis="x",
-            alpha=0.20,
-        )
-
-        ax.spines[
-            "top"
-        ].set_visible(
-            False
-        )
-
-        ax.spines[
-            "right"
-        ].set_visible(
-            False
-        )
-
-        # --------------------------------------------------------
         # Title
-        # --------------------------------------------------------
+        ax.set_title(covariate.capitalize(), fontsize=13, fontweight="bold", pad=10)
 
-        ax.set_title(
-            covariate.capitalize(),
-            fontsize=13,
-            fontweight="bold",
-            pad=10,
-        )
-
-        # --------------------------------------------------------
         # Legend
-        # --------------------------------------------------------
-
         legend_handles = [
             Line2D(
-                [
-                    0
-                ],
-                [
-                    0
-                ],
+                [0],
+                [0],
                 marker="o",
                 linestyle="None",
                 markerfacecolor="C3",
                 markeredgecolor="black",
                 markersize=7,
-                label=result[
-                    "significance_label"
-                ],
+                label=result["significance_label"],
             ),
-
             Line2D(
-                [
-                    0
-                ],
-                [
-                    0
-                ],
+                [0],
+                [0],
                 marker="o",
                 linestyle="None",
                 markerfacecolor="white",
                 markeredgecolor="black",
                 markersize=7,
-                label=result[
-                    "nonsignificance_label"
-                ],
+                label=result["nonsignificance_label"],
             ),
         ]
 
@@ -12316,41 +7776,19 @@ def plot_long_biological_effects(
             fontsize=8,
         )
 
-    # ============================================================
-    # HIDE UNUSED EFFECT PANELS
-    # ============================================================
+    # Hide unused effect panels
+    for ax in axes[n_covariates:]:
+        ax.axis("off")
 
-    for ax in axes[
-        n_covariates:
-    ]:
-
-        ax.axis(
-            "off"
-        )
-
-    # ============================================================
-    # EFFECT FIGURE TITLE
-    # ============================================================
-
+    # Effect figure title
     if plot_fdr:
-
         effects_title = (
-            "Biological fixed-effect estimates across Features "
-            "(FDR-corrected)"
+            "Biological fixed-effect estimates across Features (FDR-corrected)"
         )
-
     else:
+        effects_title = "Biological fixed-effect estimates across Features"
 
-        effects_title = (
-            "Biological fixed-effect estimates across Features"
-        )
-
-    fig_effects.suptitle(
-        effects_title,
-        fontsize=16,
-        fontweight="bold",
-        y=0.99,
-    )
+    fig_effects.suptitle(effects_title, fontsize=16, fontweight="bold", y=0.99)
 
     fig_effects.text(
         0.5,
@@ -12365,438 +7803,161 @@ def plot_long_biological_effects(
         alpha=0.65,
     )
 
-    fig_effects.tight_layout(
-        rect=[
-            0.02,
-            0.04,
-            0.98,
-            0.94,
-        ]
-    )
+    fig_effects.tight_layout(rect=[0.02, 0.04, 0.98, 0.94])
 
-    # ============================================================
-    # SAVE EFFECT FIGURE
-    # ============================================================
-
+    # Save effect figure
     if savepath is not None:
-
-        base, ext = os.path.splitext(
-            savepath
-        )
+        base, ext = os.path.splitext(savepath)
 
         if ext == "":
             ext = ".png"
 
         fig_effects.savefig(
-            (
-                f"{base}_"
-                f"biological_effects"
-                f"{ext}"
-            ),
+            f"{base}_biological_effects{ext}",
             dpi=300,
             bbox_inches="tight",
             facecolor="white",
         )
 
-    # ============================================================
-    # REPORT EFFECT FIGURE
-    # ============================================================
-
-    effects_caption = (
-        "Biological fixed-effect estimates across Features"
-    )
+    # Report effect figure
+    effects_caption = "Biological fixed-effect estimates across Features"
 
     if rep is not None:
+        rep.log_plot(fig_effects, caption=effects_caption)
 
-        rep.log_plot(
-            fig_effects,
-            caption=effects_caption,
-        )
-
-    figs.append(
-        (
-            effects_caption,
-            fig_effects,
-        )
-    )
+    figs.append((effects_caption, fig_effects))
 
     if show:
-
         plt.show()
 
-    # ============================================================
-    # TOP FEATURE DATAFRAME
-    # ============================================================
-
+    # Top Feature dataframe
     top_idps_df = pd.DataFrame(
         top_idp_rows,
-        columns=[
-            "Covariate",
-            "Feature",
-            "|beta|",
-        ],
+        columns=["Covariate", "Feature", "|beta|"],
     )
 
-    # ------------------------------------------------------------
     # Preserve covariate order and descending |beta|
-    # ------------------------------------------------------------
-
     if not top_idps_df.empty:
-
-        top_idps_df[
-            "Covariate"
-        ] = pd.Categorical(
-            top_idps_df[
-                "Covariate"
-            ],
+        top_idps_df["Covariate"] = pd.Categorical(
+            top_idps_df["Covariate"],
             categories=valid_covariates,
             ordered=True,
         )
 
-        top_idps_df = (
-            top_idps_df
-            .sort_values(
-                [
-                    "Covariate",
-                    "|beta|",
-                ],
-                ascending=[
-                    True,
-                    False,
-                ],
-                kind="stable",
-            )
-            .reset_index(
-                drop=True
-            )
-        )
+        top_idps_df = top_idps_df.sort_values(
+            ["Covariate", "|beta|"],
+            ascending=[True, False],
+            kind="stable",
+        ).reset_index(drop=True)
 
-        top_idps_df[
-            "Covariate"
-        ] = (
-            top_idps_df[
-                "Covariate"
-            ]
-            .astype(str)
-        )
+        top_idps_df["Covariate"] = top_idps_df["Covariate"].astype(str)
 
-    # ============================================================
-    # FIGURE 2
-    #
-    # LEFT:
-    #   Proportion of significant Features
-    #
-    # RIGHT:
-    #   Top-Feature table
-    # ============================================================
-
-    fig_summary, (
-        ax_sig,
-        ax_table,
-    ) = plt.subplots(
+    # Figure 2
+    # Left: proportion of significant Features
+    # Right: top-Feature table
+    fig_summary, (ax_sig, ax_table) = plt.subplots(
         1,
         2,
-        figsize=(
-            16,
-            max(
-                5.5,
-                0.42
-                * len(
-                    top_idps_df
-                )
-                + 2.5,
-            ),
-        ),
-        gridspec_kw={
-            "width_ratios": [
-                0.85,
-                1.55,
-            ]
-        },
+        figsize=(16, max(5.5, 0.42 * len(top_idps_df) + 2.5)),
+        gridspec_kw={"width_ratios": [0.85, 1.55]},
         facecolor="white",
     )
 
-    # ============================================================
-    # LEFT PANEL
-    #
-    # HORIZONTAL PROPORTION PLOT
-    # ============================================================
-
+    # Left panel: horizontal proportion plot
     sig_covariates = []
-
     sig_proportions = []
-
     sig_counts = []
-
     sig_totals = []
 
     for covariate in valid_covariates:
+        result = covariate_results[covariate]
 
-        result = covariate_results[
-            covariate
-        ]
+        sig_covariates.append(covariate)
+        sig_proportions.append(result["prop_significant"])
+        sig_counts.append(result["n_significant"])
+        sig_totals.append(result["n_valid"])
 
-        sig_covariates.append(
-            covariate
-        )
-
-        sig_proportions.append(
-            result[
-                "prop_significant"
-            ]
-        )
-
-        sig_counts.append(
-            result[
-                "n_significant"
-            ]
-        )
-
-        sig_totals.append(
-            result[
-                "n_valid"
-            ]
-        )
-
-    # ------------------------------------------------------------
     # Reverse so first covariate appears at top
-    # ------------------------------------------------------------
+    plot_covariates = sig_covariates[::-1]
+    plot_proportions = np.asarray(sig_proportions[::-1], dtype=float)
+    plot_counts = sig_counts[::-1]
+    plot_totals = sig_totals[::-1]
 
-    plot_covariates = (
-        sig_covariates[
-            ::-1
-        ]
-    )
+    y_positions = np.arange(len(plot_covariates))
 
-    plot_proportions = np.asarray(
-        sig_proportions[
-            ::-1
-        ],
-        dtype=float,
-    )
+    bars = ax_sig.barh(y_positions, plot_proportions, height=0.58, alpha=0.75)
 
-    plot_counts = (
-        sig_counts[
-            ::-1
-        ]
-    )
-
-    plot_totals = (
-        sig_totals[
-            ::-1
-        ]
-    )
-
-    y_positions = np.arange(
-        len(
-            plot_covariates
-        )
-    )
-
-    bars = ax_sig.barh(
-        y_positions,
-        plot_proportions,
-        height=0.58,
-        alpha=0.75,
-    )
-
-    # ------------------------------------------------------------
     # Bar labels
-    # ------------------------------------------------------------
-
-    for (
-        bar,
-        n_sig,
-        n_total,
-        proportion,
-    ) in zip(
+    for bar, n_sig, n_total, proportion in zip(
         bars,
         plot_counts,
         plot_totals,
         plot_proportions,
     ):
-
         ax_sig.text(
-            bar.get_width()
-            + 0.015,
-            bar.get_y()
-            + bar.get_height()
-            / 2.0,
-            (
-                f"{n_sig}/{n_total} "
-                f"("
-                f"{100 * proportion:.1f}%"
-                f")"
-            ),
+            bar.get_width() + 0.015,
+            bar.get_y() + bar.get_height() / 2.0,
+            f"{n_sig}/{n_total} ({100 * proportion:.1f}%)",
             ha="left",
             va="center",
             fontsize=9,
         )
 
-    # ------------------------------------------------------------
     # Axes
-    # ------------------------------------------------------------
-
-    ax_sig.set_yticks(
-        y_positions
-    )
-
-    ax_sig.set_yticklabels(
-        [
-            str(
-                covariate
-            )
-            for covariate in plot_covariates
-        ],
-        fontsize=10,
-    )
-
-    ax_sig.set_xlabel(
-        "Proportion of significant Features"
-    )
-
-    ax_sig.set_ylabel(
-        "Biological covariate"
-    )
-
-    ax_sig.set_xlim(
-        0,
-        1.18,
-    )
-
-    ax_sig.grid(
-        axis="x",
-        alpha=0.20,
-    )
-
-    ax_sig.spines[
-        "top"
-    ].set_visible(
-        False
-    )
-
-    ax_sig.spines[
-        "right"
-    ].set_visible(
-        False
-    )
+    ax_sig.set_yticks(y_positions)
+    ax_sig.set_yticklabels([str(c) for c in plot_covariates], fontsize=10)
+    ax_sig.set_xlabel("Proportion of significant Features")
+    ax_sig.set_ylabel("Biological covariate")
+    ax_sig.set_xlim(0, 1.18)
+    ax_sig.grid(axis="x", alpha=0.20)
+    ax_sig.spines["top"].set_visible(False)
+    ax_sig.spines["right"].set_visible(False)
 
     if plot_fdr:
-
-        sig_panel_title = (
-            "Significant Features\n"
-            "(FDR-corrected)"
-        )
-
+        sig_panel_title = "Significant Features\n(FDR-corrected)"
     else:
+        sig_panel_title = "Significant Features"
 
-        sig_panel_title = (
-            "Significant Features"
-        )
+    ax_sig.set_title(sig_panel_title, fontsize=13, fontweight="bold", pad=12)
 
-    ax_sig.set_title(
-        sig_panel_title,
-        fontsize=13,
-        fontweight="bold",
-        pad=12,
-    )
-
-    # ============================================================
-    # RIGHT PANEL
-    #
-    # TOP-FEATURE TABLE
-    # ============================================================
-
-    ax_table.axis(
-        "off"
-    )
+    # Right panel: top-Feature table
+    ax_table.axis("off")
 
     if not top_idps_df.empty:
+        table_display = top_idps_df.copy()
 
-        table_display = (
-            top_idps_df
-            .copy()
-        )
-
-        table_display[
-            "|beta|"
-        ] = table_display[
-            "|beta|"
-        ].map(
-            lambda value:
-                f"{value:.4g}"
+        table_display["|beta|"] = table_display["|beta|"].map(
+            lambda value: f"{value:.4g}"
         )
 
         table = ax_table.table(
-            cellText=(
-                table_display[
-                    [
-                        "Covariate",
-                        "Feature",
-                        "|beta|",
-                    ]
-                ]
-                .values
-            ),
-            colLabels=[
-                "Covariate",
-                "Feature",
-                r"$|\beta|$",
-            ],
+            cellText=table_display[["Covariate", "Feature", "|beta|"]].values,
+            colLabels=["Covariate", "Feature", r"$|\beta|$"],
             cellLoc="left",
             colLoc="left",
             loc="center",
-            colWidths=[
-                0.18,
-                0.64,
-                0.18,
-            ],
+            colWidths=[0.18, 0.64, 0.18],
         )
 
-        table.auto_set_font_size(
-            False
-        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(8.5)
+        table.scale(1.0, 1.30)
 
-        table.set_fontsize(
-            8.5
-        )
-
-        table.scale(
-            1.0,
-            1.30,
-        )
-
-        # --------------------------------------------------------
         # Header formatting
-        # --------------------------------------------------------
-
-        for (
-            row_index,
-            col_index,
-        ), cell in table.get_celld().items():
-
-            cell.set_linewidth(
-                0.4
-            )
+        for (row_index, col_index), cell in table.get_celld().items():
+            cell.set_linewidth(0.4)
 
             if row_index == 0:
-
-                cell.set_text_props(
-                    weight="bold"
-                )
+                cell.set_text_props(weight="bold")
 
         ax_table.set_title(
-            (
-                f"Top {top_n} Features by "
-                r"$|\beta|$"
-            ),
+            f"Top {top_n} Features by " r"$|\beta|$",
             fontsize=13,
             fontweight="bold",
             pad=12,
         )
 
     else:
-
         ax_table.text(
             0.5,
             0.5,
@@ -12805,10 +7966,7 @@ def plot_long_biological_effects(
             va="center",
         )
 
-    # ============================================================
-    # SUMMARY FIGURE TITLE
-    # ============================================================
-
+    # Summary figure title
     fig_summary.suptitle(
         "Biological association summary",
         fontsize=16,
@@ -12816,254 +7974,112 @@ def plot_long_biological_effects(
         y=0.99,
     )
 
-    """ fig_summary.text(
-        0.5,
-        0.015,
-        (
-            f"Top Features are ranked separately within each "
-            f"covariate by absolute effect size."
-        ),
-        ha="center",
-        fontsize=8.5,
-        alpha=0.65,
-    ) """
+    # fig_summary.text(
+    #     0.5,
+    #     0.015,
+    #     (
+    #         f"Top Features are ranked separately within each "
+    #         f"covariate by absolute effect size."
+    #     ),
+    #     ha="center",
+    #     fontsize=8.5,
+    #     alpha=0.65,
+    # )
 
-    fig_summary.tight_layout(
-        rect=[
-            0.02,
-            0.04,
-            0.98,
-            0.94,
-        ]
-    )
+    fig_summary.tight_layout(rect=[0.02, 0.04, 0.98, 0.94])
 
-    # ============================================================
-    # SAVE SUMMARY FIGURE
-    # ============================================================
-
+    # Save summary figure
     if savepath is not None:
-
-        base, ext = os.path.splitext(
-            savepath
-        )
+        base, ext = os.path.splitext(savepath)
 
         if ext == "":
             ext = ".png"
 
         fig_summary.savefig(
-            (
-                f"{base}_"
-                f"biological_summary"
-                f"{ext}"
-            ),
+            f"{base}_biological_summary{ext}",
             dpi=300,
             bbox_inches="tight",
             facecolor="white",
         )
 
-    # ============================================================
-    # REPORT SUMMARY FIGURE
-    # ============================================================
-
+    # Report summary figure
     summary_caption = (
-        "Biological association summary: "
-        "significant Features and strongest effects"
+        "Biological association summary: significant Features and strongest effects"
     )
 
     if rep is not None:
+        rep.log_plot(fig_summary, caption=summary_caption)
 
-        rep.log_plot(
-            fig_summary,
-            caption=summary_caption,
-        )
-
-    figs.append(
-        (
-            summary_caption,
-            fig_summary,
-        )
-    )
+    figs.append((summary_caption, fig_summary))
 
     if show:
-
         plt.show()
 
-    # ============================================================
-    # SUMMARY DATAFRAME
-    # ============================================================
+    # Summary dataframe
+    summary_df = pd.DataFrame(summary_rows)
 
-    summary_df = pd.DataFrame(
-        summary_rows
-    )
-
-    # ============================================================
-    # FORMATTED SUMMARY COLUMNS
-    #
-    # Median -> Median [Q1, Q3]
-    # Mean   -> Mean ± SD
-    # ============================================================
-
+    # Formatted summary columns
+    # Median -> Median [Q1, Q3]; Mean -> Mean ± SD
     if not summary_df.empty:
-
-        summary_df[
-            "Median estimate [IQR]"
-        ] = summary_df.apply(
-
+        summary_df["Median estimate [IQR]"] = summary_df.apply(
             lambda row: (
-
                 f"{row['Median estimate']:.3f} "
-                f"["
-                f"{row['Q1 estimate']:.3f}, "
-                f"{row['Q3 estimate']:.3f}"
-                f"]"
-
+                f"[{row['Q1 estimate']:.3f}, {row['Q3 estimate']:.3f}]"
                 if (
-                    pd.notna(
-                        row[
-                            "Median estimate"
-                        ]
-                    )
-                    and
-                    pd.notna(
-                        row[
-                            "Q1 estimate"
-                        ]
-                    )
-                    and
-                    pd.notna(
-                        row[
-                            "Q3 estimate"
-                        ]
-                    )
+                    pd.notna(row["Median estimate"])
+                    and pd.notna(row["Q1 estimate"])
+                    and pd.notna(row["Q3 estimate"])
                 )
-
                 else "NA"
             ),
-
             axis=1,
         )
 
-        summary_df[
-            "Mean estimate ± SD"
-        ] = summary_df.apply(
-
+        summary_df["Mean estimate ± SD"] = summary_df.apply(
             lambda row: (
-
-                f"{row['Mean estimate']:.3f} "
-                f"± "
-                f"{row['SD estimate']:.3f}"
-
-                if (
-                    pd.notna(
-                        row[
-                            "Mean estimate"
-                        ]
-                    )
-                    and
-                    pd.notna(
-                        row[
-                            "SD estimate"
-                        ]
-                    )
-                )
-
+                f"{row['Mean estimate']:.3f} ± {row['SD estimate']:.3f}"
+                if (pd.notna(row["Mean estimate"]) and pd.notna(row["SD estimate"]))
                 else "NA"
             ),
-
             axis=1,
         )
 
-        summary_df[
-            "Significant Features"
-        ] = summary_df.apply(
-
+        summary_df["Significant Features"] = summary_df.apply(
             lambda row: (
-
                 f"{int(row['N significant Features'])}"
                 f"/"
                 f"{int(row['N valid estimates'])}"
-                f" "
-                f"("
-                f"{100 * row['Proportion significant']:.1f}%"
-                f")"
-
-                if (
-                    row[
-                        "N valid estimates"
-                    ] > 0
-                )
-
+                f" ({100 * row['Proportion significant']:.1f}%)"
+                if row["N valid estimates"] > 0
                 else "NA"
             ),
-
             axis=1,
         )
 
-    # ============================================================
-    # PRINT SUMMARY
-    # ============================================================
-
+    # Print summary
     if not summary_df.empty:
-
-        display_summary = (
-            summary_df[
-                [
-                    "Covariate",
-                    "Median estimate [IQR]",
-                    "Mean estimate ± SD",
-                    "Significant Features",
-                    "N Features",
-                    "Correction",
-                ]
+        display_summary = summary_df[
+            [
+                "Covariate",
+                "Median estimate [IQR]",
+                "Mean estimate ± SD",
+                "Significant Features",
+                "N Features",
+                "Correction",
             ]
-            .copy()
-        )
+        ].copy()
 
-        print(
-            "\n" + "=" * 70
-        )
+        print("\n" + "=" * 70)
+        print("BIOLOGICAL FIXED-EFFECT SUMMARY")
+        print("=" * 70)
+        print(display_summary.to_string(index=False))
 
-        print(
-            "BIOLOGICAL FIXED-EFFECT SUMMARY"
-        )
-
-        print(
-            "=" * 70
-        )
-
-        print(
-            display_summary.to_string(
-                index=False
-            )
-        )
-
-    # ============================================================
-    # PRINT TOP FEATURES
-    # ============================================================
-
+    # Print top Features
     if not top_idps_df.empty:
-
-        print(
-            "\n" + "=" * 70
-        )
-
-        print(
-            f"TOP {top_n} FEATURES BY ABSOLUTE EFFECT SIZE"
-        )
-
-        print(
-            "=" * 70
-        )
-
-        print(
-            top_idps_df.to_string(
-                index=False
-            )
-        )
-
-    # ============================================================
-    # RETURN
-    # ============================================================
+        print("\n" + "=" * 70)
+        print(f"TOP {top_n} FEATURES BY ABSOLUTE EFFECT SIZE")
+        print("=" * 70)
+        print(top_idps_df.to_string(index=False))
 
     return (
         figs,
@@ -13165,10 +8181,7 @@ def plot_AddMultEffects(
         Combined figure.
     """
 
-    # ============================================================
-    # CONSTANTS
-    # ============================================================
-
+    # Constants
     tiny = 1e-300
 
     # Maximum -log10(p) shown explicitly.
@@ -13180,183 +8193,78 @@ def plot_AddMultEffects(
     axis_size = 10
     tick_size = 8
 
-    # ============================================================
-    # VALIDATION
-    # ============================================================
+    # Validation
+    if not (0 < p_thr < 1):
+        raise ValueError("p_thr must be between 0 and 1.")
 
-    if not (
-        0 < p_thr < 1
-    ):
-        raise ValueError(
-            "p_thr must be between 0 and 1."
-        )
-
-    # ============================================================
-    # NORMALISE INPUT
-    # ============================================================
-
-    if isinstance(
-        dfs,
-        pd.DataFrame,
-    ):
-
-        dfs = [
-            dfs
-        ]
-
+    # Normalise input
+    if isinstance(dfs, pd.DataFrame):
+        dfs = [dfs]
     else:
-
         try:
-
-            dfs = list(
-                dfs
-            )
-
+            dfs = list(dfs)
         except TypeError:
-
             raise TypeError(
-                "dfs must be a pandas DataFrame or a "
-                "sequence of pandas DataFrames."
+                "dfs must be a pandas DataFrame or a sequence of pandas DataFrames."
             )
 
     if len(dfs) == 0:
+        raise ValueError("At least one DataFrame must be supplied.")
 
-        raise ValueError(
-            "At least one DataFrame must be supplied."
-        )
+    n_datasets = len(dfs)
 
-    n_datasets = len(
-        dfs
-    )
-
-    # ============================================================
-    # LABELS
-    # ============================================================
-
+    # Labels
     if labels is None:
-
         if n_datasets == 1:
-
-            labels = [
-                "Dataset"
-            ]
-
+            labels = ["Dataset"]
         else:
-
-            labels = [
-                f"Dataset {i + 1}"
-                for i in range(
-                    n_datasets
-                )
-            ]
-
+            labels = [f"Dataset {i + 1}" for i in range(n_datasets)]
     else:
-
-        labels = list(
-            labels
-        )
+        labels = list(labels)
 
     if len(labels) != n_datasets:
+        raise ValueError("labels must have the same length as dfs.")
 
-        raise ValueError(
-            "labels must have the same length as dfs."
-        )
-
-    # ============================================================
-    # CLEAN DATA
-    # ============================================================
-
+    # Clean data
     clean_dfs = []
 
-    for i, df in enumerate(
-        dfs
-    ):
+    for i, df in enumerate(dfs):
+        if not isinstance(df, pd.DataFrame):
+            raise TypeError(f"dfs[{i}] must be a pandas DataFrame.")
 
-        if not isinstance(
-            df,
-            pd.DataFrame,
-        ):
+        required = [feature_col, p_col]
 
-            raise TypeError(
-                f"dfs[{i}] must be a pandas DataFrame."
-            )
-
-        required = [
-            feature_col,
-            p_col,
-        ]
-
-        missing = [
-            col
-            for col in required
-            if col not in df.columns
-        ]
+        missing = [col for col in required if col not in df.columns]
 
         if missing:
-
             raise ValueError(
-                f"DataFrame {i + 1} is missing columns: "
-                + ", ".join(
-                    missing
-                )
+                f"DataFrame {i + 1} is missing columns: " + ", ".join(missing)
             )
 
-        tmp = df[
-            [
-                feature_col,
-                p_col,
-            ]
-        ].copy()
+        tmp = df[[feature_col, p_col]].copy()
 
-        tmp[feature_col] = (
-            tmp[feature_col]
-            .astype(str)
-            .str.strip()
-        )
+        tmp[feature_col] = tmp[feature_col].astype(str).str.strip()
 
-        tmp[p_col] = pd.to_numeric(
-            tmp[p_col],
-            errors="coerce",
-        )
+        tmp[p_col] = pd.to_numeric(tmp[p_col], errors="coerce")
 
         # Keep first feature occurrence.
-        tmp = tmp.drop_duplicates(
-            subset=feature_col,
-            keep="first",
-        )
+        tmp = tmp.drop_duplicates(subset=feature_col, keep="first")
 
-        clean_dfs.append(
-            tmp
-        )
+        clean_dfs.append(tmp)
 
-    # ============================================================
-    # PRESERVE FEATURE ORDER
-    # ============================================================
-
+    # Preserve feature order
     all_features = list(
         dict.fromkeys(
-            feature
-            for df in clean_dfs
-            for feature in df[
-                feature_col
-            ].tolist()
+            feature for df in clean_dfs for feature in df[feature_col].tolist()
         )
     )
 
-    n_features = len(
-        all_features
-    )
+    n_features = len(all_features)
 
     if n_features == 0:
+        raise ValueError("No Features were found.")
 
-        raise ValueError(
-            "No Features were found."
-        )
-
-    # ============================================================
-    # P-VALUE MATRIX
-    # ============================================================
-
+    # P-value matrix
     pmat = pd.DataFrame(
         np.nan,
         index=all_features,
@@ -13364,60 +8272,24 @@ def plot_AddMultEffects(
         dtype=float,
     )
 
-    for df, label in zip(
-        clean_dfs,
-        labels,
-    ):
+    for df, label in zip(clean_dfs, labels):
+        series = df.set_index(feature_col)[p_col].astype(float)
 
-        series = (
-            df
-            .set_index(
-                feature_col
-            )[p_col]
-            .astype(float)
-        )
+        pmat.loc[series.index, label] = series
 
-        pmat.loc[
-            series.index,
-            label
-        ] = series
-
-    # ============================================================
-    # SUMMARY STATISTICS
-    #
-    # Only statistics retained for display:
-    #
-    #   N Features
-    #   Significant Features
-    #   Proportion significant
-    # ============================================================
-
+    # Summary statistics
+    # Only retained for display: N Features, significant Features,
+    # proportion significant.
     summaries = {}
 
     for label in labels:
+        values = pmat[label].dropna().to_numpy(dtype=float)
 
-        values = (
-            pmat[label]
-            .dropna()
-            .to_numpy(
-                dtype=float
-            )
-        )
+        values = values[np.isfinite(values)]
 
-        values = values[
-            np.isfinite(
-                values
-            )
-        ]
-
-        values = np.clip(
-            values,
-            tiny,
-            1.0,
-        )
+        values = np.clip(values, tiny, 1.0)
 
         if len(values) == 0:
-
             summaries[label] = {
                 "n": 0,
                 "n_sig": 0,
@@ -13425,179 +8297,64 @@ def plot_AddMultEffects(
             }
 
         else:
-
             summaries[label] = {
-                "n": int(
-                    len(values)
-                ),
-
-                "n_sig": int(
-                    np.sum(
-                        values < p_thr
-                    )
-                ),
-
-                "pct_sig": float(
-                    100
-                    * np.mean(
-                        values < p_thr
-                    )
-                ),
+                "n": int(len(values)),
+                "n_sig": int(np.sum(values < p_thr)),
+                "pct_sig": float(100 * np.mean(values < p_thr)),
             }
 
-    # ============================================================
-    # COMMON AXIS STYLE
-    # ============================================================
+    # Common axis style
+    def style_axis(ax):
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
-    def style_axis(
-        ax,
-    ):
+        ax.grid(axis="y", alpha=0.18, linewidth=0.8)
 
-        ax.spines[
-            "top"
-        ].set_visible(False)
+        ax.tick_params(axis="both", labelsize=tick_size)
 
-        ax.spines[
-            "right"
-        ].set_visible(False)
+    # Panel A
+    # Reversed orientation: x = feature index, y = -log10(p)
+    def draw_panel_A(ax, standalone=False):
+        x = np.arange(1, n_features + 1, dtype=float)
 
-        ax.grid(
-            axis="y",
-            alpha=0.18,
-            linewidth=0.8,
-        )
-
-        ax.tick_params(
-            axis="both",
-            labelsize=tick_size,
-        )
-
-    # ============================================================
-    # PANEL A
-    #
-    # REVERSED ORIENTATION:
-    #
-    # X = FEATURE INDEX
-    # Y = -log10(p)
-    # ============================================================
-
-    def draw_panel_A(
-        ax,
-        standalone=False,
-    ):
-
-        x = np.arange(
-            1,
-            n_features + 1,
-            dtype=float,
-        )
-
-        # --------------------------------------------------------
         # Horizontal offsets for multiple datasets.
-        # --------------------------------------------------------
-
         if n_datasets == 1:
-
-            offsets = [
-                0.0
-            ]
-
+            offsets = [0.0]
         elif n_datasets == 2:
-
-            offsets = [
-                -0.16,
-                0.16,
-            ]
-
+            offsets = [-0.16, 0.16]
         elif n_datasets == 3:
-
-            offsets = [
-                -0.22,
-                0.0,
-                0.22,
-            ]
-
+            offsets = [-0.22, 0.0, 0.22]
         else:
+            offsets = np.linspace(-0.30, 0.30, n_datasets)
 
-            offsets = np.linspace(
-                -0.30,
-                0.30,
-                n_datasets,
-            )
-
-        # --------------------------------------------------------
         # Plot each dataset.
-        # --------------------------------------------------------
+        for label, offset in zip(labels, offsets):
+            raw_p = pmat[label].to_numpy(dtype=float)
 
-        for label, offset in zip(
-            labels,
-            offsets,
-        ):
+            valid = np.isfinite(raw_p)
 
-            raw_p = (
-                pmat[label]
-                .to_numpy(
-                    dtype=float
-                )
-            )
-
-            valid = np.isfinite(
-                raw_p
-            )
-
-            if not np.any(
-                valid
-            ):
-
+            if not np.any(valid):
                 continue
 
-            safe_p = np.clip(
-                raw_p[valid],
-                tiny,
-                1.0,
-            )
+            safe_p = np.clip(raw_p[valid], tiny, 1.0)
 
-            logp = (
-                -np.log10(
-                    safe_p
-                )
-            )
+            logp = -np.log10(safe_p)
 
-            # ----------------------------------------------------
             # Capped values.
-            # ----------------------------------------------------
+            capped = logp > display_logp_max
 
-            capped = (
-                logp
-                > display_logp_max
-            )
+            displayed = np.minimum(logp, display_logp_max)
 
-            displayed = np.minimum(
-                logp,
-                display_logp_max,
-            )
+            x_valid = x[valid] + offset
 
-            x_valid = (
-                x[valid]
-                + offset
-            )
-
-            # ----------------------------------------------------
             # Normal points.
-            # ----------------------------------------------------
-
             normal = ~capped
 
             if np.any(normal):
-
                 ax.scatter(
                     x_valid[normal],
                     displayed[normal],
-                    s=(
-                        24
-                        if n_features < 500
-                        else 10
-                    ),
+                    s=(24 if n_features < 500 else 10),
                     alpha=0.82,
                     edgecolors="white",
                     linewidths=0.40,
@@ -13605,41 +8362,22 @@ def plot_AddMultEffects(
                     zorder=3,
                 )
 
-            # ----------------------------------------------------
             # Capped extreme values.
-            # ----------------------------------------------------
-
             if np.any(capped):
-
                 ax.scatter(
                     x_valid[capped],
                     displayed[capped],
-                    s=(
-                        36
-                        if n_features < 500
-                        else 15
-                    ),
+                    s=(36 if n_features < 500 else 15),
                     marker="^",
                     alpha=0.90,
                     edgecolors="white",
                     linewidths=0.45,
-                    label=(
-                        f"{label} (>10)"
-                        if n_datasets == 1
-                        else None
-                    ),
+                    label=(f"{label} (>10)" if n_datasets == 1 else None),
                     zorder=4,
                 )
 
-        # ========================================================
-        # SIGNIFICANCE THRESHOLD
-        # ========================================================
-
-        threshold_logp = (
-            -np.log10(
-                p_thr
-            )
-        )
+        # Significance threshold
+        threshold_logp = -np.log10(p_thr)
 
         ax.axhline(
             threshold_logp,
@@ -13653,170 +8391,70 @@ def plot_AddMultEffects(
             0.985,
             threshold_logp,
             f"p = {p_thr:g}",
-            transform=(
-                ax.get_yaxis_transform()
-            ),
+            transform=ax.get_yaxis_transform(),
             ha="right",
             va="bottom",
             fontsize=8,
             alpha=0.80,
         )
 
-        # ========================================================
-        # X AXIS — FEATURE INDEX
-        # ========================================================
-
-        ax.set_xlim(
-            0.5,
-            n_features + 0.5,
-        )
+        # X axis: feature index
+        ax.set_xlim(0.5, n_features + 0.5)
 
         if n_features <= 20:
-
             x_step = 1
-
         elif n_features <= 50:
-
             x_step = 5
-
         elif n_features <= 100:
-
             x_step = 10
-
         elif n_features <= 250:
-
             x_step = 25
-
         elif n_features <= 500:
-
             x_step = 50
-
         elif n_features <= 1000:
-
             x_step = 100
-
         else:
+            x_step = max(1, int(np.ceil(n_features / 10)))
 
-            x_step = max(
-                1,
-                int(
-                    np.ceil(
-                        n_features / 10
-                    )
-                ),
-            )
+        x_ticks = np.arange(1, n_features + 1, x_step)
 
-        x_ticks = np.arange(
-            1,
-            n_features + 1,
-            x_step,
-        )
+        if len(x_ticks) == 0 or x_ticks[-1] != n_features:
+            x_ticks = np.append(x_ticks, n_features)
 
-        if (
-            len(x_ticks) == 0
-            or x_ticks[-1]
-            != n_features
-        ):
+        x_ticks = np.unique(x_ticks)
 
-            x_ticks = np.append(
-                x_ticks,
-                n_features,
-            )
+        ax.set_xticks(x_ticks)
 
-        x_ticks = np.unique(
-            x_ticks
-        )
+        ax.set_xticklabels([str(int(v)) for v in x_ticks], fontsize=tick_size)
 
-        ax.set_xticks(
-            x_ticks
-        )
+        ax.set_xlabel("Feature index", fontsize=axis_size)
 
-        ax.set_xticklabels(
-            [
-                str(
-                    int(v)
-                )
-                for v in x_ticks
-            ],
-            fontsize=tick_size,
-        )
+        # Y axis: -log10(p)
+        ax.set_ylim(0, display_logp_max)
 
-        ax.set_xlabel(
-            "Feature index",
-            fontsize=axis_size,
-        )
+        y_ticks = np.array([0, 1, 2, 3, 5, 7, 10], dtype=float)
 
-        # ========================================================
-        # Y AXIS — -log10(p)
-        # ========================================================
+        ax.set_yticks(y_ticks)
 
-        ax.set_ylim(
-            0,
-            display_logp_max,
-        )
+        ax.set_yticklabels([f"{y:g}" for y in y_ticks], fontsize=tick_size)
 
-        y_ticks = np.array(
-            [
-                0,
-                1,
-                2,
-                3,
-                5,
-                7,
-                10,
-            ],
-            dtype=float,
-        )
+        ax.set_ylabel(r"$-\log_{10}(p)$", fontsize=axis_size)
 
-        ax.set_yticks(
-            y_ticks
-        )
-
-        ax.set_yticklabels(
-            [
-                f"{y:g}"
-                for y in y_ticks
-            ],
-            fontsize=tick_size,
-        )
-
-        ax.set_ylabel(
-            r"$-\log_{10}(p)$",
-            fontsize=axis_size,
-        )
-
-        # ========================================================
-        # TITLE
-        # ========================================================
-
+        # Title
         if standalone:
-
-            title = (
-                "Batch-effect significance across Features"
-            )
-
+            title = "Batch-effect significance across Features"
         else:
-
-            title = (
-                "Batch-effect significance across Features"
-            )
+            title = "Batch-effect significance across Features"
 
         ax.set_title(
             title,
             loc="left",
-            fontsize=(
-                14
-                if standalone
-                else title_size
-            ),
+            fontsize=(14 if standalone else title_size),
             fontweight="bold",
             pad=8,
         )
 
-        # ========================================================
-        # EXPLANATORY NOTE
-        # ========================================================
-
+        # Explanatory note
         ax.text(
             0.0,
             -0.20,
@@ -13832,118 +8470,55 @@ def plot_AddMultEffects(
             alpha=0.68,
         )
 
-        # ========================================================
-        # LEGEND
-        # ========================================================
-
+        # Legend
         if n_datasets > 1:
+            ax.legend(frameon=False, fontsize=tick_size, loc="upper right")
 
-            ax.legend(
-                frameon=False,
-                fontsize=tick_size,
-                loc="upper right",
-            )
+        style_axis(ax)
 
-        style_axis(
-            ax
-        )
-
-    # ============================================================
-    # PANEL B — SUMMARY TABLE
-    # ============================================================
-
-    def draw_panel_B(
-        ax,
-        standalone=False,
-    ):
-
-        ax.axis(
-            "off"
-        )
+    # Panel B: summary table
+    def draw_panel_B(ax, standalone=False):
+        ax.axis("off")
 
         if standalone:
-
-            title = (
-                "Summary across Features"
-            )
-
+            title = "Summary across Features"
         else:
-
-            title = (
-                "Summary across Features"
-            )
+            title = "Summary across Features"
 
         ax.set_title(
             title,
             loc="left",
-            fontsize=(
-                14
-                if standalone
-                else title_size
-            ),
+            fontsize=(14 if standalone else title_size),
             fontweight="bold",
             pad=8,
         )
 
-        # --------------------------------------------------------
         # Single dataset
-        # --------------------------------------------------------
-
         if n_datasets == 1:
-
             label = labels[0]
 
-            s = summaries[
-                label
-            ]
+            s = summaries[label]
 
             rows = [
-                [
-                    "N Features",
-                    f"{s['n']:,}",
-                ],
-                [
-                    f"Significant Features (p < {p_thr:g})",
-                    f"{s['n_sig']:,}",
-                ],
+                ["N Features", f"{s['n']:,}"],
+                [f"Significant Features (p < {p_thr:g})", f"{s['n_sig']:,}"],
                 [
                     "Proportion significant",
-                    (
-                        f"{s['pct_sig']:.1f}%"
-                        if np.isfinite(
-                            s["pct_sig"]
-                        )
-                        else "NA"
-                    ),
+                    (f"{s['pct_sig']:.1f}%" if np.isfinite(s["pct_sig"]) else "NA"),
                 ],
             ]
 
             table = ax.table(
                 cellText=rows,
-                colLabels=[
-                    "Measure",
-                    label,
-                ],
+                colLabels=["Measure", label],
                 cellLoc="left",
                 colLoc="left",
-                bbox=[
-                    0.0,
-                    0.20,
-                    1.0,
-                    0.62,
-                ],
-                colWidths=[
-                    0.72,
-                    0.28,
-                ],
+                bbox=[0.0, 0.20, 1.0, 0.62],
+                colWidths=[0.72, 0.28],
             )
 
-        # --------------------------------------------------------
         # Multiple datasets
-        # --------------------------------------------------------
-
         else:
-
             measures = [
                 "N Features",
                 f"Significant Features (p < {p_thr:g})",
@@ -13953,127 +8528,58 @@ def plot_AddMultEffects(
             rows = []
 
             for measure in measures:
-
-                row = [
-                    measure
-                ]
+                row = [measure]
 
                 for label in labels:
-
-                    s = summaries[
-                        label
-                    ]
+                    s = summaries[label]
 
                     if measure == "N Features":
+                        value = f"{s['n']:,}"
 
-                        value = (
-                            f"{s['n']:,}"
-                        )
-
-                    elif measure.startswith(
-                        "Significant"
-                    ):
-
-                        value = (
-                            f"{s['n_sig']:,}"
-                        )
+                    elif measure.startswith("Significant"):
+                        value = f"{s['n_sig']:,}"
 
                     else:
-
                         value = (
-                            f"{s['pct_sig']:.1f}%"
-                            if np.isfinite(
-                                s["pct_sig"]
-                            )
-                            else "NA"
+                            f"{s['pct_sig']:.1f}%" if np.isfinite(s["pct_sig"]) else "NA"
                         )
 
-                    row.append(
-                        value
-                    )
+                    row.append(value)
 
-                rows.append(
-                    row
-                )
+                rows.append(row)
 
             table = ax.table(
                 cellText=rows,
-                colLabels=[
-                    "Measure",
-                    *labels,
-                ],
+                colLabels=["Measure", *labels],
                 cellLoc="left",
                 colLoc="left",
-                bbox=[
-                    0.0,
-                    0.20,
-                    1.0,
-                    0.62,
-                ],
+                bbox=[0.0, 0.20, 1.0, 0.62],
             )
 
-        # --------------------------------------------------------
         # Table styling
-        # --------------------------------------------------------
+        table.auto_set_font_size(False)
 
-        table.auto_set_font_size(
-            False
-        )
+        table.set_fontsize(8)
 
-        table.set_fontsize(
-            8
-        )
+        for (row_idx, col_idx), cell in table.get_celld().items():
+            cell.set_edgecolor("0.85")
 
-        for (
-            (row_idx, col_idx),
-            cell,
-        ) in table.get_celld().items():
-
-            cell.set_edgecolor(
-                "0.85"
-            )
-
-            cell.set_linewidth(
-                0.40
-            )
+            cell.set_linewidth(0.40)
 
             if row_idx == 0:
-
-                cell.set_text_props(
-                    weight="bold"
-                )
+                cell.set_text_props(weight="bold")
 
             if col_idx > 0:
+                cell.set_text_props(ha="right")
 
-                cell.set_text_props(
-                    ha="right"
-                )
+    # Figure size (does NOT scale with n_features)
+    fig = plt.figure(figsize=(figsize[0], figsize[1]), facecolor="white")
 
-    # ============================================================
-    # FIGURE SIZE
-    #
-    # Important: does NOT scale with n_features.
-    # ============================================================
-
-    fig = plt.figure(
-        figsize=(
-            figsize[0],
-            figsize[1],
-        ),
-        facecolor="white",
-    )
-
-    # ============================================================
-    # FIGURE LAYOUT
-    # ============================================================
-
+    # Figure layout
     outer = fig.add_gridspec(
         nrows=2,
         ncols=1,
-        height_ratios=[
-            3.0,
-            1.15,
-        ],
+        height_ratios=[3.0, 1.15],
         hspace=0.28,
         left=0.08,
         right=0.96,
@@ -14081,50 +8587,25 @@ def plot_AddMultEffects(
         bottom=0.11,
     )
 
-    # ============================================================
-    # PANEL A
-    # ============================================================
+    # Panel A
+    axA = fig.add_subplot(outer[0, 0])
 
-    axA = fig.add_subplot(
-        outer[0, 0]
-    )
+    draw_panel_A(axA, standalone=False)
 
-    draw_panel_A(
-        axA,
-        standalone=False,
-    )
+    # Panel B
+    axB = fig.add_subplot(outer[1, 0])
 
-    # ============================================================
-    # PANEL B
-    # ============================================================
+    draw_panel_B(axB, standalone=False)
 
-    axB = fig.add_subplot(
-        outer[1, 0]
-    )
-
-    draw_panel_B(
-        axB,
-        standalone=False,
-    )
-
-    # ============================================================
-    # MAIN TITLE
-    # ============================================================
-
+    # Main title
     fig.suptitle(
-        (
-            "Feature significance diagnostic"
-            f"  ({n_features:,} Features analysed)"
-        ),
+        f"Feature significance diagnostic  ({n_features:,} Features analysed)",
         fontsize=14.5,
         fontweight="bold",
         y=0.965,
     )
 
-    # ============================================================
-    # FOOTNOTE
-    # ============================================================
-
+    # Footnote
     fig.text(
         0.08,
         0.035,
@@ -14137,26 +8618,15 @@ def plot_AddMultEffects(
         alpha=0.65,
     )
 
-    # ============================================================
-    # SAVE
-    # ============================================================
-
+    # Save
     if savepath is not None:
-
-        base, ext = os.path.splitext(
-            savepath
-        )
+        base, ext = os.path.splitext(savepath)
 
         if ext == "":
             ext = ".png"
 
-        # --------------------------------------------------------
         # Combined
-        # --------------------------------------------------------
-
-        combined_path = (
-            f"{base}{ext}"
-        )
+        combined_path = f"{base}{ext}"
 
         fig.savefig(
             combined_path,
@@ -14165,31 +8635,12 @@ def plot_AddMultEffects(
             facecolor="white",
         )
 
-        # ========================================================
-        # STANDALONE A
-        # ========================================================
+        # Standalone A
+        fig_A = plt.figure(figsize=(11, 7), facecolor="white")
 
-        fig_A = plt.figure(
-            figsize=(
-                11,
-                7,
-            ),
-            facecolor="white",
-        )
+        ax_A = fig_A.add_axes([0.11, 0.17, 0.82, 0.70])
 
-        ax_A = fig_A.add_axes(
-            [
-                0.11,
-                0.17,
-                0.82,
-                0.70,
-            ]
-        )
-
-        draw_panel_A(
-            ax_A,
-            standalone=True,
-        )
+        draw_panel_A(ax_A, standalone=True)
 
         fig_A.text(
             0.11,
@@ -14209,35 +8660,14 @@ def plot_AddMultEffects(
             facecolor="white",
         )
 
-        plt.close(
-            fig_A
-        )
+        plt.close(fig_A)
 
-        # ========================================================
-        # STANDALONE B
-        # ========================================================
+        # Standalone B
+        fig_B = plt.figure(figsize=(7.5, 5.5), facecolor="white")
 
-        fig_B = plt.figure(
-            figsize=(
-                7.5,
-                5.5,
-            ),
-            facecolor="white",
-        )
+        ax_B = fig_B.add_axes([0.10, 0.13, 0.80, 0.75])
 
-        ax_B = fig_B.add_axes(
-            [
-                0.10,
-                0.13,
-                0.80,
-                0.75,
-            ]
-        )
-
-        draw_panel_B(
-            ax_B,
-            standalone=True,
-        )
+        draw_panel_B(ax_B, standalone=True)
 
         fig_B.savefig(
             f"{base}_B{ext}",
@@ -14246,39 +8676,18 @@ def plot_AddMultEffects(
             facecolor="white",
         )
 
-        plt.close(
-            fig_B
-        )
+        plt.close(fig_B)
 
-        print(
-            "\nSaved additive/multiplicative effect figures:"
-        )
+        print("\nSaved additive/multiplicative effect figures:")
+        print(f"  Combined : {combined_path}")
+        print(f"  Panel A  : {base}_A{ext}")
+        print(f"  Panel B  : {base}_B{ext}")
 
-        print(
-            f"  Combined : {combined_path}"
-        )
-
-        print(
-            f"  Panel A  : {base}_A{ext}"
-        )
-
-        print(
-            f"  Panel B  : {base}_B{ext}"
-        )
-
-    # ============================================================
-    # SHOW
-    # ============================================================
-
+    # Show
     if rep is not None:
-
-        rep.log_plot(
-            fig,
-            "Batch effects",
-        )
+        rep.log_plot(fig, "Batch effects")
 
     if show:
-
         plt.show()
 
     return fig
@@ -14524,61 +8933,38 @@ from scipy.stats import norm
 # ROBUST Z-SCORE
 # ============================================================
 
-def _robust_zscore(
-    values: np.ndarray,
-) -> np.ndarray:
+def _robust_zscore(values: np.ndarray) -> np.ndarray:
     """
     Robust standardisation using median and MAD.
 
     z = (x - median) / (1.4826 * MAD)
     """
 
-    values = np.asarray(
-        values,
-        dtype=float,
-    )
+    values = np.asarray(values, dtype=float)
 
-    out = np.full(
-        values.shape,
-        np.nan,
-        dtype=float,
-    )
+    out = np.full(values.shape, np.nan, dtype=float)
 
     valid = np.isfinite(values)
 
     if not valid.any():
         return out
 
-    median = np.median(
-        values[valid]
-    )
+    median = np.median(values[valid])
 
-    mad = np.median(
-        np.abs(
-            values[valid] - median
-        )
-    )
+    mad = np.median(np.abs(values[valid] - median))
 
     mad_scaled = 1.4826 * mad
 
-    if (
-        not np.isfinite(mad_scaled)
-        or mad_scaled == 0
-    ):
+    if not np.isfinite(mad_scaled) or mad_scaled == 0:
         out[valid] = 0.0
         return out
 
-    out[valid] = (
-        values[valid] - median
-    ) / mad_scaled
+    out[valid] = (values[valid] - median) / mad_scaled
 
     return out
 
 
-# ============================================================
-# PREPARE INPUT
-# ============================================================
-
+# Prepare input
 def _prepare_longitudinal_input(
     data: Union[pd.DataFrame, np.ndarray],
     batch: Sequence,
@@ -14590,163 +8976,84 @@ def _prepare_longitudinal_input(
     """
 
     if isinstance(data, pd.DataFrame):
-
         df = data.copy()
 
         n_samples = len(df)
 
         if batch is None:
-
             if "batch" not in df.columns:
                 raise ValueError(
                     "batch must be supplied when the DataFrame "
                     "does not contain a 'batch' column."
                 )
 
-            batch_arr = (
-                df["batch"]
-                .astype(str)
-                .to_numpy()
-            )
+            batch_arr = df["batch"].astype(str).to_numpy()
 
         else:
-
-            batch_arr = np.asarray(
-                batch
-            ).astype(str)
+            batch_arr = np.asarray(batch).astype(str)
 
         if subject is None:
-
             if "subject" not in df.columns:
                 raise ValueError(
                     "subject must be supplied when the DataFrame "
                     "does not contain a 'subject' column."
                 )
 
-            subject_arr = (
-                df["subject"]
-                .astype(str)
-                .to_numpy()
-            )
+            subject_arr = df["subject"].astype(str).to_numpy()
 
         else:
-
-            subject_arr = np.asarray(
-                subject
-            ).astype(str)
+            subject_arr = np.asarray(subject).astype(str)
 
         if idp_names is None:
+            excluded = {"batch", "subject"}
 
-            excluded = {
-                "batch",
-                "subject",
-            }
-
-            idp_names = [
-                c
-                for c in df.columns
-                if c not in excluded
-            ]
+            idp_names = [c for c in df.columns if c not in excluded]
 
         else:
+            idp_names = list(idp_names)
 
-            idp_names = list(
-                idp_names
-            )
-
-        missing = [
-            c
-            for c in idp_names
-            if c not in df.columns
-        ]
+        missing = [c for c in idp_names if c not in df.columns]
 
         if missing:
-
-            raise ValueError(
-                "IDP columns not found: "
-                + ", ".join(
-                    map(str, missing)
-                )
-            )
+            raise ValueError("IDP columns not found: " + ", ".join(map(str, missing)))
 
         idp_matrix = (
             df[idp_names]
-            .apply(
-                pd.to_numeric,
-                errors="coerce",
-            )
-            .to_numpy(
-                dtype=float
-            )
+            .apply(pd.to_numeric, errors="coerce")
+            .to_numpy(dtype=float)
         )
 
     elif isinstance(data, np.ndarray):
-
         if data.ndim != 2:
+            raise ValueError("data must be a 2D NumPy array.")
 
-            raise ValueError(
-                "data must be a 2D NumPy array."
-            )
+        idp_matrix = np.asarray(data, dtype=float)
 
-        idp_matrix = np.asarray(
-            data,
-            dtype=float,
-        )
+        n_samples, n_features = idp_matrix.shape
 
-        n_samples, n_features = (
-            idp_matrix.shape
-        )
+        batch_arr = np.asarray(batch).astype(str)
 
-        batch_arr = np.asarray(
-            batch
-        ).astype(str)
-
-        subject_arr = np.asarray(
-            subject
-        ).astype(str)
+        subject_arr = np.asarray(subject).astype(str)
 
         if idp_names is None:
-
-            idp_names = [
-                f"idp_{i+1}"
-                for i in range(
-                    n_features
-                )
-            ]
+            idp_names = [f"idp_{i+1}" for i in range(n_features)]
 
         else:
-
-            idp_names = list(
-                idp_names
-            )
+            idp_names = list(idp_names)
 
             if len(idp_names) != n_features:
-
                 raise ValueError(
-                    "idp_names must contain one name "
-                    "per column of data."
+                    "idp_names must contain one name per column of data."
                 )
 
     else:
-
-        raise TypeError(
-            "data must be either a pandas DataFrame "
-            "or a NumPy array."
-        )
+        raise TypeError("data must be either a pandas DataFrame or a NumPy array.")
 
     if len(batch_arr) != idp_matrix.shape[0]:
-
-        raise ValueError(
-            "Length of batch does not match "
-            "number of observations."
-        )
+        raise ValueError("Length of batch does not match number of observations.")
 
     if len(subject_arr) != idp_matrix.shape[0]:
-
-        raise ValueError(
-            "Length of subject does not match "
-            "number of observations."
-        )
+        raise ValueError("Length of subject does not match number of observations.")
 
     return (
         idp_matrix,
@@ -14756,10 +9063,7 @@ def _prepare_longitudinal_input(
     )
 
 
-# ============================================================
-# PREPARE COVARIATES
-# ============================================================
-
+# Prepare covariates
 def _prepare_covariates(
     covariates: Optional[Dict[str, Sequence]],
     n_samples: int,
@@ -14773,26 +9077,17 @@ def _prepare_covariates(
     in the formula using C(Q('name')).
     """
 
-    covariate_df = pd.DataFrame(
-        index=np.arange(n_samples)
-    )
+    covariate_df = pd.DataFrame(index=np.arange(n_samples))
 
     if not covariates:
-        return (
-            covariate_df,
-            [],
-        )
+        return covariate_df, []
 
     formula_terms = []
 
     for name, values in covariates.items():
-
-        values = np.asarray(
-            values
-        )
+        values = np.asarray(values)
 
         if len(values) != n_samples:
-
             raise ValueError(
                 f"Covariate '{name}' has "
                 f"{len(values)} values but "
@@ -14801,52 +9096,28 @@ def _prepare_covariates(
 
         safe_name = str(name)
 
-        series = pd.Series(
-            values,
-            index=covariate_df.index,
-        )
+        series = pd.Series(values, index=covariate_df.index)
 
         if series.isna().any():
+            raise ValueError(f"Covariate '{name}' contains missing values.")
 
-            raise ValueError(
-                f"Covariate '{name}' contains missing values."
-            )
-
-        if pd.api.types.is_numeric_dtype(
-            series
-        ):
-
-            covariate_df[
-                safe_name
-            ] = pd.to_numeric(
+        if pd.api.types.is_numeric_dtype(series):
+            covariate_df[safe_name] = pd.to_numeric(
                 series,
                 errors="raise",
             ).astype(float)
 
-            formula_terms.append(
-                safe_name
-            )
+            formula_terms.append(safe_name)
 
         else:
+            covariate_df[safe_name] = series.astype(str)
 
-            covariate_df[
-                safe_name
-            ] = series.astype(str)
+            formula_terms.append(f"C(Q('{safe_name}'))")
 
-            formula_terms.append(
-                f"C(Q('{safe_name}'))"
-            )
-
-    return (
-        covariate_df,
-        formula_terms,
-    )
+    return covariate_df, formula_terms
 
 
-# ============================================================
-# FIT ONE MIXED MODEL
-# ============================================================
-
+# Fit one mixed model
 def _fit_and_adjust_feature(
     df: pd.DataFrame,
     feature: str,
@@ -14872,96 +9143,42 @@ def _fit_and_adjust_feature(
         fitted model
     """
 
-    work = pd.DataFrame(
-        index=df.index
-    )
+    work = pd.DataFrame(index=df.index)
 
-    work["_y"] = pd.to_numeric(
-        df[feature],
-        errors="coerce",
-    )
+    work["_y"] = pd.to_numeric(df[feature], errors="coerce")
 
-    work["_batch"] = (
-        df[batch_col]
-        .astype(str)
-    )
+    work["_batch"] = df[batch_col].astype(str)
 
-    work["_subject"] = (
-        df[subject_col]
-        .astype(str)
-    )
+    work["_subject"] = df[subject_col].astype(str)
 
     for col in covariate_df.columns:
-
         work[col] = covariate_df[col]
 
-    # --------------------------------------------------------
     # Complete cases
-    # --------------------------------------------------------
-
-    valid = np.isfinite(
-        work["_y"].to_numpy(
-            dtype=float
-        )
-    )
+    valid = np.isfinite(work["_y"].to_numpy(dtype=float))
 
     for col in covariate_df.columns:
-
-        if pd.api.types.is_numeric_dtype(
-            work[col]
-        ):
-
+        if pd.api.types.is_numeric_dtype(work[col]):
             valid &= np.isfinite(
-                pd.to_numeric(
-                    work[col],
-                    errors="coerce",
-                ).to_numpy(
-                    dtype=float
-                )
+                pd.to_numeric(work[col], errors="coerce").to_numpy(dtype=float)
             )
 
         else:
+            valid &= work[col].notna().to_numpy()
 
-            valid &= work[
-                col
-            ].notna().to_numpy()
-
-    work = work.loc[
-        valid
-    ].copy()
+    work = work.loc[valid].copy()
 
     if len(work) < 3:
+        return np.full(len(df), np.nan, dtype=float), None
 
-        return (
-            np.full(
-                len(df),
-                np.nan,
-                dtype=float,
-            ),
-            None,
-        )
-
-    # --------------------------------------------------------
     # Formula
-    # --------------------------------------------------------
+    formula_terms = ["C(_batch)"]
 
-    formula_terms = [
-        "C(_batch)"
-    ]
+    formula_terms.extend(covariate_terms)
 
-    formula_terms.extend(
-        covariate_terms
-    )
-
-    formula = (
-        "_y ~ "
-        + " + ".join(
-            formula_terms
-        )
-    )
+    formula = "_y ~ " + " + ".join(formula_terms)
 
     try:
-
         model = smf.mixedlm(
             formula=formula,
             data=work,
@@ -14969,137 +9186,64 @@ def _fit_and_adjust_feature(
             re_formula="1",
         )
 
-        fitted = model.fit(
-            reml=reml,
-            method="lbfgs",
-            disp=False,
-        )
+        fitted = model.fit(reml=reml, method="lbfgs", disp=False)
 
     except Exception as exc:
+        warnings.warn(f"Mixed model failed for {feature}: {exc}")
 
-        warnings.warn(
-            f"Mixed model failed for "
-            f"{feature}: {exc}"
-        )
+        return np.full(len(df), np.nan, dtype=float), None
 
-        return (
-            np.full(
-                len(df),
-                np.nan,
-                dtype=float,
-            ),
-            None,
-        )
-
-    # ========================================================
-    # IDENTIFY FIXED EFFECTS
-    # ========================================================
-
+    # Identify fixed effects
     params = fitted.fe_params
 
     exog = fitted.model.exog
     exog_names = fitted.model.exog_names
 
-    # --------------------------------------------------------
     # Covariate contribution
-    #
-    # Do NOT remove:
-    #   Intercept
-    #   Batch
-    # --------------------------------------------------------
+    # Do NOT remove: Intercept, Batch
+    covariate_contribution = np.zeros(len(work), dtype=float)
 
-    covariate_contribution = np.zeros(
-        len(work),
-        dtype=float,
-    )
-
-    for j, name in enumerate(
-        exog_names
-    ):
-
+    for j, name in enumerate(exog_names):
         if name == "Intercept":
             continue
 
         if "_batch" in name:
             continue
 
-        covariate_contribution += (
-            exog[:, j]
-            * params[name]
-        )
+        covariate_contribution += exog[:, j] * params[name]
 
-    # ========================================================
-    # RANDOM INTERCEPT
-    # ========================================================
+    # Random intercept
+    random_effects = fitted.random_effects
 
-    random_effects = (
-        fitted.random_effects
-    )
+    subject_random_intercept = np.zeros(len(work), dtype=float)
 
-    subject_random_intercept = np.zeros(
-        len(work),
-        dtype=float,
-    )
-
-    for pos, subject_id in enumerate(
-        work["_subject"]
-    ):
-
-        effect = random_effects.get(
-            subject_id
-        )
+    for pos, subject_id in enumerate(work["_subject"]):
+        effect = random_effects.get(subject_id)
 
         if effect is None:
             continue
 
         try:
-
-            subject_random_intercept[pos] = (
-                float(
-                    np.asarray(
-                        effect
-                    ).reshape(-1)[0]
-                )
-            )
+            subject_random_intercept[pos] = float(np.asarray(effect).reshape(-1)[0])
 
         except Exception:
+            subject_random_intercept[pos] = 0.0
 
-            subject_random_intercept[pos] = (
-                0.0
-            )
-
-    # ========================================================
-    # ADJUSTED VALUES
-    # ========================================================
-
+    # Adjusted values
     adjusted_values = (
-        work["_y"].to_numpy(
-            dtype=float
-        )
+        work["_y"].to_numpy(dtype=float)
         - covariate_contribution
         - subject_random_intercept
     )
 
-    output = np.full(
-        len(df),
-        np.nan,
-        dtype=float,
-    )
+    output = np.full(len(df), np.nan, dtype=float)
 
-    output[
-        work.index.to_numpy()
-    ] = adjusted_values
+    output[work.index.to_numpy()] = adjusted_values
 
-    return (
-        output,
-        fitted,
-    )
+    return output, fitted
 
 
-# ============================================================
-# MAIN FUNCTION
-# ============================================================
-
+# Main function
 def plot_longitudinal_zscore_histograms(
     data: Union[pd.DataFrame, np.ndarray],
     batch: Optional[Sequence] = None,
@@ -15206,10 +9350,7 @@ def plot_longitudinal_zscore_histograms(
         Dictionary of fitted mixed models by IDP.
     """
 
-    # ========================================================
-    # PREPARE DATA
-    # ========================================================
-
+    # Prepare data
     (
         idp_matrix,
         batch_arr,
@@ -15223,307 +9364,101 @@ def plot_longitudinal_zscore_histograms(
     )
 
     n_samples = idp_matrix.shape[0]
-
-    work_df = pd.DataFrame(
-        idp_matrix,
-        columns=idp_names,
-    )
-
+    work_df = pd.DataFrame(idp_matrix, columns=idp_names)
     work_df["_batch"] = batch_arr
     work_df["_subject"] = subject_arr
 
-    # ========================================================
-    # BATCH ORDER
-    # ========================================================
-
+    # Batch order
     if batch_order is None:
-
-        batch_order = (
-            pd.Series(
-                batch_arr
-            )
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
+        batch_order = pd.Series(batch_arr).dropna().unique().tolist()
     else:
+        batch_order = [str(x) for x in batch_order]
 
-        batch_order = [
-            str(x)
-            for x in batch_order
-        ]
+    # Raw robust z-scores
+    raw_z = np.full((n_samples, len(idp_names)), np.nan, dtype=float)
+    for j, feature in enumerate(idp_names):
+        raw_z[:, j] = _robust_zscore(idp_matrix[:, j])
+    raw_z = pd.DataFrame(raw_z, columns=idp_names)
 
-    # ========================================================
-    # RAW ROBUST Z-SCORES
-    # ========================================================
-
-    raw_z = np.full(
-        (
-            n_samples,
-            len(idp_names),
-        ),
-        np.nan,
-        dtype=float,
+    # Covariates
+    covariate_df, covariate_terms = _prepare_covariates(
+        covariates=covariates,
+        n_samples=n_samples,
     )
 
-    for j, feature in enumerate(
-        idp_names
-    ):
-
-        raw_z[:, j] = (
-            _robust_zscore(
-                idp_matrix[:, j]
-            )
-        )
-
-    raw_z = pd.DataFrame(
-        raw_z,
-        columns=idp_names,
-    )
-
-    # ========================================================
-    # COVARIATES
-    # ========================================================
-
-    covariate_df, covariate_terms = (
-        _prepare_covariates(
-            covariates=covariates,
-            n_samples=n_samples,
-        )
-    )
-
-    # ========================================================
-    # FIT MIXED MODELS
-    # ========================================================
-
-    adjusted_values = np.full(
-        (
-            n_samples,
-            len(idp_names),
-        ),
-        np.nan,
-        dtype=float,
-    )
-
+    # Fit mixed models
+    adjusted_values = np.full((n_samples, len(idp_names)), np.nan, dtype=float)
     models = {}
-
-    for j, feature in enumerate(
-        idp_names
-    ):
-
-        adjusted, fitted = (
-            _fit_and_adjust_feature(
-                df=work_df,
-                feature=feature,
-                batch_col="_batch",
-                subject_col="_subject",
-                covariate_df=covariate_df,
-                covariate_terms=covariate_terms,
-                reml=reml,
-            )
+    for j, feature in enumerate(idp_names):
+        adjusted, fitted = _fit_and_adjust_feature(
+            df=work_df,
+            feature=feature,
+            batch_col="_batch",
+            subject_col="_subject",
+            covariate_df=covariate_df,
+            covariate_terms=covariate_terms,
+            reml=reml,
         )
-
         adjusted_values[:, j] = adjusted
-
         if fitted is not None:
             models[feature] = fitted
 
-    # ========================================================
-    # ADJUSTED ROBUST Z-SCORES
-    # ========================================================
+    # Adjusted robust z-scores
+    adjusted_z = np.full(adjusted_values.shape, np.nan, dtype=float)
 
-    adjusted_z = np.full(
-        adjusted_values.shape,
-        np.nan,
-        dtype=float,
-    )
+    for j in range(len(idp_names)):
+        adjusted_z[:, j] = _robust_zscore(adjusted_values[:, j])
 
-    for j in range(
-        len(idp_names)
-    ):
+    adjusted_z = pd.DataFrame(adjusted_z, columns=idp_names)
 
-        adjusted_z[:, j] = (
-            _robust_zscore(
-                adjusted_values[:, j]
-            )
-        )
+    # Print model information
+    covariate_formula = " + ".join(covariate_terms) if covariate_terms else "none"
 
-    adjusted_z = pd.DataFrame(
-        adjusted_z,
-        columns=idp_names,
-    )
-
-    # ========================================================
-    # PRINT MODEL INFORMATION
-    # ========================================================
-
-    covariate_formula = (
-        " + ".join(
-            covariate_terms
-        )
-        if covariate_terms
-        else "none"
-    )
-
-    print(
-        "\n"
-        + "=" * 72
-    )
-
-    print(
-        "LONGITUDINAL DISTRIBUTION MODEL"
-    )
-
-    print(
-        "=" * 72
-    )
-
-    print(
-        "General model:"
-    )
+    print("\n" + "=" * 72)
+    print("LONGITUDINAL DISTRIBUTION MODEL")
+    print("=" * 72)
+    print("General model:")
 
     if covariate_terms:
-
-        print(
-            "    IDP ~ Batch + "
-            + covariate_formula
-            + " + (1 | Subject)"
-        )
-
+        print("    IDP ~ Batch + " + covariate_formula + " + (1 | Subject)")
     else:
+        print("    IDP ~ Batch + (1 | Subject)")
 
-        print(
-            "    IDP ~ Batch + (1 | Subject)"
-        )
+    print(f"REML: {reml}")
+    print("\nAdjustment applied:")
+    print("    - covariate fixed effects removed")
+    print("    - subject random intercept removed")
+    print("    - batch effects retained")
+    print("\nFixed effects are estimated separately for each IDP.")
+    print("Random effects: subject-specific random intercepts.")
 
-    print(
-        f"REML: {reml}"
-    )
-
-    print(
-        "\nAdjustment applied:"
-    )
-
-    print(
-        "    - covariate fixed effects removed"
-    )
-
-    print(
-        "    - subject random intercept removed"
-    )
-
-    print(
-        "    - batch effects retained"
-    )
-
-    print(
-        "\nFixed effects are estimated separately for each IDP."
-    )
-
-    print(
-        "Random effects: subject-specific random intercepts."
-    )
-
-    # ========================================================
-    # PRINT AN EXAMPLE FULL MODEL
-    # ========================================================
-
+    # Print an example full model
     if models:
-
-        first_feature = next(
-            iter(models)
-        )
-
-        model = models[
-            first_feature
-        ]
-
-        print(
-            "\n"
-            + "-" * 72
-        )
-
-        print(
-            f"Example fitted model: {first_feature}"
-        )
-
-        print(
-            "-" * 72
-        )
-
-        print(
-            model.summary()
-        )
+        first_feature = next(iter(models))
+        model = models[first_feature]
+        print("\n" + "-" * 72)
+        print(f"Example fitted model: {first_feature}")
+        print("-" * 72)
+        print(model.summary())
 
         # Random-effect variance
         try:
-
-            random_var = float(
-                np.asarray(
-                    model.cov_re
-                )[0, 0]
-            )
-
-            random_sd = np.sqrt(
-                max(
-                    random_var,
-                    0.0,
-                )
-            )
-
-            print(
-                "\nSubject random-intercept variance:"
-            )
-
-            print(
-                f"    Variance = {random_var:.6g}"
-            )
-
-            print(
-                f"    SD       = {random_sd:.6g}"
-            )
-
+            random_var = float(np.asarray(model.cov_re)[0, 0])
+            random_sd = np.sqrt(max(random_var, 0.0))
+            print("\nSubject random-intercept variance:")
+            print(f"    Variance = {random_var:.6g}")
+            print(f"    SD       = {random_sd:.6g}")
         except Exception:
-
             pass
 
-    # ========================================================
-    # PLOT
-    # ========================================================
+    # Plot
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
 
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=figsize,
-    )
-
-    def _plot_panel(
-        ax,
-        score_df,
-        title,
-    ):
-
+    def _plot_panel(ax, score_df, title):
         for batch_label in batch_order:
-
-            mask = (
-                batch_arr
-                == batch_label
-            )
-
-            values = (
-                score_df.loc[
-                    mask
-                ]
-                .to_numpy(
-                    dtype=float
-                )
-                .ravel()
-            )
-
-            values = values[
-                np.isfinite(values)
-            ]
+            mask = batch_arr == batch_label
+            values = score_df.loc[mask].to_numpy(dtype=float).ravel()
+            values = values[np.isfinite(values)]
 
             if len(values) == 0:
                 continue
@@ -15533,110 +9468,40 @@ def plot_longitudinal_zscore_histograms(
                 bins=bins,
                 density=True,
                 alpha=0.45,
-                label=str(
-                    batch_label
-                ),
+                label=str(batch_label),
             )
 
             # PDF in corresponding histogram colour
             patches = ax.patches
 
             if len(patches) > 0:
+                color = patches[-1].get_facecolor()
+                mu = float(np.mean(values))
+                sd = float(np.std(values))
 
-                color = patches[
-                    -1
-                ].get_facecolor()
+                if np.isfinite(sd) and sd > 0:
+                    x = np.linspace(xlim[0], xlim[1], 300)
+                    y = norm.pdf(x, mu, sd)
+                    ax.plot(x, y, color=color, linewidth=2)
 
-                mu = float(
-                    np.mean(values)
-                )
+        ax.set_xlim(xlim)
+        ax.set_xlabel("Robust z-score")
+        ax.set_ylabel("Density")
+        ax.set_title(title, fontweight="bold")
+        ax.legend(title="Batch", fontsize=8)
+        ax.grid(axis="y", alpha=0.2)
 
-                sd = float(
-                    np.std(values)
-                )
-
-                if (
-                    np.isfinite(sd)
-                    and sd > 0
-                ):
-
-                    x = np.linspace(
-                        xlim[0],
-                        xlim[1],
-                        300,
-                    )
-
-                    y = norm.pdf(
-                        x,
-                        mu,
-                        sd,
-                    )
-
-                    ax.plot(
-                        x,
-                        y,
-                        color=color,
-                        linewidth=2,
-                    )
-
-        ax.set_xlim(
-            xlim
-        )
-
-        ax.set_xlabel(
-            "Robust z-score"
-        )
-
-        ax.set_ylabel(
-            "Density"
-        )
-
-        ax.set_title(
-            title,
-            fontweight="bold",
-        )
-
-        ax.legend(
-            title="Batch",
-            fontsize=8,
-        )
-
-        ax.grid(
-            axis="y",
-            alpha=0.2,
-        )
-
-    # --------------------------------------------------------
     # Raw
-    # --------------------------------------------------------
+    _plot_panel(axes[0], raw_z, "Raw data")
 
-    _plot_panel(
-        axes[0],
-        raw_z,
-        "Raw data",
-    )
-
-    # --------------------------------------------------------
     # Adjusted
-    # --------------------------------------------------------
-
     if covariates:
-
-        adjusted_title = (
-            "Covariate- and subject-adjusted data"
-        )
+        adjusted_title = "Covariate- and subject-adjusted data"
 
     else:
+        adjusted_title = "Subject-adjusted data"
 
-        adjusted_title = (
-            "Subject-adjusted data"
-        )
-
-    _plot_panel(
-        axes[1],
-        adjusted_z,
-        adjusted_title,
-    )
+    _plot_panel(axes[1], adjusted_z, adjusted_title)
 
     fig.suptitle(
         "Robust z-score distributions across batches",
@@ -15647,12 +9512,8 @@ def plot_longitudinal_zscore_histograms(
 
     fig.tight_layout()
 
-    # ========================================================
-    # SAVE
-    # ========================================================
-
+    # Save
     if savepath is not None:
-
         fig.savefig(
             savepath,
             dpi=600,
@@ -15660,20 +9521,12 @@ def plot_longitudinal_zscore_histograms(
             facecolor="white",
         )
 
-    # ========================================================
-    # SHOW
-    # ========================================================
-
-    
+    # Show
     if show:
-
         plt.show()
 
     if rep is not None:
-                rep.log_plot(
-                    fig,
-                    "Batch effects",
-                )
+        rep.log_plot(fig, "Batch effects")
 
     return (
         fig,
