@@ -4378,8 +4378,8 @@ def LongitudinalReport(data, batch,
                 row["covariate_adjusted_distance"] = (
                     md["pairwise_resid"].get((batchA, batchB), np.nan)
                 )
-
             pairwise_rows.append(row)
+
         md_pairwise_df = pd.DataFrame(pairwise_rows)
         md_pairwise_df.to_csv(
             os.path.join(save_dir, "multivariate_batch_pairwise.csv"),
@@ -5264,10 +5264,14 @@ def LongitudinalComparisonReport(
 ) -> StatsReporter:
     """Run and compare longitudinal diagnostics across multiple methods."""
     if not isinstance(datasets, dict) or len(datasets) == 0:
-        raise ValueError("datasets must be a non-empty dictionary mapping method name to data array.")
+        raise ValueError(
+            "datasets must be a non-empty dictionary mapping method name to data array."
+        )
 
     first_dataset = next(iter(datasets.values()))
-    first_matrix, inferred_feature_names = _normalize_data_matrix(first_dataset, feature_names=features)
+    first_matrix, inferred_feature_names = _normalize_data_matrix(
+        first_dataset, feature_names=features
+    )
     if features is None and inferred_feature_names is not None:
         features = inferred_feature_names
 
@@ -5282,14 +5286,22 @@ def LongitudinalComparisonReport(
     )
 
     if not include_raw and raw_name in normalized_datasets:
-        normalized_datasets = {k: v for k, v in normalized_datasets.items() if k != raw_name}
+        normalized_datasets = {
+            k: v for k, v in normalized_datasets.items() if k != raw_name
+        }
         if len(normalized_datasets) == 0:
-            raise ValueError("No datasets remain after excluding raw dataset. Provide at least one method dataset.")
+            raise ValueError(
+                "No datasets remain after excluding raw dataset. Provide at least one method dataset."
+            )
 
     n_samples = first_matrix.shape[0]
     batch_arr = _normalize_batch_vector(batch, n_samples).astype(str)
-    subject_arr = _normalize_longitudinal_vector(subject_ids, n_samples, "subject_ids").astype(str)
-    timepoint_arr = _normalize_longitudinal_vector(timepoints, n_samples, "timepoints").astype(str)
+    subject_arr = _normalize_longitudinal_vector(
+        subject_ids, n_samples, "subject_ids"
+    ).astype(str)
+    timepoint_arr = _normalize_longitudinal_vector(
+        timepoints, n_samples, "timepoints"
+    ).astype(str)
     covariates_dict, covariate_names_norm = _normalize_longitudinal_covariates(
         covariates,
         n_samples,
@@ -5297,7 +5309,7 @@ def LongitudinalComparisonReport(
     )
 
     if features is None:
-        features = [f"idp_{i+1}" for i in range(first_matrix.shape[1])]
+        features = [f"idp_{i + 1}" for i in range(first_matrix.shape[1])]
     features = [str(f) for f in features]
 
     if save_dir is None:
@@ -5309,7 +5321,9 @@ def LongitudinalComparisonReport(
     if report_name is None:
         base_name = "LongitudinalComparisonReport.html"
     else:
-        base_name = report_name if report_name.endswith(".html") else report_name + ".html"
+        base_name = (
+            report_name if report_name.endswith(".html") else report_name + ".html"
+        )
 
     if timestamped_reports:
         stem, ext = base_name.rsplit(".", 1)
@@ -5320,10 +5334,7 @@ def LongitudinalComparisonReport(
         report_obj.save_dir = save_dir
         report_obj.report_name = base_name
         rp = report_obj.write_report()
-        report_obj.log_text(
-            "initialised HTML report at: \n"
-            f"{rp}"
-        )
+        report_obj.log_text(f"initialised HTML report at: \n{rp}")
         print(f"Report will be saved to: {rp}")
         return report_obj
 
@@ -5355,7 +5366,9 @@ def LongitudinalComparisonReport(
             "Ranking prioritises subject stability, followed by residual batch effects and biological preservation."
         )
 
-        report.log_section("comparison_overview", "Multi-method longitudinal comparison overview")
+        report.log_section(
+            "comparison_overview", "Multi-method longitudinal comparison overview"
+        )
         batch_counts = dict(zip(*np.unique(batch_arr, return_counts=True)))
         overview_lines = [
             f"Validated methods: {', '.join(normalized_datasets.keys())}",
@@ -5376,7 +5389,9 @@ def LongitudinalComparisonReport(
         line_break_in_text = "-" * 150
 
         for method_name, data in normalized_datasets.items():
-            report.log_section(_sanitize_name(method_name), f"Diagnostics for {method_name}")
+            report.log_section(
+                _sanitize_name(method_name), f"Diagnostics for {method_name}"
+            )
             logger.info(f"Running longitudinal diagnostics for method: {method_name}")
 
             method_result = _run_single_longitudinal_method_diagnostics(
@@ -5410,7 +5425,9 @@ def LongitudinalComparisonReport(
 
             report.text_simple(line_break_in_text)
 
-        summary_df = summarise_longitudinal_method_performance(method_results, scoring_config=scoring_config)
+        summary_df = summarise_longitudinal_method_performance(
+            method_results, scoring_config=scoring_config
+        )
         advice = generate_longitudinal_comparison_advice(summary_df)
 
         report.log_section("scorecard", "Longitudinal method scorecard")
@@ -5430,9 +5447,13 @@ def LongitudinalComparisonReport(
 
         report.log_section("comparison_advice", "Best method summary")
         report.text_simple(f"Best overall method: {advice.get('best_overall')}")
-        report.text_simple(f"Best subject stability: {advice.get('best_subject_stability')}")
+        report.text_simple(
+            f"Best subject stability: {advice.get('best_subject_stability')}"
+        )
         report.text_simple(f"Best batch removal: {advice.get('best_batch_removal')}")
-        report.text_simple(f"Best biological preservation: {advice.get('best_biological')}")
+        report.text_simple(
+            f"Best biological preservation: {advice.get('best_biological')}"
+        )
         for diag_name, method_name in advice.get("best_by_metric", {}).items():
             report.text_simple(f"Best {diag_name}: {method_name}")
         report.text_simple(advice.get("summary_text", ""))
@@ -5447,19 +5468,13 @@ def LongitudinalComparisonReport(
         # ============================================================
         # FEATURE-DISTRIBUTION COMPARISON
         # ============================================================
-
         report.log_section(
-            "feature_distribution_comparison",
-            "Feature distributions across batches"
+            "feature_distribution_comparison", "Feature distributions across batches"
         )
-
-
         # ------------------------------------------------------------
         # Description
         # ------------------------------------------------------------
-
         if covariates_dict:
-
             feature_distribution_description = (
                 "This section compares robust IDP distributions across "
                 "acquisition batches for each dataset. The original \n"
@@ -5469,9 +5484,7 @@ def LongitudinalComparisonReport(
                 "adjustment so that remaining batch-related differences \n"
                 "remain visible."
             )
-
         else:
-
             feature_distribution_description = (
                 "This section compares robust IDP distributions across "
                 "acquisition batches for each dataset. The original \n"
@@ -5480,13 +5493,7 @@ def LongitudinalComparisonReport(
                 "retained during adjustment so that remaining "
                 "batch-related differences remain visible."
             )
-
-
-        report.text_simple(
-            feature_distribution_description
-        )
-
-
+        report.text_simple(feature_distribution_description)
         report.text_simple(
             "Each IDP is robustly standardised before plotting so that "
             "features measured on different numerical scales can be \n"
@@ -5494,16 +5501,12 @@ def LongitudinalComparisonReport(
             "single-dataset longitudinal diagnostic is applied \n"
             "independently to each method."
         )
-
-
         report.text_simple(
             "Greater overlap between batch distributions indicates more "
             "similar feature distributions across acquisition batches. \n"
             "Persistent differences in location or spread indicate "
             "remaining batch-related structure.\n"
         )
-
-
         # ------------------------------------------------------------
         # Generate comparison figure
         #
@@ -5513,10 +5516,8 @@ def LongitudinalComparisonReport(
         # rep=None is used internally by that function so that the
         # temporary single-method figures are not added to this report.
         # ------------------------------------------------------------
-
         feature_distribution_figs = (
-            PlotComparisonResults
-            .plot_compare_longitudinal_zscore_histograms(
+            PlotComparisonResults.plot_compare_longitudinal_zscore_histograms(
                 datasets=normalized_datasets,
                 batch=batch_arr,
                 subjects=subject_arr,
@@ -5528,36 +5529,21 @@ def LongitudinalComparisonReport(
                 xlim=(-8, 8),
             )
         )
-
-
         # ------------------------------------------------------------
         # Add comparison figure to report
         # ------------------------------------------------------------
-
         if feature_distribution_figs:
-
-            _log_figures(
-                feature_distribution_figs
-            )
-
-
+            _log_figures(feature_distribution_figs)
         else:
-
             report.text_simple(
                 "Feature-distribution comparison could not be generated."
             )
-
-
-        report.text_simple(
-            line_break_in_text
-        )
-        
+        report.text_simple(line_break_in_text)
         # ============================================================
         # SUBJECT-ORDER CONSISTENCY COMPARISON
         # ============================================================
         report.log_section(
-            "subject_order_comparison",
-            "Subject-order consistency comparison"
+            "subject_order_comparison", "Subject-order consistency comparison"
         )
         subject_order_figs, subject_order_summary = (
             PlotComparisonResults.plot_compare_long_subject_order(
@@ -5568,9 +5554,7 @@ def LongitudinalComparisonReport(
         # ------------------------------------------------------------
         # Add figures to report
         # ------------------------------------------------------------
-        _log_figures(
-            subject_order_figs
-        )
+        _log_figures(subject_order_figs)
         # ------------------------------------------------------------
         # Save comparison summary
         # ------------------------------------------------------------
@@ -5579,98 +5563,60 @@ def LongitudinalComparisonReport(
                 subject_order_summary,
                 pd.DataFrame,
             )
-            and
-            not subject_order_summary.empty
+            and not subject_order_summary.empty
         ):
             subject_order_summary_path = (
-                save_dir
-                / "subject_order_comparison_summary.csv"
+                save_dir / "subject_order_comparison_summary.csv"
             )
             subject_order_summary.to_csv(
                 subject_order_summary_path,
                 index=False,
             )
-            report.text_simple(
-                "Subject-order consistency comparison summary:"
-            )
-            report.text_simple(
-                subject_order_summary.to_string(
-                    index=False
-                )
-            )
+            report.text_simple("Subject-order consistency comparison summary:")
+            report.text_simple(subject_order_summary.to_string(index=False))
             report.text_simple(
                 "Subject-order comparison summary saved to: "
                 f"{subject_order_summary_path}"
             )
-
         # ============================================================
         # WITHIN-SUBJECT VARIABILITY COMPARISON
         # ============================================================
-
         report.log_section(
             "within_subject_variability_comparison",
-            "Within-subject variability comparison"
+            "Within-subject variability comparison",
         )
-
-
         (
             within_subject_variability_figs,
             within_subject_variability_summary,
-        ) = (
-            PlotComparisonResults
-            .plot_compare_long_within_subject_variability(
-                method_results,
-                summary_stat="median",
-            )
+        ) = PlotComparisonResults.plot_compare_long_within_subject_variability(
+            method_results,
+            summary_stat="median",
         )
-
-
         # ------------------------------------------------------------
         # Add figures to report
         # ------------------------------------------------------------
-
-        _log_figures(
-            within_subject_variability_figs
-        )
-
-
+        _log_figures(within_subject_variability_figs)
         # ------------------------------------------------------------
         # Save comparison summary
         # ------------------------------------------------------------
-
         if (
             isinstance(
                 within_subject_variability_summary,
                 pd.DataFrame,
             )
-            and
-            not within_subject_variability_summary.empty
+            and not within_subject_variability_summary.empty
         ):
-
             within_subject_variability_summary_path = (
-                save_dir
-                / "within_subject_variability_comparison_summary.csv"
+                save_dir / "within_subject_variability_comparison_summary.csv"
             )
-
-
             within_subject_variability_summary.to_csv(
                 within_subject_variability_summary_path,
                 index=False,
             )
-
-
+            report.text_simple("Within-subject variability comparison summary:")
             report.text_simple(
-                "Within-subject variability comparison summary:"
+                within_subject_variability_summary.to_string(index=False)
             )
-
-
-            report.text_simple(
-                within_subject_variability_summary.to_string(
-                    index=False
-                )
-            )
-
-
             report.text_simple(
                 "Within-subject variability comparison summary "
                 "saved to: "
@@ -5680,227 +5626,128 @@ def LongitudinalComparisonReport(
         # ============================================================
         # ADDITIVE BATCH-EFFECT COMPARISON
         # ============================================================
-
         report.log_section(
-            "additive_batch_effect_comparison",
-            "Additive batch-effect comparison"
+            "additive_batch_effect_comparison", "Additive batch-effect comparison"
         )
-
-
         (
             additive_figs,
             additive_summary,
-        ) = (
-            PlotComparisonResults
-            .plot_compare_long_addmul_batch_effects(
-                method_results,
-                effect_type="additive",
-                fdr_threshold=0.05,
-                p_display_floor=0.001,
-            )
+        ) = PlotComparisonResults.plot_compare_long_addmul_batch_effects(
+            method_results,
+            effect_type="additive",
+            fdr_threshold=0.05,
+            p_display_floor=0.001,
         )
-
-
         # ------------------------------------------------------------
         # Add figures to report
         # ------------------------------------------------------------
-
-        _log_figures(
-            additive_figs
-        )
-
-
+        _log_figures(additive_figs)
         # ------------------------------------------------------------
         # Save comparison summary
         # ------------------------------------------------------------
-
         if (
             isinstance(
                 additive_summary,
                 pd.DataFrame,
             )
-            and
-            not additive_summary.empty
+            and not additive_summary.empty
         ):
-
             additive_summary_path = (
-                save_dir
-                / "additive_batch_effect_comparison_summary.csv"
+                save_dir / "additive_batch_effect_comparison_summary.csv"
             )
-
-
             additive_summary.to_csv(
                 additive_summary_path,
                 index=False,
             )
-
-
-            report.text_simple(
-                "Additive batch-effect comparison summary:"
-            )
-
-
-            report.text_simple(
-                additive_summary.to_string(
-                    index=False
-                )
-            )
-
-
+            report.text_simple("Additive batch-effect comparison summary:")
+            report.text_simple(additive_summary.to_string(index=False))
             report.text_simple(
                 "Additive batch-effect comparison summary "
                 "saved to: "
                 f"{additive_summary_path}"
             )
-
         # ============================================================
         # MULTIPLICATIVE BATCH-EFFECT COMPARISON
         # ============================================================
-
         report.log_section(
             "multiplicative_batch_effect_comparison",
-            "Multiplicative batch-effect comparison"
+            "Multiplicative batch-effect comparison",
         )
-
-
         (
             multiplicative_figs,
             multiplicative_summary,
-        ) = (
-            PlotComparisonResults
-            .plot_compare_long_addmul_batch_effects(
-                method_results,
-                effect_type="multiplicative",
-                fdr_threshold=0.05,
-                p_display_floor=0.001,
-            )
+        ) = PlotComparisonResults.plot_compare_long_addmul_batch_effects(
+            method_results,
+            effect_type="multiplicative",
+            fdr_threshold=0.05,
+            p_display_floor=0.001,
         )
-
-
         # ------------------------------------------------------------
         # Add figures to report
         # ------------------------------------------------------------
-
-        _log_figures(
-            multiplicative_figs
-        )
-
-
+        _log_figures(multiplicative_figs)
         # ------------------------------------------------------------
         # Save comparison summary
         # ------------------------------------------------------------
-
         if (
             isinstance(
                 multiplicative_summary,
                 pd.DataFrame,
             )
-            and
-            not multiplicative_summary.empty
+            and not multiplicative_summary.empty
         ):
-
             multiplicative_summary_path = (
-                save_dir
-                / "multiplicative_batch_effect_comparison_summary.csv"
+                save_dir / "multiplicative_batch_effect_comparison_summary.csv"
             )
-
-
             multiplicative_summary.to_csv(
                 multiplicative_summary_path,
                 index=False,
             )
-
-
-            report.text_simple(
-                "Multiplicative batch-effect comparison summary:"
-            )
-
-
-            report.text_simple(
-                multiplicative_summary.to_string(
-                    index=False
-                )
-            )
-
-
+            report.text_simple("Multiplicative batch-effect comparison summary:")
+            report.text_simple(multiplicative_summary.to_string(index=False))
             report.text_simple(
                 "Multiplicative batch-effect comparison summary "
                 "saved to: "
                 f"{multiplicative_summary_path}"
             )
-
         # ============================================================
         # MIXED-EFFECTS COMPARISON
         # ============================================================
-
-        report.log_section(
-            "mixed_effects_comparison",
-            "Mixed-effects comparison"
-        )
-
-
+        report.log_section("mixed_effects_comparison", "Mixed-effects comparison")
         (
             mixed_effects_figs,
             mixed_effects_summary,
-        ) = (
-            PlotComparisonResults
-            .plot_compare_long_mixed_effects(
-                method_results,
-                reference_levels=(
-                    0.50,
-                    0.75,
-                    0.90,
-                ),
-            )
+        ) = PlotComparisonResults.plot_compare_long_mixed_effects(
+            method_results,
+            reference_levels=(
+                0.50,
+                0.75,
+                0.90,
+            ),
         )
-
-
         # ------------------------------------------------------------
         # Add figures to report
         # ------------------------------------------------------------
-
-        _log_figures(
-            mixed_effects_figs
-        )
-
-
+        _log_figures(mixed_effects_figs)
         # ------------------------------------------------------------
         # Save comparison summary
         # ------------------------------------------------------------
-
         if (
             isinstance(
                 mixed_effects_summary,
                 pd.DataFrame,
             )
-            and
-            not mixed_effects_summary.empty
+            and not mixed_effects_summary.empty
         ):
-
             mixed_effects_summary_path = (
-                save_dir
-                / "mixed_effects_comparison_summary.csv"
+                save_dir / "mixed_effects_comparison_summary.csv"
             )
-
-
             mixed_effects_summary.to_csv(
                 mixed_effects_summary_path,
                 index=False,
             )
-
-
-            report.text_simple(
-                "Mixed-effects comparison summary:"
-            )
-
-
-            report.text_simple(
-                mixed_effects_summary.to_string(
-                    index=False
-                )
-            )
-
-
+            report.text_simple("Mixed-effects comparison summary:")
+            report.text_simple(mixed_effects_summary.to_string(index=False))
             report.text_simple(
                 "Mixed-effects comparison summary saved to: "
                 f"{mixed_effects_summary_path}"
@@ -5909,36 +5756,22 @@ def LongitudinalComparisonReport(
         # ============================================================
         # BIOLOGICAL FIXED-EFFECT COMPARISON
         # ============================================================
-
         report.log_section(
-            "biological_effects_comparison",
-            "Biological fixed-effect comparison"
+            "biological_effects_comparison", "Biological fixed-effect comparison"
         )
-
-
         (
             biological_effect_figs,
             biological_effect_summary,
-        ) = (
-            PlotComparisonResults
-            .plot_compare_long_biological_effects(
-                method_results,
-                covariates=covariate_names_norm,
-                significance=0.05,
-                plot_fdr=True,
-            )
+        ) = PlotComparisonResults.plot_compare_long_biological_effects(
+            method_results,
+            covariates=covariate_names_norm,
+            significance=0.05,
+            plot_fdr=True,
         )
-
-
         # ------------------------------------------------------------
         # Add figures to report
         # ------------------------------------------------------------
-
-        _log_figures(
-            biological_effect_figs
-        )
-
-
+        _log_figures(biological_effect_figs)
         # ------------------------------------------------------------
         # Save comparison summary
         # ------------------------------------------------------------
@@ -5948,34 +5781,17 @@ def LongitudinalComparisonReport(
                 biological_effect_summary,
                 pd.DataFrame,
             )
-            and
-            not biological_effect_summary.empty
+            and not biological_effect_summary.empty
         ):
-
             biological_effect_summary_path = (
-                save_dir
-                / "biological_effects_comparison_summary.csv"
+                save_dir / "biological_effects_comparison_summary.csv"
             )
-
-
             biological_effect_summary.to_csv(
                 biological_effect_summary_path,
                 index=False,
             )
-
-
-            report.text_simple(
-                "Biological fixed-effect comparison summary:"
-            )
-
-
-            report.text_simple(
-                biological_effect_summary.to_string(
-                    index=False
-                )
-            )
-
-
+            report.text_simple("Biological fixed-effect comparison summary:")
+            report.text_simple(biological_effect_summary.to_string(index=False))
             report.text_simple(
                 "Biological fixed-effect comparison summary "
                 "saved to: "
@@ -5985,33 +5801,21 @@ def LongitudinalComparisonReport(
         # ============================================================
         # MULTIVARIATE BATCH-DIFFERENCE COMPARISON
         # ============================================================
-
         report.log_section(
             "multivariate_batch_difference_comparison",
-            "Multivariate batch-difference comparison"
+            "Multivariate batch-difference comparison",
         )
-
 
         (
             multivariate_figs,
             multivariate_summary,
-        ) = (
-            PlotComparisonResults
-            .plot_compare_long_multivariate_batch_difference(
-                method_results,
-            )
+        ) = PlotComparisonResults.plot_compare_long_multivariate_batch_difference(
+            method_results,
         )
-
-
         # ------------------------------------------------------------
         # Add figures to report
         # ------------------------------------------------------------
-
-        _log_figures(
-            multivariate_figs
-        )
-
-
+        _log_figures(multivariate_figs)
         # ------------------------------------------------------------
         # Save comparison summary
         # ------------------------------------------------------------
@@ -6021,46 +5825,35 @@ def LongitudinalComparisonReport(
                 multivariate_summary,
                 pd.DataFrame,
             )
-            and
-            not multivariate_summary.empty
+            and not multivariate_summary.empty
         ):
-
             multivariate_summary_path = (
-                save_dir
-                / "multivariate_batch_difference_comparison_summary.csv"
+                save_dir / "multivariate_batch_difference_comparison_summary.csv"
             )
-
-
             multivariate_summary.to_csv(
                 multivariate_summary_path,
                 index=False,
             )
-
-
-            report.text_simple(
-                "Multivariate batch-difference comparison summary:"
-            )
-
-
-            report.text_simple(
-                multivariate_summary.to_string(
-                    index=False
-                )
-            )
-
-
+            report.text_simple("Multivariate batch-difference comparison summary:")
+            report.text_simple(multivariate_summary.to_string(index=False))
             report.text_simple(
                 "Multivariate batch-difference comparison summary "
                 "saved to: "
                 f"{multivariate_summary_path}"
             )
 
-        _log_figures(PlotComparisonResults.plot_compare_longitudinal_scorecard(summary_df))
+        _log_figures(
+            PlotComparisonResults.plot_compare_longitudinal_scorecard(summary_df)
+        )
 
         if save_data and summary_df is not None and not summary_df.empty:
             from DiagnoseHarmonisation.SaveDiagnosticResults import save_test_results
 
-            scorecard_name = _sanitize_name(save_data_name) + "_Longitudinal_Scorecard" if save_data_name else "Longitudinal_Comparison_Scorecard"
+            scorecard_name = (
+                _sanitize_name(save_data_name) + "_Longitudinal_Scorecard"
+                if save_data_name
+                else "Longitudinal_Comparison_Scorecard"
+            )
             scorecard_path = save_test_results(
                 summary_df,
                 test_name=scorecard_name,

@@ -1,7 +1,6 @@
 ###################################
 # FOR LONGITUDINAL DATA
 ####################################
-
 import numpy as np
 import pandas as pd
 from scipy.stats import rankdata
@@ -51,6 +50,7 @@ def _force_numeric_vector(series_like) -> np.ndarray:
             except Exception:
                 out[i] = np.nan
         return out
+
 
 def SubjectOrder_long(
     idp_matrix: np.ndarray,
@@ -132,121 +132,50 @@ def SubjectOrder_long(
         dtype=float,
     )
 
-
     if idp_matrix.ndim != 2:
+        raise ValueError("idp_matrix must be 2D (n_samples, n_idps).")
 
-        raise ValueError(
-            "idp_matrix must be 2D "
-            "(n_samples, n_idps)."
-        )
-
-
-    n_samples, n_idps = (
-        idp_matrix.shape
-    )
-
+    n_samples, n_idps = idp_matrix.shape
 
     if n_samples == 0:
-
-        raise ValueError(
-            "idp_matrix contains no observations."
-        )
-
+        raise ValueError("idp_matrix contains no observations.")
 
     if n_idps == 0:
-
-        raise ValueError(
-            "idp_matrix contains no IDPs."
-        )
-
+        raise ValueError("idp_matrix contains no IDPs.")
 
     # ============================================================
     # VALIDATE SUBJECTS
     # ============================================================
 
-    if len(
-        subjects
-    ) != n_samples:
+    if len(subjects) != n_samples:
+        raise ValueError("Length of subjects must match number of rows in idp_matrix.")
 
-        raise ValueError(
-            "Length of subjects must match number of rows "
-            "in idp_matrix."
-        )
-
-
-    subjects_arr = (
-        np.asarray(
-            subjects
-        )
-        .astype(str)
-    )
-
+    subjects_arr = np.asarray(subjects).astype(str)
 
     # ============================================================
     # VALIDATE BATCH
     # ============================================================
 
-    if len(
-        batch
-    ) != n_samples:
+    if len(batch) != n_samples:
+        raise ValueError("Length of batch must match number of rows in idp_matrix.")
 
-        raise ValueError(
-            "Length of batch must match number of rows "
-            "in idp_matrix."
-        )
-
-
-    batch_arr = (
-        np.asarray(
-            batch
-        )
-        .astype(str)
-    )
-
+    batch_arr = np.asarray(batch).astype(str)
 
     # ============================================================
     # VALIDATE IDP NAMES
     # ============================================================
 
     if idp_names is None:
-
-        idp_names = [
-            f"idp_{i + 1}"
-            for i in range(
-                n_idps
-            )
-        ]
-
+        idp_names = [f"idp_{i + 1}" for i in range(n_idps)]
 
     else:
+        idp_names = list(idp_names)
 
-        idp_names = list(
-            idp_names
-        )
+        if len(idp_names) != n_idps:
+            raise ValueError("idp_names length must match idp_matrix.shape[1].")
 
-
-        if len(
-            idp_names
-        ) != n_idps:
-
-            raise ValueError(
-                "idp_names length must match "
-                "idp_matrix.shape[1]."
-            )
-
-
-        if len(
-            set(
-                idp_names
-            )
-        ) != len(
-            idp_names
-        ):
-
-            raise ValueError(
-                "idp_names must be unique."
-            )
-
+        if len(set(idp_names)) != len(idp_names):
+            raise ValueError("idp_names must be unique.")
 
     # ============================================================
     # VALIDATE PERMUTATIONS
@@ -257,40 +186,19 @@ def SubjectOrder_long(
             nPerm,
             int,
         )
-        or
-        nPerm < 1
+        or nPerm < 1
     ):
-
-        raise ValueError(
-            "nPerm must be an integer >= 1."
-        )
-
+        raise ValueError("nPerm must be an integer >= 1.")
 
     # ============================================================
     # CHECK SUBJECT / BATCH LABELS
     # ============================================================
 
-    if np.any(
-        pd.isna(
-            subjects
-        )
-    ):
+    if np.any(pd.isna(subjects)):
+        raise ValueError("subjects contains missing values.")
 
-        raise ValueError(
-            "subjects contains missing values."
-        )
-
-
-    if np.any(
-        pd.isna(
-            batch
-        )
-    ):
-
-        raise ValueError(
-            "batch contains missing values."
-        )
-
+    if np.any(pd.isna(batch)):
+        raise ValueError("batch contains missing values.")
 
     # ============================================================
     # BATCH ORDER
@@ -298,33 +206,18 @@ def SubjectOrder_long(
     # Preserve order of first appearance.
     # ============================================================
 
-    batch_levels = (
-        pd.Index(
-            batch_arr
-        )
-        .unique()
-        .tolist()
-    )
+    batch_levels = pd.Index(batch_arr).unique().tolist()
 
-
-    if len(
-        batch_levels
-    ) < 2:
-
+    if len(batch_levels) < 2:
         raise ValueError(
-            "At least two unique batches are required "
-            "for subject-order consistency."
+            "At least two unique batches are required for subject-order consistency."
         )
-
 
     # ============================================================
     # RANDOM NUMBER GENERATOR
     # ============================================================
 
-    rng = default_rng(
-        seed
-    )
-
+    rng = default_rng(seed)
 
     # ============================================================
     # CREATE OBSERVATION-LEVEL DATAFRAME
@@ -335,20 +228,17 @@ def SubjectOrder_long(
         columns=idp_names,
     )
 
-
     idp_df.insert(
         0,
         "_batch",
         batch_arr,
     )
 
-
     idp_df.insert(
         0,
         "_subject",
         subjects_arr,
     )
-
 
     # ============================================================
     # AVERAGE REPEATED OBSERVATIONS WITHIN SUBJECT x BATCH
@@ -359,111 +249,69 @@ def SubjectOrder_long(
     # that observation is unchanged.
     # ============================================================
 
-    subject_batch_df = (
-        idp_df
-        .groupby(
-            [
-                "_subject",
-                "_batch",
-            ],
-            sort=False,
-            as_index=False,
-        )[
-            idp_names
-        ]
-        .mean()
-    )
-
+    subject_batch_df = idp_df.groupby(
+        [
+            "_subject",
+            "_batch",
+        ],
+        sort=False,
+        as_index=False,
+    )[idp_names].mean()
 
     # ============================================================
     # COUNT REPEATED SUBJECT x BATCH OBSERVATIONS
     # ============================================================
 
-    subject_batch_counts = (
-        idp_df
-        .groupby(
-            [
-                "_subject",
-                "_batch",
-            ],
-            sort=False,
-        )
-        .size()
-    )
+    subject_batch_counts = idp_df.groupby(
+        [
+            "_subject",
+            "_batch",
+        ],
+        sort=False,
+    ).size()
 
-
-    n_repeated_subject_batch = int(
-        (
-            subject_batch_counts > 1
-        )
-        .sum()
-    )
-
+    n_repeated_subject_batch = int((subject_batch_counts > 1).sum())
 
     # ============================================================
     # SUMMARY
     # ============================================================
 
-    print(
-        "\n" + "=" * 70
-    )
+    print("\n" + "=" * 70)
 
+    print("SUBJECT-ORDER CONSISTENCY")
 
-    print(
-        "SUBJECT-ORDER CONSISTENCY"
-    )
-
-
-    print(
-        "=" * 70
-    )
-
+    print("=" * 70)
 
     print(
         "Observations:",
         n_samples,
     )
 
-
     print(
         "Subjects:",
-        len(
-            np.unique(
-                subjects_arr
-            )
-        ),
+        len(np.unique(subjects_arr)),
     )
-
 
     print(
         "Batches:",
-        len(
-            batch_levels
-        ),
+        len(batch_levels),
     )
-
 
     print(
         "Subject x batch combinations:",
-        len(
-            subject_batch_df
-        ),
+        len(subject_batch_df),
     )
-
 
     print(
         "Subject x batch combinations with >1 observation:",
         n_repeated_subject_batch,
     )
 
-
     if n_repeated_subject_batch > 0:
-
         print(
             "Repeated observations within subject x batch "
             "were averaged before calculating correlations."
         )
-
 
     # ============================================================
     # OUTPUT STORAGE
@@ -471,61 +319,26 @@ def SubjectOrder_long(
 
     rows = []
 
-
     # ============================================================
     # BATCH-PAIR LOOP
     # ============================================================
 
-    for ia in range(
-        len(
-            batch_levels
-        ) - 1
-    ):
-
+    for ia in range(len(batch_levels) - 1):
         for ib in range(
             ia + 1,
-            len(
-                batch_levels
-            ),
+            len(batch_levels),
         ):
+            batch_A = batch_levels[ia]
 
-            batch_A = (
-                batch_levels[
-                    ia
-                ]
-            )
-
-
-            batch_B = (
-                batch_levels[
-                    ib
-                ]
-            )
-
+            batch_B = batch_levels[ib]
 
             # ====================================================
             # EXTRACT SUBJECTS FROM EACH BATCH
             # ====================================================
 
-            data_A = (
-                subject_batch_df[
-                    subject_batch_df[
-                        "_batch"
-                    ] == batch_A
-                ]
-                .copy()
-            )
+            data_A = subject_batch_df[subject_batch_df["_batch"] == batch_A].copy()
 
-
-            data_B = (
-                subject_batch_df[
-                    subject_batch_df[
-                        "_batch"
-                    ] == batch_B
-                ]
-                .copy()
-            )
-
+            data_B = subject_batch_df[subject_batch_df["_batch"] == batch_B].copy()
 
             # ====================================================
             # MATCH SUBJECTS ACROSS BATCHES
@@ -546,155 +359,81 @@ def SubjectOrder_long(
                 sort=False,
             )
 
-
-            n_matched_subjects = len(
-                matched
-            )
-
+            n_matched_subjects = len(matched)
 
             # ====================================================
             # NO MATCHED SUBJECTS
             # ====================================================
 
             if n_matched_subjects == 0:
-
                 for idp_name in idp_names:
-
                     rows.append(
                         {
-                            "TimeA":
-                                batch_A,
-
-                            "TimeB":
-                                batch_B,
-
-                            "IDP":
-                                idp_name,
-
-                            "nPairs":
-                                0,
-
-                            "SpearmanRho":
-                                np.nan,
-
-                            "NullMeanRho":
-                                np.nan,
-
-                            "pValue":
-                                np.nan,
+                            "TimeA": batch_A,
+                            "TimeB": batch_B,
+                            "IDP": idp_name,
+                            "nPairs": 0,
+                            "SpearmanRho": np.nan,
+                            "NullMeanRho": np.nan,
+                            "pValue": np.nan,
                         }
                     )
 
-
                 continue
-
 
             # ====================================================
             # IDP LOOP
             # ====================================================
 
             for idp_name in idp_names:
+                column_A = f"{idp_name}_A"
 
-                column_A = (
-                    f"{idp_name}_A"
-                )
-
-
-                column_B = (
-                    f"{idp_name}_B"
-                )
-
+                column_B = f"{idp_name}_B"
 
                 # ------------------------------------------------
                 # Extract matched subject values
                 # ------------------------------------------------
 
                 xa = pd.to_numeric(
-                    matched[
-                        column_A
-                    ],
+                    matched[column_A],
                     errors="coerce",
-                ).to_numpy(
-                    dtype=float
-                )
-
+                ).to_numpy(dtype=float)
 
                 yb = pd.to_numeric(
-                    matched[
-                        column_B
-                    ],
+                    matched[column_B],
                     errors="coerce",
-                ).to_numpy(
-                    dtype=float
-                )
-
+                ).to_numpy(dtype=float)
 
                 # ------------------------------------------------
                 # Remove missing / non-finite values
                 # ------------------------------------------------
 
-                valid_mask = (
-                    np.isfinite(
-                        xa
-                    )
-                    &
-                    np.isfinite(
-                        yb
-                    )
-                )
+                valid_mask = np.isfinite(xa) & np.isfinite(yb)
 
+                xa = xa[valid_mask]
 
-                xa = xa[
-                    valid_mask
-                ]
+                yb = yb[valid_mask]
 
-
-                yb = yb[
-                    valid_mask
-                ]
-
-
-                nPairs = int(
-                    len(
-                        xa
-                    )
-                )
-
+                nPairs = int(len(xa))
 
                 # =================================================
                 # MINIMUM NUMBER OF MATCHED SUBJECTS
                 # =================================================
 
                 if nPairs < 3:
-
                     rows.append(
                         {
-                            "TimeA":
-                                batch_A,
-
-                            "TimeB":
-                                batch_B,
-
-                            "IDP":
-                                idp_name,
-
-                            "nPairs":
-                                nPairs,
-
-                            "SpearmanRho":
-                                np.nan,
-
-                            "NullMeanRho":
-                                np.nan,
-
-                            "pValue":
-                                np.nan,
+                            "TimeA": batch_A,
+                            "TimeB": batch_B,
+                            "IDP": idp_name,
+                            "nPairs": nPairs,
+                            "SpearmanRho": np.nan,
+                            "NullMeanRho": np.nan,
+                            "pValue": np.nan,
                         }
                     )
 
-
                     continue
-
 
                 # =================================================
                 # OBSERVED SPEARMAN CORRELATION
@@ -706,22 +445,11 @@ def SubjectOrder_long(
                     nan_policy="omit",
                 )
 
-
-                if np.isnan(
-                    obs_rho
-                ):
-
+                if np.isnan(obs_rho):
                     abs_obs = None
 
-
                 else:
-
-                    abs_obs = abs(
-                        float(
-                            obs_rho
-                        )
-                    )
-
+                    abs_obs = abs(float(obs_rho))
 
                 # =================================================
                 # PERMUTATION NULL DISTRIBUTION
@@ -736,72 +464,36 @@ def SubjectOrder_long(
 
                 count_ge = 0
 
-
-                for _ in range(
-                    nPerm
-                ):
-
-                    perm_idx = rng.permutation(
-                        nPairs
-                    )
-
+                for _ in range(nPerm):
+                    perm_idx = rng.permutation(nPairs)
 
                     null_rho, _ = spearmanr(
                         xa,
-                        yb[
-                            perm_idx
-                        ],
+                        yb[perm_idx],
                         nan_policy="omit",
                     )
 
-
-                    if np.isnan(
-                        null_rho
-                    ):
-
+                    if np.isnan(null_rho):
                         continue
 
+                    null_rho = float(null_rho)
 
-                    null_rho = float(
-                        null_rho
-                    )
-
-
-                    sum_null += (
-                        null_rho
-                    )
-
+                    sum_null += null_rho
 
                     valid_null_count += 1
 
-
-                    if (
-                        abs_obs is not None
-                        and
-                        abs(
-                            null_rho
-                        ) >= abs_obs
-                    ):
-
+                    if abs_obs is not None and abs(null_rho) >= abs_obs:
                         count_ge += 1
-
 
                 # =================================================
                 # NULL MEAN
                 # =================================================
 
                 if valid_null_count > 0:
-
-                    null_mean = float(
-                        sum_null
-                        / valid_null_count
-                    )
-
+                    null_mean = float(sum_null / valid_null_count)
 
                 else:
-
                     null_mean = np.nan
-
 
                 # =================================================
                 # PERMUTATION P-VALUE
@@ -813,24 +505,10 @@ def SubjectOrder_long(
                 # =================================================
 
                 if valid_null_count > 0:
-
-                    pval = float(
-                        (
-                            1
-                            + count_ge
-                        )
-                        /
-                        (
-                            1
-                            + valid_null_count
-                        )
-                    )
-
+                    pval = float((1 + count_ge) / (1 + valid_null_count))
 
                 else:
-
                     pval = np.nan
-
 
                 # =================================================
                 # STORE RESULT
@@ -838,37 +516,17 @@ def SubjectOrder_long(
 
                 rows.append(
                     {
-                        "TimeA":
-                            batch_A,
-
-                        "TimeB":
-                            batch_B,
-
-                        "IDP":
-                            idp_name,
-
-                        "nPairs":
-                            nPairs,
-
-                        "SpearmanRho":
-                            (
-                                float(
-                                    obs_rho
-                                )
-                                if not np.isnan(
-                                    obs_rho
-                                )
-                                else np.nan
-                            ),
-
-                        "NullMeanRho":
-                            null_mean,
-
-                        "pValue":
-                            pval,
+                        "TimeA": batch_A,
+                        "TimeB": batch_B,
+                        "IDP": idp_name,
+                        "nPairs": nPairs,
+                        "SpearmanRho": (
+                            float(obs_rho) if not np.isnan(obs_rho) else np.nan
+                        ),
+                        "NullMeanRho": null_mean,
+                        "pValue": pval,
                     }
                 )
-
 
     # ============================================================
     # CREATE OUTPUT DATAFRAME
@@ -884,72 +542,41 @@ def SubjectOrder_long(
         "pValue",
     ]
 
-
     results = pd.DataFrame(
         rows,
         columns=columns,
     )
-
 
     # ============================================================
     # FINAL SUMMARY
     # ============================================================
 
     valid_rho = pd.to_numeric(
-        results[
-            "SpearmanRho"
-        ],
+        results["SpearmanRho"],
         errors="coerce",
     )
 
-
     print(
         "Batch pairs:",
-        (
-            len(
-                batch_levels
-            )
-            * (
-                len(
-                    batch_levels
-                )
-                - 1
-            )
-            // 2
-        ),
+        (len(batch_levels) * (len(batch_levels) - 1) // 2),
     )
-
 
     print(
         "IDPs:",
-        len(
-            idp_names
-        ),
+        len(idp_names),
     )
-
 
     print(
         "Result rows:",
-        len(
-            results
-        ),
+        len(results),
     )
-
 
     print(
         "Valid Spearman correlations:",
-        int(
-            np.isfinite(
-                valid_rho
-            ).sum()
-        ),
+        int(np.isfinite(valid_rho).sum()),
     )
 
-
-    print(
-        "=" * 70
-    )
-
+    print("=" * 70)
 
     # ============================================================
     # RETURN
@@ -960,13 +587,8 @@ def SubjectOrder_long(
 ##########################################################################################################
 # FOR LONGITUDINAL DATA: 2) Within subject variability: % difference (2 timepoints) OR CoV (>2 timepoints)
 ##########################################################################################################
-# Add Tuple import to avoid error here:
-from typing import Tuple, Dict, Any, List, Iterable
-
-import numpy as np
-import pandas as pd
 from itertools import combinations
-from typing import Sequence, Optional
+
 
 def _pairwise_rpd(arr: np.ndarray) -> float:
     """
@@ -998,9 +620,6 @@ def _pairwise_rpd(arr: np.ndarray) -> float:
         if denom == 0 or np.isnan(denom):
             continue
         rpds.append(abs(arr[i] - arr[j]) / denom * 100.0)
-
-    # Calculate the std of RPD as well
-    rpds_std = float(np.std(rpds)) if rpds else np.nan
 
     if len(rpds) == 0:
         return np.nan
@@ -1069,11 +688,10 @@ def WithinSubjVar_long(
     # df["timepoint"] = list(timepoints) 
 
     out_rows = []
-    temp = []
     for subj, g in df.groupby("subject", sort=False):
         row = {
             "subject": subj,
-            "n_obs": int(len(g)),
+            "n_obs": len(g),
             "metric_type": "Median Pairwise RPD",
         }
 
@@ -1089,32 +707,18 @@ def WithinSubjVar_long(
 ##########################################################################################################
 # FOR LONGITUDINAL DATA: Multivariate pairwise site differences using Mahalanobis distances
 ##########################################################################################################
-import re
-import warnings
-from itertools import combinations
-from typing import Any, Dict, Optional, Sequence, Tuple
-
-import numpy as np
-import pandas as pd
-
+from typing import Any, Dict, Optional, Sequence
 
 def MultiVariateBatchDifference_long(
     idp_matrix: np.ndarray,
     batch: pd.Series | Sequence,
-    subject: Optional[pd.Series | Sequence] = None,
-    timepoint: Optional[pd.Series | Sequence] = None,
-    idp_names: Optional[Sequence[str]] = None,
-    covariates: Optional[
-        Dict[str, pd.Series | Sequence | np.ndarray]
-    ] = None,
+    subject: pd.Series | Sequence | None = None,
+    timepoint: pd.Series | Sequence | None = None,
+    idp_names: Sequence[str] | None = None,
+    covariates: dict[str, pd.Series | Sequence | np.ndarray] | None = None,
     return_info: bool = False,
-) -> (
-    Dict[str, Any]
-    | Tuple[
-        Dict[str, Any],
-        Dict[str, Any],
-    ]
-):
+) -> dict[str, Any] | tuple[dict[str, Any], dict[str, Any]]:
+    
     """
     Multivariate batch/site differences using Mahalanobis distances
     for regular and repeated-measures data.
@@ -1203,45 +807,26 @@ def MultiVariateBatchDifference_long(
         idp_matrix,
         np.ndarray,
     ):
-
         idp_matrix = np.asarray(
             idp_matrix,
             dtype=float,
         )
 
-
     if idp_matrix.ndim != 2:
-
-        raise ValueError(
-            "idp_matrix must be 2D "
-            "(n_samples, n_features)."
-        )
-
+        raise ValueError("idp_matrix must be 2D (n_samples, n_features).")
 
     idp_matrix = idp_matrix.astype(
         float,
         copy=False,
     )
 
-
-    n_samples, n_features = (
-        idp_matrix.shape
-    )
-
+    n_samples, n_features = idp_matrix.shape
 
     if n_samples == 0:
-
-        raise ValueError(
-            "idp_matrix contains no observations."
-        )
-
+        raise ValueError("idp_matrix contains no observations.")
 
     if n_features == 0:
-
-        raise ValueError(
-            "idp_matrix contains no features."
-        )
-
+        raise ValueError("idp_matrix contains no features.")
 
     # ============================================================
     # 2. VALIDATE BATCH
@@ -1251,199 +836,107 @@ def MultiVariateBatchDifference_long(
         batch,
         pd.Series,
     ):
-
-        batch_ser = batch.reset_index(
-            drop=True
-        )
-
-
+        batch_ser = batch.reset_index(drop=True)
     else:
-
-        batch_ser = pd.Series(
-            batch
-        )
-
+        batch_ser = pd.Series(batch)
 
     if len(batch_ser) != n_samples:
-
-        raise ValueError(
-            "Length of batch must match number of rows "
-            "in idp_matrix."
-        )
-
+        raise ValueError("Length of batch must match number of rows in idp_matrix.")
 
     if batch_ser.isna().any():
-
-        raise ValueError(
-            "batch contains missing values."
-        )
-
+        raise ValueError("batch contains missing values.")
 
     # ============================================================
     # 3. VALIDATE SUBJECT
     # ============================================================
 
     if subject is not None:
-
         if isinstance(
             subject,
             pd.Series,
         ):
-
-            subject_ser = subject.reset_index(
-                drop=True
-            )
-
+            subject_ser = subject.reset_index(drop=True)
 
         else:
-
-            subject_ser = pd.Series(
-                subject
-            )
-
+            subject_ser = pd.Series(subject)
 
         if len(subject_ser) != n_samples:
-
             raise ValueError(
-                "Length of subject must match number of rows "
-                "in idp_matrix."
+                "Length of subject must match number of rows in idp_matrix."
             )
-
 
         if subject_ser.isna().any():
-
-            raise ValueError(
-                "subject contains missing values."
-            )
-
+            raise ValueError("subject contains missing values.")
 
     else:
-
         subject_ser = None
-
 
     # ============================================================
     # 4. VALIDATE TIMEPOINT
     # ============================================================
 
     if timepoint is not None:
-
         if isinstance(
             timepoint,
             pd.Series,
         ):
-
-            timepoint_ser = timepoint.reset_index(
-                drop=True
-            )
-
+            timepoint_ser = timepoint.reset_index(drop=True)
 
         else:
-
-            timepoint_ser = pd.Series(
-                timepoint
-            )
-
+            timepoint_ser = pd.Series(timepoint)
 
         if len(timepoint_ser) != n_samples:
-
             raise ValueError(
-                "Length of timepoint must match number of rows "
-                "in idp_matrix."
+                "Length of timepoint must match number of rows in idp_matrix."
             )
-
 
         if timepoint_ser.isna().any():
-
-            raise ValueError(
-                "timepoint contains missing values."
-            )
-
+            raise ValueError("timepoint contains missing values.")
 
     else:
-
         timepoint_ser = None
-
 
     # ============================================================
     # 5. IDP NAMES
     # ============================================================
 
     if idp_names is None:
-
-        idp_names = [
-            f"idp_{i + 1}"
-            for i in range(
-                n_features
-            )
-        ]
-
+        idp_names = [f"idp_{i + 1}" for i in range(n_features)]
 
     else:
-
-        idp_names = list(
-            idp_names
-        )
-
+        idp_names = list(idp_names)
 
         if len(idp_names) != n_features:
+            raise ValueError("idp_names length must match idp_matrix.shape[1].")
 
-            raise ValueError(
-                "idp_names length must match "
-                "idp_matrix.shape[1]."
-            )
-
-
-        if len(
-            set(idp_names)
-        ) != len(idp_names):
-
-            raise ValueError(
-                "idp_names must be unique."
-            )
-
+        if len(set(idp_names)) != len(idp_names):
+            raise ValueError("idp_names must be unique.")
 
     # ============================================================
     # 6. PREPARE COVARIATES
     # ============================================================
 
-    have_covariates = (
-        covariates is not None
-    )
-
+    have_covariates = covariates is not None
 
     covariate_encoding = {}
 
-
     if have_covariates:
-
         if not isinstance(
             covariates,
             dict,
         ):
-
             raise TypeError(
                 "covariates must be a dictionary of the form "
                 "{'covariate_name': values}."
             )
 
-
         if len(covariates) == 0:
-
-            raise ValueError(
-                "covariates dictionary is empty."
-            )
-
+            raise ValueError("covariates dictionary is empty.")
 
         encoded_parts = []
 
-
         for name, values in covariates.items():
-
-            cov_name = str(
-                name
-            )
-
+            cov_name = str(name)
 
             # ----------------------------------------------------
             # Convert to Series
@@ -1453,277 +946,153 @@ def MultiVariateBatchDifference_long(
                 values,
                 pd.Series,
             ):
-
-                series = values.reset_index(
-                    drop=True
-                )
-
+                series = values.reset_index(drop=True)
 
             else:
-
                 try:
-
-                    series = pd.Series(
-                        values
-                    ).reset_index(
-                        drop=True
-                    )
-
+                    series = pd.Series(values).reset_index(drop=True)
 
                 except Exception as exc:
-
                     raise ValueError(
-                        f"Could not convert covariate "
-                        f"'{cov_name}' to a 1D sequence."
+                        f"Could not convert covariate '{cov_name}' to a 1D sequence."
                     ) from exc
 
-
             if len(series) != n_samples:
-
                 raise ValueError(
                     f"Covariate '{cov_name}' has "
                     f"{len(series)} values, but idp_matrix "
                     f"has {n_samples} observations."
                 )
 
-
             if series.isna().any():
-
                 raise ValueError(
                     f"Covariate '{cov_name}' contains missing "
                     "values. Please clean or impute them first."
                 )
 
-
             # ----------------------------------------------------
             # Boolean
             # ----------------------------------------------------
 
-            if pd.api.types.is_bool_dtype(
-                series
-            ):
+            if pd.api.types.is_bool_dtype(series):
+                encoded = pd.DataFrame({cov_name: series.astype(float)})
 
-                encoded = pd.DataFrame(
-                    {
-                        cov_name:
-                            series.astype(
-                                float
-                            )
-                    }
-                )
-
-
-                covariate_encoding[
-                    cov_name
-                ] = {
+                covariate_encoding[cov_name] = {
                     "type": "binary",
                     "levels": [
                         False,
                         True,
                     ],
                     "reference_level": False,
-                    "columns": [
-                        cov_name
-                    ],
+                    "columns": [cov_name],
                 }
 
-
-                encoded_parts.append(
-                    encoded
-                )
-
+                encoded_parts.append(encoded)
 
                 continue
-
 
             # ----------------------------------------------------
             # Numeric
             # ----------------------------------------------------
 
-            if pd.api.types.is_numeric_dtype(
-                series
-            ):
-
+            if pd.api.types.is_numeric_dtype(series):
                 numeric = pd.to_numeric(
                     series,
                     errors="coerce",
                 )
 
-
                 if numeric.isna().any():
-
                     raise ValueError(
                         f"Covariate '{cov_name}' contains values "
                         "that cannot be converted to numeric."
                     )
 
+                unique_values = list(pd.unique(numeric))
 
-                unique_values = list(
-                    pd.unique(
-                        numeric
-                    )
-                )
-
-
-                if len(
-                    unique_values
-                ) == 1:
-
+                if len(unique_values) == 1:
                     warnings.warn(
                         f"Covariate '{cov_name}' has only one "
                         "unique value and therefore contributes "
                         "no variation to the model."
                     )
 
+                encoded = pd.DataFrame({cov_name: numeric.astype(float)})
 
-                encoded = pd.DataFrame(
-                    {
-                        cov_name:
-                            numeric.astype(
-                                float
-                            )
-                    }
-                )
-
-
-                if len(
-                    unique_values
-                ) == 2:
-
-                    covariate_encoding[
-                        cov_name
-                    ] = {
+                if len(unique_values) == 2:
+                    covariate_encoding[cov_name] = {
                         "type": "binary_numeric",
-                        "levels": [
-                            float(x)
-                            for x in unique_values
-                        ],
-                        "reference_level":
-                            float(
-                                unique_values[0]
-                            ),
-                        "columns": [
-                            cov_name
-                        ],
+                        "levels": [float(x) for x in unique_values],
+                        "reference_level": float(unique_values[0]),
+                        "columns": [cov_name],
                     }
-
 
                 else:
-
-                    covariate_encoding[
-                        cov_name
-                    ] = {
+                    covariate_encoding[cov_name] = {
                         "type": "continuous",
-                        "columns": [
-                            cov_name
-                        ],
+                        "columns": [cov_name],
                     }
 
-
-                encoded_parts.append(
-                    encoded
-                )
-
+                encoded_parts.append(encoded)
 
                 continue
-
 
             # ----------------------------------------------------
             # Categorical/string
             # ----------------------------------------------------
 
-            series_string = (
-                series.astype(str)
-            )
+            series_string = series.astype(str)
 
+            levels = list(pd.unique(series_string))
 
-            levels = list(
-                pd.unique(
-                    series_string
-                )
-            )
-
-
-            n_levels = len(
-                levels
-            )
-
+            n_levels = len(levels)
 
             if n_levels < 2:
-
                 raise ValueError(
                     f"Covariate '{cov_name}' has fewer than "
                     "two unique levels and cannot be used "
                     "as a covariate."
                 )
 
-
             # ----------------------------------------------------
             # Binary categorical
             # ----------------------------------------------------
 
             if n_levels == 2:
-
                 reference = levels[0]
 
                 positive = levels[1]
 
-
-                encoded_series = (
-                    series_string.map(
-                        {
-                            reference: 0.0,
-                            positive: 1.0,
-                        }
-                    )
-                )
-
-
-                encoded = pd.DataFrame(
+                encoded_series = series_string.map(
                     {
-                        cov_name:
-                            encoded_series
+                        reference: 0.0,
+                        positive: 1.0,
                     }
                 )
 
+                encoded = pd.DataFrame({cov_name: encoded_series})
 
-                covariate_encoding[
-                    cov_name
-                ] = {
-                    "type":
-                        "binary_categorical",
-
+                covariate_encoding[cov_name] = {
+                    "type": "binary_categorical",
                     "levels": [
                         reference,
                         positive,
                     ],
-
-                    "reference_level":
-                        reference,
-
-                    "columns": [
-                        cov_name
-                    ],
+                    "reference_level": reference,
+                    "columns": [cov_name],
                 }
 
-
-                encoded_parts.append(
-                    encoded
-                )
-
+                encoded_parts.append(encoded)
 
             # ----------------------------------------------------
             # Multi-level categorical
             # ----------------------------------------------------
 
             else:
-
                 categorical = pd.Categorical(
                     series_string,
                     categories=levels,
                     ordered=False,
                 )
-
 
                 dummy_df = pd.get_dummies(
                     categorical,
@@ -1732,89 +1101,44 @@ def MultiVariateBatchDifference_long(
                     dtype=float,
                 )
 
+                dummy_df.columns = [str(col) for col in dummy_df.columns]
 
-                dummy_df.columns = [
-                    str(col)
-                    for col in dummy_df.columns
-                ]
-
-
-                covariate_encoding[
-                    cov_name
-                ] = {
+                covariate_encoding[cov_name] = {
                     "type": "categorical",
                     "levels": levels,
-                    "reference_level":
-                        levels[0],
-                    "columns":
-                        dummy_df.columns.tolist(),
+                    "reference_level": levels[0],
+                    "columns": dummy_df.columns.tolist(),
                 }
 
+                encoded_parts.append(dummy_df)
 
-                encoded_parts.append(
-                    dummy_df
-                )
-
-
-        if len(
-            encoded_parts
-        ) == 0:
-
-            raise ValueError(
-                "No usable covariates remained after encoding."
-            )
-
+        if len(encoded_parts) == 0:
+            raise ValueError("No usable covariates remained after encoding.")
 
         cov_df_encoded = pd.concat(
             encoded_parts,
             axis=1,
         )
 
+        covariates_array = cov_df_encoded.to_numpy(dtype=float)
 
-        covariates_array = (
-            cov_df_encoded
-            .to_numpy(
-                dtype=float
-            )
-        )
+        if not np.isfinite(covariates_array).all():
+            raise ValueError("Encoded covariates contain NaN or infinite values.")
 
-
-        if not np.isfinite(
-            covariates_array
-        ).all():
-
-            raise ValueError(
-                "Encoded covariates contain NaN or "
-                "infinite values."
-            )
-
-
-        covariates = (
-            covariates_array
-        )
-
+        covariates = covariates_array
 
     else:
-
         covariate_encoding = {}
 
         covariates = None
-
 
     # ============================================================
     # 7. REPEATED-MEASURES STRUCTURE AND TIMEPOINT ORDER
     # ============================================================
 
-    def _timepoint_sort_key(
-        value
-    ):
+    def _timepoint_sort_key(value):
 
-        text = (
-            str(value)
-            .strip()
-            .lower()
-        )
-
+        text = str(value).strip().lower()
 
         baseline_labels = {
             "baseline",
@@ -1826,53 +1150,38 @@ def MultiVariateBatchDifference_long(
             "time_0",
         }
 
-
         if text in baseline_labels:
-
             return (
                 0,
                 0.0,
                 text,
             )
 
-
         try:
-
             return (
                 1,
                 float(text),
                 text,
             )
 
-
         except ValueError:
-
             pass
-
 
         numbers = re.findall(
             r"[-+]?\d*\.?\d+",
             text,
         )
 
-
         if numbers:
-
             try:
-
                 return (
                     1,
-                    float(
-                        numbers[-1]
-                    ),
+                    float(numbers[-1]),
                     text,
                 )
 
-
             except ValueError:
-
                 pass
-
 
         return (
             2,
@@ -1880,71 +1189,43 @@ def MultiVariateBatchDifference_long(
             text,
         )
 
-
     # ------------------------------------------------------------
     # Timepoint structure
     # ------------------------------------------------------------
 
     if timepoint_ser is None:
-
         ordered_timepoints = None
 
         n_timepoints = 1
 
-
     else:
-
         if isinstance(
             timepoint_ser.dtype,
             pd.CategoricalDtype,
         ):
-
-            observed = set(
-                timepoint_ser.tolist()
-            )
-
+            observed = set(timepoint_ser.tolist())
 
             ordered_timepoints = [
-                tp
-                for tp in (
-                    timepoint_ser.cat.categories
-                )
-                if tp in observed
+                tp for tp in (timepoint_ser.cat.categories) if tp in observed
             ]
 
-
         else:
-
             ordered_timepoints = sorted(
-                pd.unique(
-                    timepoint_ser
-                ).tolist(),
+                pd.unique(timepoint_ser).tolist(),
                 key=_timepoint_sort_key,
             )
 
-
-        n_timepoints = len(
-            ordered_timepoints
-        )
-
+        n_timepoints = len(ordered_timepoints)
 
     # ------------------------------------------------------------
     # Repeated subjects
     # ------------------------------------------------------------
 
     if subject_ser is None:
-
         has_repeated_subjects = False
 
-
     else:
-
-        has_repeated_subjects = bool(
-            subject_ser
-            .duplicated()
-            .any()
-        )
-
+        has_repeated_subjects = bool(subject_ser.duplicated().any())
 
     # ------------------------------------------------------------
     # Batch variation within subject
@@ -1960,63 +1241,22 @@ def MultiVariateBatchDifference_long(
 
     n_subjects_single_batch = 0
 
-
     if subject_ser is not None:
-
         structure_df = pd.DataFrame(
             {
-                "_subject":
-                    subject_ser.to_numpy(),
-
-                "_batch":
-                    batch_ser.to_numpy(),
+                "_subject": subject_ser.to_numpy(),
+                "_batch": batch_ser.to_numpy(),
             }
         )
 
+        batches_per_subject = structure_df.groupby(
+            "_subject",
+            sort=False,
+        )["_batch"].nunique()
 
-        batches_per_subject = (
-            structure_df
-            .groupby(
-                "_subject",
-                sort=False,
-            )[
-                "_batch"
-            ]
-            .nunique()
-        )
-
-
-        batch_varies_within_subject = bool(
-            (
-                batches_per_subject
-                > 1
-            )
-            .any()
-        )
-
-
-        n_subjects = int(
-            subject_ser.nunique()
-        )
-
-
-        n_subjects_multiple_batches = int(
-            (
-                batches_per_subject
-                > 1
-            )
-            .sum()
-        )
-
-
-        n_subjects_single_batch = int(
-            (
-                batches_per_subject
-                == 1
-            )
-            .sum()
-        )
-
+        batch_varies_within_subject = bool((batches_per_subject > 1).any())
+        n_subjects_multiple_batches = int((batches_per_subject > 1).sum())
+        n_subjects_single_batch = int((batches_per_subject == 1).sum())
 
     # ------------------------------------------------------------
     # Select analysis representation
@@ -2024,49 +1264,22 @@ def MultiVariateBatchDifference_long(
 
     if (
         subject_ser is not None
-        and
-        has_repeated_subjects
-        and
-        batch_varies_within_subject
+        and has_repeated_subjects
+        and batch_varies_within_subject
     ):
+        analysis_mode = "repeated"
 
-        analysis_mode = (
-            "repeated"
-        )
+        longitudinal_case = "batch_varies_within_subject"
 
+    elif subject_ser is not None and has_repeated_subjects and n_timepoints > 1:
+        analysis_mode = "longitudinal"
 
-        longitudinal_case = (
-            "batch_varies_within_subject"
-        )
-
-
-    elif (
-        subject_ser is not None
-        and
-        has_repeated_subjects
-        and
-        n_timepoints > 1
-    ):
-
-        analysis_mode = (
-            "longitudinal"
-        )
-
-
-        longitudinal_case = (
-            "batch_constant_within_subject"
-        )
-
+        longitudinal_case = "batch_constant_within_subject"
 
     else:
-
-        analysis_mode = (
-            "regular"
-        )
-
+        analysis_mode = "regular"
 
         longitudinal_case = None
-
 
     # ============================================================
     # 8. HELPER: RESIDUALIZATION
@@ -2089,19 +1302,13 @@ def MultiVariateBatchDifference_long(
             ]
         )
 
-
         B, *_ = np.linalg.lstsq(
             design,
             X,
             rcond=None,
         )
 
-
-        return (
-            X
-            - design @ B
-        )
-
+        return X - design @ B
 
     # ============================================================
     # 9. HELPER: DESIGN RANK
@@ -2123,13 +1330,7 @@ def MultiVariateBatchDifference_long(
             ]
         )
 
-
-        return int(
-            np.linalg.matrix_rank(
-                design
-            )
-        )
-
+        return int(np.linalg.matrix_rank(design))
 
     # ============================================================
     # 10. HELPER: COVARIANCE
@@ -2140,7 +1341,6 @@ def MultiVariateBatchDifference_long(
     ) -> np.ndarray:
 
         if X.shape[0] <= 1:
-
             return np.zeros(
                 (
                     X.shape[1],
@@ -2149,13 +1349,11 @@ def MultiVariateBatchDifference_long(
                 dtype=float,
             )
 
-
         cov = np.cov(
             X,
             rowvar=False,
             ddof=1,
         )
-
 
         cov = np.atleast_2d(
             np.asarray(
@@ -2164,19 +1362,13 @@ def MultiVariateBatchDifference_long(
             )
         )
 
-
         if cov.shape != (
             X.shape[1],
             X.shape[1],
         ):
-
-            raise ValueError(
-                "Unexpected covariance matrix shape."
-            )
-
+            raise ValueError("Unexpected covariance matrix shape.")
 
         return cov
-
 
     # ============================================================
     # 11. HELPER: STABLE PSEUDOINVERSE
@@ -2191,62 +1383,26 @@ def MultiVariateBatchDifference_long(
             full_matrices=False,
         )
 
-
         if len(s) == 0:
-
             return (
                 np.zeros_like(S),
                 0,
             )
 
+        tol = np.max(s) * max(S.shape) * np.finfo(float).eps
 
-        tol = (
-            np.max(s)
-            * max(
-                S.shape
-            )
-            * np.finfo(
-                float
-            ).eps
-        )
+        keep = s > tol
 
+        s_inv = np.zeros_like(s)
 
-        keep = (
-            s
-            > tol
-        )
+        s_inv[keep] = 1.0 / s[keep]
 
-
-        s_inv = np.zeros_like(
-            s
-        )
-
-
-        s_inv[
-            keep
-        ] = (
-            1.0
-            / s[
-                keep
-            ]
-        )
-
-
-        pinv = (
-            (Vt.T * s_inv)
-            @ U.T
-        )
-
+        pinv = (Vt.T * s_inv) @ U.T
 
         return (
             pinv,
-            int(
-                np.sum(
-                    keep
-                )
-            ),
+            int(np.sum(keep)),
         )
-
 
     # ============================================================
     # 12. HELPER: MAHALANOBIS DISTANCES
@@ -2264,186 +1420,90 @@ def MultiVariateBatchDifference_long(
             dtype=float,
         )
 
-
-        batches = np.asarray(
-            batches
-        )
-
+        batches = np.asarray(batches)
 
         if X.ndim != 2:
+            raise ValueError("Analysis matrix must be 2D.")
 
-            raise ValueError(
-                "Analysis matrix must be 2D."
-            )
-
-
-        if X.shape[0] != len(
-            batches
-        ):
-
-            raise ValueError(
-                "Batch length does not match analysis matrix."
-            )
-
+        if X.shape[0] != len(batches):
+            raise ValueError("Batch length does not match analysis matrix.")
 
         if X.shape[0] < 2:
+            raise ValueError("At least two observations are required.")
 
-            raise ValueError(
-                "At least two observations are required."
-            )
+        if not np.isfinite(X).all():
+            raise ValueError("Analysis matrix contains non-finite values.")
 
+        unique_batches = list(dict.fromkeys(batches.tolist()))
 
-        if not np.isfinite(
-            X
-        ).all():
-
-            raise ValueError(
-                "Analysis matrix contains non-finite values."
-            )
-
-
-        unique_batches = list(
-            dict.fromkeys(
-                batches.tolist()
-            )
-        )
-
-
-        if len(
-            unique_batches
-        ) < 2:
-
-            raise ValueError(
-                "At least two unique batches are required."
-            )
-
+        if len(unique_batches) < 2:
+            raise ValueError("At least two unique batches are required.")
 
         # --------------------------------------------------------
         # Batch means
         # --------------------------------------------------------
 
-        batch_means = {
-            b:
-                X[
-                    batches == b
-                ].mean(
-                    axis=0
-                )
-
-            for b in unique_batches
-        }
-
+        batch_means = {b: X[batches == b].mean(axis=0) for b in unique_batches}
 
         # --------------------------------------------------------
         # Covariance
         # --------------------------------------------------------
 
         if covariance_mode == "site_average":
-
             site_covariances = []
 
-
             for b in unique_batches:
+                Xb = X[batches == b]
 
-                Xb = X[
-                    batches == b
-                ]
-
-
-                site_covariances.append(
-                    _covariance(
-                        Xb
-                    )
-                )
-
+                site_covariances.append(_covariance(Xb))
 
             overall_cov = np.mean(
                 site_covariances,
                 axis=0,
             )
 
-
         elif covariance_mode == "pooled":
-
-            overall_cov = _covariance(
-                X
-            )
-
+            overall_cov = _covariance(X)
 
         else:
-
-            raise ValueError(
-                "Unknown covariance_mode."
-            )
-
+            raise ValueError("Unknown covariance_mode.")
 
         # --------------------------------------------------------
         # Inverse covariance
         # --------------------------------------------------------
 
         try:
-
-            cond_number = float(
-                np.linalg.cond(
-                    overall_cov
-                )
-            )
-
+            cond_number = float(np.linalg.cond(overall_cov))
 
         except Exception:
-
             cond_number = np.inf
 
-
-        use_pinv = (
-            not np.isfinite(
-                cond_number
-            )
-            or
-            cond_number > 1e15
-        )
-
+        use_pinv = not np.isfinite(cond_number) or cond_number > 1e15
 
         retained_svals = 0
 
-
         if use_pinv:
-
             (
                 covariance_inv,
                 retained_svals,
-            ) = _stable_pinv(
-                overall_cov
-            )
-
+            ) = _stable_pinv(overall_cov)
 
         else:
-
             try:
-
-                covariance_inv = np.linalg.inv(
-                    overall_cov
-                )
-
+                covariance_inv = np.linalg.inv(overall_cov)
 
             except np.linalg.LinAlgError:
-
                 warnings.warn(
                     "Covariance matrix was singular during "
                     "inversion; using pseudoinverse."
                 )
 
-
                 (
                     covariance_inv,
                     retained_svals,
-                ) = _stable_pinv(
-                    overall_cov
-                )
-
+                ) = _stable_pinv(overall_cov)
 
                 use_pinv = True
-
 
         # --------------------------------------------------------
         # Pairwise distances
@@ -2451,24 +1511,13 @@ def MultiVariateBatchDifference_long(
 
         pairwise = {}
 
-
         for b1, b2 in combinations(
             unique_batches,
             2,
         ):
+            diff = batch_means[b1] - batch_means[b2]
 
-            diff = (
-                batch_means[b1]
-                - batch_means[b2]
-            )
-
-
-            delta = float(
-                diff
-                @ covariance_inv
-                @ diff
-            )
-
+            delta = float(diff @ covariance_inv @ diff)
 
             pairwise[
                 (
@@ -2484,55 +1533,28 @@ def MultiVariateBatchDifference_long(
                 )
             )
 
-
         # --------------------------------------------------------
         # Global centroid
         # --------------------------------------------------------
 
         if centroid_mode == "site_mean":
-
             global_mean = np.mean(
-                np.vstack(
-                    [
-                        batch_means[b]
-                        for b in unique_batches
-                    ]
-                ),
+                np.vstack([batch_means[b] for b in unique_batches]),
                 axis=0,
             )
 
-
         elif centroid_mode == "global":
-
-            global_mean = X.mean(
-                axis=0
-            )
-
+            global_mean = X.mean(axis=0)
 
         else:
-
-            raise ValueError(
-                "Unknown centroid_mode."
-            )
-
+            raise ValueError("Unknown centroid_mode.")
 
         centroid = {}
 
-
         for b in unique_batches:
+            diff = batch_means[b] - global_mean
 
-            diff = (
-                batch_means[b]
-                - global_mean
-            )
-
-
-            delta = float(
-                diff
-                @ covariance_inv
-                @ diff
-            )
-
+            delta = float(diff @ covariance_inv @ diff)
 
             centroid[
                 (
@@ -2548,42 +1570,15 @@ def MultiVariateBatchDifference_long(
                 )
             )
 
-
         diagnostics = {
-            "cond_number":
-                cond_number,
-
-            "used_pseudoinverse":
-                bool(
-                    use_pinv
-                ),
-
-            "num_retained_svals":
-                int(
-                    retained_svals
-                ),
-
-            "covariance_rank":
-                int(
-                    np.linalg.matrix_rank(
-                        overall_cov
-                    )
-                ),
-
-            "overallCov":
-                overall_cov,
-
-            "n_observations":
-                int(
-                    X.shape[0]
-                ),
-
-            "n_features":
-                int(
-                    X.shape[1]
-                ),
+            "cond_number": cond_number,
+            "used_pseudoinverse": bool(use_pinv),
+            "num_retained_svals": int(retained_svals),
+            "covariance_rank": int(np.linalg.matrix_rank(overall_cov)),
+            "overallCov": overall_cov,
+            "n_observations": int(X.shape[0]),
+            "n_features": int(X.shape[1]),
         }
-
 
         return (
             pairwise,
@@ -2591,36 +1586,19 @@ def MultiVariateBatchDifference_long(
             diagnostics,
         )
 
-
     # ============================================================
     # 13. REGULAR DATA
     # ============================================================
 
     if analysis_mode == "regular":
-
-        complete_rows = np.isfinite(
-            idp_matrix
-        ).all(
-            axis=1
-        )
-
+        complete_rows = np.isfinite(idp_matrix).all(axis=1)
 
         if not complete_rows.any():
+            raise ValueError("No complete IDP observations remain.")
 
-            raise ValueError(
-                "No complete IDP observations remain."
-            )
+        X_raw = idp_matrix[complete_rows]
 
-
-        X_raw = idp_matrix[
-            complete_rows
-        ]
-
-
-        B_raw = batch_ser.to_numpy()[
-            complete_rows
-        ]
-
+        B_raw = batch_ser.to_numpy()[complete_rows]
 
         (
             pairwise_raw,
@@ -2633,19 +1611,13 @@ def MultiVariateBatchDifference_long(
             centroid_mode="site_mean",
         )
 
-
         if have_covariates:
-
-            C_valid = covariates[
-                complete_rows
-            ]
-
+            C_valid = covariates[complete_rows]
 
             X_resid = _residualize(
                 X_raw,
                 C_valid,
             )
-
 
             (
                 pairwise_resid,
@@ -2658,138 +1630,53 @@ def MultiVariateBatchDifference_long(
                 centroid_mode="site_mean",
             )
 
-
         else:
-
             pairwise_resid = None
 
             centroid_resid = None
 
             resid_diag = None
 
-
         results = {
-            "pairwise_raw":
-                pairwise_raw,
-
-            "pairwise_resid":
-                pairwise_resid,
-
-            "centroid_raw":
-                centroid_raw,
-
-            "centroid_resid":
-                centroid_resid,
-
-            "batches":
-                list(
-                    dict.fromkeys(
-                        B_raw.tolist()
-                    )
-                ),
+            "pairwise_raw": pairwise_raw,
+            "pairwise_resid": pairwise_resid,
+            "centroid_raw": centroid_raw,
+            "centroid_resid": centroid_resid,
+            "batches": list(dict.fromkeys(B_raw.tolist())),
         }
-
 
         info = {
-            "mode":
-                "regular",
-
-            "longitudinal_case":
-                None,
-
-            "analysis_representation":
-                "original observations",
-
-            "n_timepoints":
-                int(
-                    n_timepoints
-                ),
-
-            "timepoints":
-                (
-                    None
-                    if ordered_timepoints is None
-                    else list(
-                        ordered_timepoints
-                    )
-                ),
-
-            "has_repeated_subjects":
-                bool(
-                    has_repeated_subjects
-                ),
-
-            "batch_varies_within_subject":
-                bool(
-                    batch_varies_within_subject
-                ),
-
-            "n_subjects_multiple_batches":
-                int(
-                    n_subjects_multiple_batches
-                ),
-
-            "n_subjects_single_batch":
-                int(
-                    n_subjects_single_batch
-                ),
-
-            "n_samples_input":
-                int(
-                    n_samples
-                ),
-
-            "n_samples_retained":
-                int(
-                    X_raw.shape[0]
-                ),
-
-            "n_samples_excluded":
-                int(
-                    n_samples
-                    - X_raw.shape[0]
-                ),
-
-            "raw_diagnostics":
-                raw_diag,
-
-            "residual_diagnostics":
-                resid_diag,
-
-            "idp_names":
-                list(
-                    idp_names
-                ),
-
-            "covariates_used":
-                bool(
-                    have_covariates
-                ),
-
-            "n_covariates_after_encoding":
-                (
-                    int(
-                        covariates.shape[1]
-                    )
-                    if have_covariates
-                    else 0
-                ),
-
-            "covariate_encoding":
-                covariate_encoding,
+            "mode": "regular",
+            "longitudinal_case": None,
+            "analysis_representation": "original observations",
+            "n_timepoints": int(n_timepoints),
+            "timepoints": (
+                None if ordered_timepoints is None else list(ordered_timepoints)
+            ),
+            "has_repeated_subjects": bool(has_repeated_subjects),
+            "batch_varies_within_subject": bool(batch_varies_within_subject),
+            "n_subjects_multiple_batches": int(n_subjects_multiple_batches),
+            "n_subjects_single_batch": int(n_subjects_single_batch),
+            "n_samples_input": int(n_samples),
+            "n_samples_retained": int(X_raw.shape[0]),
+            "n_samples_excluded": int(n_samples - X_raw.shape[0]),
+            "raw_diagnostics": raw_diag,
+            "residual_diagnostics": resid_diag,
+            "idp_names": list(idp_names),
+            "covariates_used": bool(have_covariates),
+            "n_covariates_after_encoding": (
+                int(covariates.shape[1]) if have_covariates else 0
+            ),
+            "covariate_encoding": covariate_encoding,
         }
 
-
         if return_info:
-
             return (
                 results,
                 info,
             )
 
-
         return results
-
 
     # ============================================================
     # 14. LONGITUDINAL / REPEATED DATAFRAME
@@ -2800,78 +1687,34 @@ def MultiVariateBatchDifference_long(
         columns=idp_names,
     )
 
-
-    data[
-        "_subject"
-    ] = (
-        subject_ser.to_numpy()
-    )
-
+    data["_subject"] = subject_ser.to_numpy()
 
     if timepoint_ser is None:
-
-        data[
-            "_timepoint"
-        ] = np.repeat(
+        data["_timepoint"] = np.repeat(
             "__single_timepoint__",
             n_samples,
         )
 
-
     else:
+        data["_timepoint"] = timepoint_ser.to_numpy()
 
-        data[
-            "_timepoint"
-        ] = (
-            timepoint_ser.to_numpy()
-        )
-
-
-    data[
-        "_batch"
-    ] = (
-        batch_ser.to_numpy()
-    )
-
+    data["_batch"] = batch_ser.to_numpy()
 
     # ============================================================
     # 15. OBSERVATION-LEVEL RESIDUALIZATION
     # ============================================================
 
     if have_covariates:
+        complete_for_resid = np.isfinite(idp_matrix).all(axis=1)
 
-        complete_for_resid = (
-            np.isfinite(
-                idp_matrix
-            ).all(
-                axis=1
-            )
-        )
-
-
-        if (
-            complete_for_resid.sum()
-            <= covariates.shape[1] + 1
-        ):
-
+        if complete_for_resid.sum() <= covariates.shape[1] + 1:
             raise ValueError(
-                "Insufficient complete observations for "
-                "covariate residualization."
+                "Insufficient complete observations for covariate residualization."
             )
 
+        design_rank = _design_rank(covariates[complete_for_resid])
 
-        design_rank = _design_rank(
-            covariates[
-                complete_for_resid
-            ]
-        )
-
-
-        if (
-            design_rank
-            < covariates.shape[1] + 1
-        ):
-
+        if design_rank < covariates.shape[1] + 1:
             warnings.warn(
                 "The covariate design matrix is rank deficient. "
                 "Residualization will use the least-squares "
@@ -2879,32 +1722,21 @@ def MultiVariateBatchDifference_long(
                 "dependent."
             )
 
-
         resid_matrix = np.full_like(
             idp_matrix,
             np.nan,
             dtype=float,
         )
 
-
-        resid_matrix[
-            complete_for_resid
-        ] = _residualize(
-            idp_matrix[
-                complete_for_resid
-            ],
-            covariates[
-                complete_for_resid
-            ],
+        resid_matrix[complete_for_resid] = _residualize(
+            idp_matrix[complete_for_resid],
+            covariates[complete_for_resid],
         )
 
-
     else:
-
         resid_matrix = None
 
         design_rank = None
-
 
     # ============================================================
     # 16. BATCH CONSTANT WITHIN SUBJECT
@@ -2916,22 +1748,16 @@ def MultiVariateBatchDifference_long(
     #     ...
     # ============================================================
 
-    if longitudinal_case == (
-        "batch_constant_within_subject"
-    ):
-
+    if longitudinal_case == ("batch_constant_within_subject"):
         raw_vectors = []
 
         raw_batches = []
-
 
         resid_vectors = []
 
         resid_batches = []
 
-
         retained_subjects = []
-
 
         for (
             subject_id,
@@ -2940,56 +1766,29 @@ def MultiVariateBatchDifference_long(
             "_subject",
             sort=False,
         ):
-
             rows_by_timepoint = []
 
             complete_subject = True
 
-
             for tp in ordered_timepoints:
-
-                rows = subject_df[
-                    subject_df[
-                        "_timepoint"
-                    ] == tp
-                ]
-
+                rows = subject_df[subject_df["_timepoint"] == tp]
 
                 if len(rows) != 1:
-
                     complete_subject = False
 
                     break
 
-
-                rows_by_timepoint.append(
-                    rows.iloc[0]
-                )
-
+                rows_by_timepoint.append(rows.iloc[0])
 
             if not complete_subject:
-
                 continue
 
+            subject_batches = subject_df["_batch"].unique()
 
-            subject_batches = (
-                subject_df[
-                    "_batch"
-                ].unique()
-            )
-
-
-            if len(
-                subject_batches
-            ) != 1:
-
+            if len(subject_batches) != 1:
                 continue
 
-
-            subject_batch = (
-                subject_batches[0]
-            )
-
+            subject_batch = subject_batches[0]
 
             # ----------------------------------------------------
             # Raw longitudinal changes
@@ -2997,147 +1796,75 @@ def MultiVariateBatchDifference_long(
 
             values_by_timepoint = []
 
-
             for row in rows_by_timepoint:
+                values = row[idp_names].to_numpy(dtype=float)
 
-                values = row[
-                    idp_names
-                ].to_numpy(
-                    dtype=float
-                )
-
-
-                if not np.isfinite(
-                    values
-                ).all():
-
+                if not np.isfinite(values).all():
                     complete_subject = False
 
                     break
 
-
-                values_by_timepoint.append(
-                    values
-                )
-
+                values_by_timepoint.append(values)
 
             if not complete_subject:
-
                 continue
-
 
             change_blocks = []
 
-
             for j in range(
                 1,
-                len(
-                    values_by_timepoint
-                ),
+                len(values_by_timepoint),
             ):
-
                 change_blocks.append(
-                    values_by_timepoint[j]
-                    - values_by_timepoint[
-                        j - 1
-                    ]
+                    values_by_timepoint[j] - values_by_timepoint[j - 1]
                 )
 
+            subject_vector = np.concatenate(change_blocks)
 
-            subject_vector = np.concatenate(
-                change_blocks
-            )
+            raw_vectors.append(subject_vector)
 
-
-            raw_vectors.append(
-                subject_vector
-            )
-
-
-            raw_batches.append(
-                subject_batch
-            )
-
+            raw_batches.append(subject_batch)
 
             # ----------------------------------------------------
             # Residualized longitudinal changes
             # ----------------------------------------------------
 
             if have_covariates:
-
                 resid_values_by_timepoint = []
 
-
                 for row in rows_by_timepoint:
-
                     original_index = row.name
 
+                    values = resid_matrix[original_index]
 
-                    values = resid_matrix[
-                        original_index
-                    ]
-
-
-                    if not np.isfinite(
-                        values
-                    ).all():
-
+                    if not np.isfinite(values).all():
                         complete_subject = False
 
                         break
 
-
-                    resid_values_by_timepoint.append(
-                        values
-                    )
-
+                    resid_values_by_timepoint.append(values)
 
                 if complete_subject:
-
                     resid_change_blocks = []
-
 
                     for j in range(
                         1,
-                        len(
-                            resid_values_by_timepoint
-                        ),
+                        len(resid_values_by_timepoint),
                     ):
-
                         resid_change_blocks.append(
-                            resid_values_by_timepoint[
-                                j
-                            ]
-                            - resid_values_by_timepoint[
-                                j - 1
-                            ]
+                            resid_values_by_timepoint[j]
+                            - resid_values_by_timepoint[j - 1]
                         )
 
+                    resid_vector = np.concatenate(resid_change_blocks)
 
-                    resid_vector = np.concatenate(
-                        resid_change_blocks
-                    )
+                    resid_vectors.append(resid_vector)
 
+                    resid_batches.append(subject_batch)
 
-                    resid_vectors.append(
-                        resid_vector
-                    )
+            retained_subjects.append(subject_id)
 
-
-                    resid_batches.append(
-                        subject_batch
-                    )
-
-
-            retained_subjects.append(
-                subject_id
-            )
-
-
-        if len(
-            raw_vectors
-        ) < 2:
-
+        if len(raw_vectors) < 2:
             raise ValueError(
                 "Fewer than two subjects have complete data "
                 "across all required timepoints. "
@@ -3145,20 +1872,13 @@ def MultiVariateBatchDifference_long(
                 "be performed."
             )
 
-
         # --------------------------------------------------------
         # Raw distances
         # --------------------------------------------------------
 
-        X_raw = np.vstack(
-            raw_vectors
-        )
+        X_raw = np.vstack(raw_vectors)
 
-
-        B_raw = np.asarray(
-            raw_batches
-        )
-
+        B_raw = np.asarray(raw_batches)
 
         (
             pairwise_raw,
@@ -3171,26 +1891,15 @@ def MultiVariateBatchDifference_long(
             centroid_mode="global",
         )
 
-
         # --------------------------------------------------------
         # Residual distances
         # --------------------------------------------------------
 
         if have_covariates:
+            if len(resid_vectors) >= 2:
+                X_resid = np.vstack(resid_vectors)
 
-            if len(
-                resid_vectors
-            ) >= 2:
-
-                X_resid = np.vstack(
-                    resid_vectors
-                )
-
-
-                B_resid = np.asarray(
-                    resid_batches
-                )
-
+                B_resid = np.asarray(resid_batches)
 
                 (
                     pairwise_resid,
@@ -3203,184 +1912,72 @@ def MultiVariateBatchDifference_long(
                     centroid_mode="global",
                 )
 
-
             else:
-
                 pairwise_resid = None
 
                 centroid_resid = None
 
                 resid_diag = None
 
-
                 warnings.warn(
                     "Insufficient complete subjects for the "
                     "covariate-adjusted longitudinal analysis."
                 )
 
-
         else:
-
             pairwise_resid = None
 
             centroid_resid = None
 
             resid_diag = None
 
-
         results = {
-            "pairwise_raw":
-                pairwise_raw,
-
-            "pairwise_resid":
-                pairwise_resid,
-
-            "centroid_raw":
-                centroid_raw,
-
-            "centroid_resid":
-                centroid_resid,
-
-            "batches":
-                list(
-                    dict.fromkeys(
-                        B_raw.tolist()
-                    )
-                ),
+            "pairwise_raw": pairwise_raw,
+            "pairwise_resid": pairwise_resid,
+            "centroid_raw": centroid_raw,
+            "centroid_resid": centroid_resid,
+            "batches": list(dict.fromkeys(B_raw.tolist())),
         }
-
 
         info = {
-            "mode":
-                (
-                    "two_timepoints"
-                    if n_timepoints == 2
-                    else "multiple_timepoints"
-                ),
-
-            "longitudinal_case":
-                "batch_constant_within_subject",
-
-            "analysis_representation":
-                (
-                    "within-subject changes between "
-                    "consecutive timepoints"
-                ),
-
-            "has_repeated_subjects":
-                bool(
-                    has_repeated_subjects
-                ),
-
-            "batch_varies_within_subject":
-                False,
-
-            "n_subjects_multiple_batches":
-                int(
-                    n_subjects_multiple_batches
-                ),
-
-            "n_subjects_single_batch":
-                int(
-                    n_subjects_single_batch
-                ),
-
-            "n_timepoints":
-                int(
-                    n_timepoints
-                ),
-
-            "timepoints":
-                list(
-                    ordered_timepoints
-                ),
-
-            "n_subjects_input":
-                int(
-                    subject_ser.nunique()
-                ),
-
-            "n_subjects_retained":
-                int(
-                    len(
-                        retained_subjects
-                    )
-                ),
-
-            "n_subjects_excluded":
-                int(
-                    subject_ser.nunique()
-                    - len(
-                        retained_subjects
-                    )
-                ),
-
-            "retained_subjects":
-                retained_subjects,
-
-            "representation":
-                (
-                    "within-subject changes between "
-                    "consecutive timepoints"
-                ),
-
-            "change_definition":
-                "Y(i,t) - Y(i,t-1)",
-
-            "n_analysis_features":
-                int(
-                    X_raw.shape[1]
-                ),
-
-            "raw_diagnostics":
-                raw_diag,
-
-            "residual_diagnostics":
-                resid_diag,
-
-            "idp_names":
-                list(
-                    idp_names
-                ),
-
-            "covariates_used":
-                bool(
-                    have_covariates
-                ),
-
-            "n_covariates_after_encoding":
-                (
-                    int(
-                        covariates.shape[1]
-                    )
-                    if have_covariates
-                    else 0
-                ),
-
-            "covariate_design_rank":
-                (
-                    int(
-                        design_rank
-                    )
-                    if design_rank is not None
-                    else None
-                ),
-
-            "covariate_encoding":
-                covariate_encoding,
+            "mode": ("two_timepoints" if n_timepoints == 2 else "multiple_timepoints"),
+            "longitudinal_case": "batch_constant_within_subject",
+            "analysis_representation": (
+                "within-subject changes between consecutive timepoints"
+            ),
+            "has_repeated_subjects": bool(has_repeated_subjects),
+            "batch_varies_within_subject": False,
+            "n_subjects_multiple_batches": int(n_subjects_multiple_batches),
+            "n_subjects_single_batch": int(n_subjects_single_batch),
+            "n_timepoints": int(n_timepoints),
+            "timepoints": list(ordered_timepoints),
+            "n_subjects_input": int(subject_ser.nunique()),
+            "n_subjects_retained": int(len(retained_subjects)),
+            "n_subjects_excluded": int(subject_ser.nunique() - len(retained_subjects)),
+            "retained_subjects": retained_subjects,
+            "representation": ("within-subject changes between consecutive timepoints"),
+            "change_definition": "Y(i,t) - Y(i,t-1)",
+            "n_analysis_features": int(X_raw.shape[1]),
+            "raw_diagnostics": raw_diag,
+            "residual_diagnostics": resid_diag,
+            "idp_names": list(idp_names),
+            "covariates_used": bool(have_covariates),
+            "n_covariates_after_encoding": (
+                int(covariates.shape[1]) if have_covariates else 0
+            ),
+            "covariate_design_rank": (
+                int(design_rank) if design_rank is not None else None
+            ),
+            "covariate_encoding": covariate_encoding,
         }
 
-
         if return_info:
-
             return (
                 results,
                 info,
             )
 
-
         return results
-
 
     # ============================================================
     # 17. BATCH VARIES WITHIN SUBJECT
@@ -3389,17 +1986,10 @@ def MultiVariateBatchDifference_long(
     # ============================================================
 
     raw_rows = []
-
     raw_batches = []
-
-
     resid_rows = []
-
     resid_batches = []
-
-
     retained_subjects = []
-
 
     for (
         subject_id,
@@ -3408,151 +1998,53 @@ def MultiVariateBatchDifference_long(
         "_subject",
         sort=False,
     ):
-
-        subject_indices = (
-            subject_df.index.to_numpy(
-                dtype=int
-            )
-        )
-
-
+        subject_indices = subject_df.index.to_numpy(dtype=int)
         complete_subject_rows = []
-
-
         for idx in subject_indices:
+            values = idp_matrix[idx]
 
-            values = idp_matrix[
-                idx
-            ]
+            if np.isfinite(values).all():
+                complete_subject_rows.append(idx)
 
-
-            if np.isfinite(
-                values
-            ).all():
-
-                complete_subject_rows.append(
-                    idx
-                )
-
-
-        if len(
-            complete_subject_rows
-        ) < 2:
-
+        if len(complete_subject_rows) < 2:
             continue
-
 
         # --------------------------------------------------------
         # Raw subject-centering
         # --------------------------------------------------------
-
-        X_subject = idp_matrix[
-            complete_subject_rows
-        ]
-
-
-        subject_mean = (
-            X_subject.mean(
-                axis=0
-            )
-        )
-
-
-        X_subject_centered = (
-            X_subject
-            - subject_mean
-        )
-
-
-        B_subject = (
-            batch_ser
-            .iloc[
-                complete_subject_rows
-            ]
-            .to_numpy()
-        )
-
-
-        raw_rows.append(
-            X_subject_centered
-        )
-
-
-        raw_batches.append(
-            B_subject
-        )
-
+        X_subject = idp_matrix[complete_subject_rows]
+        subject_mean = X_subject.mean(axis=0)
+        X_subject_centered = X_subject - subject_mean
+        B_subject = batch_ser.iloc[complete_subject_rows].to_numpy()
+        raw_rows.append(X_subject_centered)
+        raw_batches.append(B_subject)
 
         # --------------------------------------------------------
         # Residualized subject-centering
         # --------------------------------------------------------
 
         if have_covariates:
-
-            X_subject_resid = resid_matrix[
-                complete_subject_rows
-            ]
-
-
-            if not np.isfinite(
-                X_subject_resid
-            ).all():
-
+            X_subject_resid = resid_matrix[complete_subject_rows]
+            if not np.isfinite(X_subject_resid).all():
                 continue
+            resid_subject_mean = X_subject_resid.mean(axis=0)
+            X_subject_resid_centered = X_subject_resid - resid_subject_mean
+            resid_rows.append(X_subject_resid_centered)
+            resid_batches.append(B_subject)
+        retained_subjects.append(subject_id)
 
-
-            resid_subject_mean = (
-                X_subject_resid.mean(
-                    axis=0
-                )
-            )
-
-
-            X_subject_resid_centered = (
-                X_subject_resid
-                - resid_subject_mean
-            )
-
-
-            resid_rows.append(
-                X_subject_resid_centered
-            )
-
-
-            resid_batches.append(
-                B_subject
-            )
-
-
-        retained_subjects.append(
-            subject_id
-        )
-
-
-    if len(
-        raw_rows
-    ) == 0:
-
+    if len(raw_rows) == 0:
         raise ValueError(
             "No subjects have at least two complete observations "
             "for the batch-varying repeated-measures analysis."
         )
 
-
-    X_raw = np.vstack(
-        raw_rows
-    )
-
-
-    B_raw = np.concatenate(
-        raw_batches
-    )
-
+    X_raw = np.vstack(raw_rows)
+    B_raw = np.concatenate(raw_batches)
 
     # ------------------------------------------------------------
     # Raw distances
     # ------------------------------------------------------------
-
     (
         pairwise_raw,
         centroid_raw,
@@ -3564,29 +2056,15 @@ def MultiVariateBatchDifference_long(
         centroid_mode="global",
     )
 
-
     # ------------------------------------------------------------
     # Residual distances
     # ------------------------------------------------------------
 
     if have_covariates:
-
-        if len(
-            resid_rows
-        ) > 0:
-
-            X_resid = np.vstack(
-                resid_rows
-            )
-
-
-            B_resid = np.concatenate(
-                resid_batches
-            )
-
-
+        if len(resid_rows) > 0:
+            X_resid = np.vstack(resid_rows)
+            B_resid = np.concatenate(resid_batches)
             if X_resid.shape[0] >= 2:
-
                 (
                     pairwise_resid,
                     centroid_resid,
@@ -3598,213 +2076,87 @@ def MultiVariateBatchDifference_long(
                     centroid_mode="global",
                 )
 
-
             else:
-
                 pairwise_resid = None
-
                 centroid_resid = None
-
                 resid_diag = None
 
-
         else:
-
             pairwise_resid = None
-
             centroid_resid = None
-
             resid_diag = None
-
-
             warnings.warn(
                 "No complete observations remain for the "
                 "covariate-adjusted batch-varying analysis."
             )
 
-
     else:
-
         pairwise_resid = None
-
         centroid_resid = None
-
         resid_diag = None
-
 
     # ============================================================
     # RESULTS
     # ============================================================
 
     results = {
-        "pairwise_raw":
-            pairwise_raw,
-
-        "pairwise_resid":
-            pairwise_resid,
-
-        "centroid_raw":
-            centroid_raw,
-
-        "centroid_resid":
-            centroid_resid,
-
-        "batches":
-            list(
-                dict.fromkeys(
-                    B_raw.tolist()
-                )
-            ),
+        "pairwise_raw": pairwise_raw,
+        "pairwise_resid": pairwise_resid,
+        "centroid_raw": centroid_raw,
+        "centroid_resid": centroid_resid,
+        "batches": list(dict.fromkeys(B_raw.tolist())),
     }
-
 
     # ============================================================
     # INFO
     # ============================================================
 
     if n_timepoints <= 1:
-
-        mode_label = (
-            "single_timepoint_repeated"
-        )
-
+        mode_label = "single_timepoint_repeated"
 
     elif n_timepoints == 2:
-
-        mode_label = (
-            "two_timepoints"
-        )
-
+        mode_label = "two_timepoints"
 
     else:
-
-        mode_label = (
-            "multiple_timepoints"
-        )
-
+        mode_label = "multiple_timepoints"
 
     info = {
-        "mode":
-            mode_label,
-
-        "longitudinal_case":
-            "batch_varies_within_subject",
-
-        "analysis_representation":
-            "subject-centred observations",
-
-        "has_repeated_subjects":
-            bool(
-                has_repeated_subjects
-            ),
-
-        "batch_varies_within_subject":
-            True,
-
-        "n_subjects_multiple_batches":
-            int(
-                n_subjects_multiple_batches
-            ),
-
-        "n_subjects_single_batch":
-            int(
-                n_subjects_single_batch
-            ),
-
-        "n_timepoints":
-            int(
-                n_timepoints
-            ),
-
-        "timepoints":
-            (
-                None
-                if ordered_timepoints is None
-                else list(
-                    ordered_timepoints
-                )
-            ),
-
-        "n_subjects_input":
-            int(
-                subject_ser.nunique()
-            ),
-
-        "n_subjects_retained":
-            int(
-                len(
-                    retained_subjects
-                )
-            ),
-
-        "n_subjects_excluded":
-            int(
-                subject_ser.nunique()
-                - len(
-                    retained_subjects
-                )
-            ),
-
-        "retained_subjects":
-            retained_subjects,
-
-        "representation":
-            "subject-centred observations",
-
-        "change_definition":
-            None,
-
-        "n_analysis_features":
-            int(
-                X_raw.shape[1]
-            ),
-
-        "raw_diagnostics":
-            raw_diag,
-
-        "residual_diagnostics":
-            resid_diag,
-
-        "idp_names":
-            list(
-                idp_names
-            ),
-
-        "covariates_used":
-            bool(
-                have_covariates
-            ),
-
-        "n_covariates_after_encoding":
-            (
-                int(
-                    covariates.shape[1]
-                )
-                if have_covariates
-                else 0
-            ),
-
-        "covariate_design_rank":
-            (
-                int(
-                    design_rank
-                )
-                if design_rank is not None
-                else None
-            ),
-
-        "covariate_encoding":
-            covariate_encoding,
+        "mode": mode_label,
+        "longitudinal_case": "batch_varies_within_subject",
+        "analysis_representation": "subject-centred observations",
+        "has_repeated_subjects": bool(has_repeated_subjects),
+        "batch_varies_within_subject": True,
+        "n_subjects_multiple_batches": int(n_subjects_multiple_batches),
+        "n_subjects_single_batch": int(n_subjects_single_batch),
+        "n_timepoints": int(n_timepoints),
+        "timepoints": (
+            None if ordered_timepoints is None else list(ordered_timepoints)
+        ),
+        "n_subjects_input": int(subject_ser.nunique()),
+        "n_subjects_retained": len(retained_subjects),
+        "n_subjects_excluded": int(subject_ser.nunique() - len(retained_subjects)),
+        "retained_subjects": retained_subjects,
+        "representation": "subject-centred observations",
+        "change_definition": None,
+        "n_analysis_features": int(X_raw.shape[1]),
+        "raw_diagnostics": raw_diag,
+        "residual_diagnostics": resid_diag,
+        "idp_names": list(idp_names),
+        "covariates_used": bool(have_covariates),
+        "n_covariates_after_encoding": (
+            int(covariates.shape[1]) if have_covariates else 0
+        ),
+        "covariate_design_rank": (
+            int(design_rank) if design_rank is not None else None
+        ),
+        "covariate_encoding": covariate_encoding,
     }
 
-
     if return_info:
-
         return (
             results,
             info,
         )
-
 
     return results
 
