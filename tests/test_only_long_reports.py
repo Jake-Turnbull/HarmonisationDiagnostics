@@ -114,6 +114,9 @@ def test_longitudinal_report_with_known_effects(test_results_dir, monkeypatch):
 
     report_path = test_results_dir / "long_known_effects" / "Long_with_Known_Effects.html"
     assert report_path.exists() and report_path.stat().st_size > 100
+    report_html = report_path.read_text(encoding="utf-8")
+    assert "Batch-covariate confounding diagnostics" in report_html
+    assert "timepoint" in report_html
 
 
 def test_longitudinal_report_warns_and_skips_rank_deficient_mahalanobis(

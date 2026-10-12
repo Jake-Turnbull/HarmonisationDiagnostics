@@ -49,7 +49,7 @@ def _extract_weighted_covariate_pc_correlation(
     return float(np.nanmean(weighted_scores))
 
 # Helper function 
-def covariate_to_numeric(covariates) -> np.ndarray | None:
+def covariate_to_numeric(covariates, covariate_types=None) -> np.ndarray | None:
     """
     Convert categorical covariates to numeric codes for downstream analyses.
 
@@ -67,17 +67,113 @@ def covariate_to_numeric(covariates) -> np.ndarray | None:
         independently.
         Numeric columns are left unchanged.
     """
-    # Check covariate columns independently and factorize if they are categorical (string/object), otherwise keep as is. This allows for mixed covariate types.
     if covariates is None:
         return None
-    for i in range(covariates.shape[1]):
-        if covariates[:, i].dtype.kind in {"U", "S", "O"}:  # string/object categorical
-            covariates[:, i], unique = pd.factorize(covariates[:, i])
-        elif covariates[:, i].dtype.kind in {"i", "f"}:  # numeric, keep as is
-            pass
-    covariate_numeric = covariates.astype(float)  # ensure all numeric for functions that require numeric input
-    
-    return covariate_numeric
+    from DiagnoseHarmonisation.HarmonisationFunctions import _infer_covariate_type
+
+    if isinstance(covariates, pd.DataFrame):
+        covariate_frame = covariates.reset_index(drop=True)
+    elif isinstance(covariates, dict):
+        covariate_frame = pd.DataFrame(covariates)
+    else:
+        covariate_array = np.asarray(covariates)
+        if covariate_array.ndim == 1:
+            covariate_array = covariate_array.reshape(-1, 1)
+        if covariate_array.ndim != 2:
+            raise ValueError("covariates must be a 2D array-like.")
+        covariate_frame = pd.DataFrame(covariate_array)
+
+    code_to_type = {0: "binary", 2: "categorical", 3: "continuous"}
+    columns = []
+    for column_index, column_name in enumerate(covariate_frame.columns):
+        series = covariate_frame[column_name]
+        if covariate_types is None:
+            variable_type = _infer_covariate_type(series)
+        elif isinstance(covariate_types, dict):
+            variable_type = covariate_types.get(column_name)
+            if variable_type is None:
+                variable_type = _infer_covariate_type(series)
+            else:
+                variable_type = code_to_type.get(variable_type, str(variable_type).lower())
+        else:
+            variable_type = covariate_types[column_index]
+            variable_type = code_to_type.get(variable_type, str(variable_type).lower())
+
+        if variable_type == "continuous":
+            values = pd.to_numeric(series, errors="coerce").to_numpy(dtype=float)
+        elif pd.api.types.is_numeric_dtype(series):
+            values = series.to_numpy(dtype=float, na_value=np.nan)
+        else:
+            values = pd.factorize(series)[0].astype(float)
+        columns.append(values)
+
+    return np.column_stack(columns).astype(float) if columns else np.empty((len(covariate_frame), 0))
+
+
+def _resolve_report_covariate_types(covariates, covariate_names=None, covariate_types=None):
+    """Resolve covariate types before report inputs are converted to numeric codes."""
+    from DiagnoseHarmonisation.HarmonisationFunctions import _infer_covariate_type
+
+    if covariates is None:
+        return None, None, covariate_names
+    if isinstance(covariates, pd.DataFrame):
+        covariate_frame = covariates.reset_index(drop=True).copy()
+        names = list(covariate_names) if covariate_names is not None else [str(c) for c in covariate_frame.columns]
+    elif isinstance(covariates, dict):
+        covariate_frame = pd.DataFrame(covariates)
+        names = list(covariate_names) if covariate_names is not None else [str(c) for c in covariate_frame.columns]
+    else:
+        covariate_array = np.asarray(covariates)
+        if covariate_array.ndim == 1:
+            covariate_array = covariate_array.reshape(-1, 1)
+        if covariate_array.ndim != 2:
+            raise ValueError("covariates must be a 2D array-like with samples in rows.")
+        names = (
+            [str(name) for name in covariate_names]
+            if covariate_names is not None
+            else [f"covariate_{i+1}" for i in range(covariate_array.shape[1])]
+        )
+        covariate_frame = pd.DataFrame(covariate_array, columns=names)
+
+    if len(names) != covariate_frame.shape[1]:
+        raise ValueError("covariate_names length must match the number of covariate columns.")
+    covariate_frame.columns = names
+
+    code_to_type = {0: "binary", 2: "categorical", 3: "continuous"}
+    type_to_code = {value: key for key, value in code_to_type.items()}
+    if covariate_types is None:
+        variable_types = {
+            name: _infer_covariate_type(covariate_frame[name])
+            for name in names
+        }
+    elif isinstance(covariate_types, dict):
+        unknown = set(covariate_types) - set(names)
+        if unknown:
+            raise ValueError(f"Unknown covariates in covariate_types: {sorted(unknown)}")
+        variable_types = {}
+        for name in names:
+            value = covariate_types.get(name)
+            if value is None:
+                variable_types[name] = _infer_covariate_type(covariate_frame[name])
+            elif value in code_to_type:
+                variable_types[name] = code_to_type[value]
+            else:
+                variable_types[name] = str(value).lower()
+    else:
+        if len(covariate_types) != len(names):
+            raise ValueError("covariate_types length must match the number of covariate columns.")
+        variable_types = {}
+        for name, value in zip(names, covariate_types):
+            if value in code_to_type:
+                variable_types[name] = code_to_type[value]
+            else:
+                variable_types[name] = str(value).lower()
+
+    invalid = {name: value for name, value in variable_types.items() if value not in type_to_code}
+    if invalid:
+        raise ValueError(f"Invalid covariate types: {invalid}. Use binary, categorical, or continuous.")
+    legacy_types = [type_to_code[variable_types[name]] for name in names]
+    return legacy_types, variable_types, names
 
 
 def _normalize_data_matrix(data, feature_names=None) -> tuple[np.ndarray, list | None]:
@@ -1323,6 +1419,9 @@ def CrossSectionalReportMin(data,
 
     data, feature_names = _normalize_data_matrix(data, feature_names=feature_names)
     batch = _normalize_batch_vector(batch, data.shape[0])
+    covariate_types, _, covariate_names = _resolve_report_covariate_types(
+        covariates, covariate_names, covariate_types
+    )
     covariates = _normalize_covariates_input(covariates, data.shape[0])
 
     if save_dir is None:
@@ -1467,11 +1566,11 @@ def CrossSectionalReportMin(data,
         # if dataframe or dictionary, convert to numeric array:
         if covariates is not None:
             if isinstance(covariates, pd.DataFrame):
-                covariates_numeric = covariate_to_numeric(covariates.values)
+                covariates_numeric = covariate_to_numeric(covariates, covariate_types)
             elif isinstance(covariates, dict):
-                covariates_numeric = covariate_to_numeric(np.column_stack(list(covariates.values())))
+                covariates_numeric = covariate_to_numeric(covariates, covariate_types)
             elif isinstance(covariates, np.ndarray):
-                covariates_numeric = covariate_to_numeric(covariates)
+                covariates_numeric = covariate_to_numeric(covariates, covariate_types)
             else:
                 raise ValueError("Covariates must be a numpy array, pandas DataFrame, or dictionary of arrays")
         
@@ -1889,6 +1988,9 @@ def CrossSectionalReport(
 
     data, feature_names = _normalize_data_matrix(data, feature_names=feature_names)
     batch = _normalize_batch_vector(batch, data.shape[0])
+    covariate_types, _, covariate_names = _resolve_report_covariate_types(
+        covariates, covariate_names, covariate_types
+    )
     covariates = _normalize_covariates_input(covariates, data.shape[0])
 
     # Check inputs and revert to defaults as needed
@@ -2072,19 +2174,16 @@ def CrossSectionalReport(
             covariates_numeric = covariates
             # if dataframe or dictionary, convert to numeric array:
             if isinstance(covariates, pd.DataFrame):
-                covariates_numeric = covariate_to_numeric(covariates.values)
+                covariates_numeric = covariate_to_numeric(covariates, covariate_types)
             elif isinstance(covariates, dict):
-                covariates_numeric = covariate_to_numeric(np.column_stack(list(covariates.values())))
+                covariates_numeric = covariate_to_numeric(covariates, covariate_types)
             elif isinstance(covariates, np.ndarray):
-                covariates_numeric = covariate_to_numeric(covariates)
+                covariates_numeric = covariate_to_numeric(covariates, covariate_types)
             else:
                 raise ValueError("Covariates must be a numpy array, pandas DataFrame, or dictionary of arrays")
             
         #  Check for NaNs and replace with batch mean (for numeric) or mode (for categorical) as appropriate:
         if covariates is not None:
-            n_total = covariates_numeric.shape[0]
-            cat_threshold = int(np.ceil(0.05 * n_total))  # 5% of total dataset size
-
             for col_idx in range(covariates_numeric.shape[1]):
                 col = covariates_numeric[:, col_idx]
                 nan_mask_cov = np.isnan(col)
@@ -2093,11 +2192,9 @@ def CrossSectionalReport(
                     continue
 
                 # Determine if column is categorical:
-                # categorical if values are integers and number of unique non-NaN values <= 5% of n_total
                 col_nonan = col[~nan_mask_cov]
                 unique_vals = np.unique(col_nonan)
-                is_integer_valued = np.all(col_nonan == np.floor(col_nonan))
-                is_categorical = is_integer_valued and (len(unique_vals) <= cat_threshold)
+                is_categorical = covariate_types[col_idx] in {0, 2}
 
                 for b in unique_batches:
                     batch_mask_cov = (batch == b) & nan_mask_cov
@@ -2962,6 +3059,10 @@ def CrossSectionalComparisonReport(
     if feature_names is None and inferred_feature_names is not None:
         feature_names = inferred_feature_names
 
+    covariate_types, _, covariate_names = _resolve_report_covariate_types(
+        covariates, covariate_names, covariate_types
+    )
+
     normalized_datasets = validate_comparison_datasets(
         datasets=datasets,
         batch=batch,
@@ -3043,7 +3144,7 @@ def CrossSectionalComparisonReport(
         )
         covariates_numeric = None
         if covariates is not None:
-            covariates_numeric = covariate_to_numeric(np.asarray(covariates).copy())
+            covariates_numeric = covariate_to_numeric(covariates, covariate_types)
             if covariates_numeric is not None and covariates_numeric.shape[1] == 0:
                 covariates_numeric = None
         if covariates_numeric is None:
@@ -3409,6 +3510,66 @@ def _normalise_longitudinal_inputs(
 
     return X, batch, subjects, time, C
 
+
+def _report_longitudinal_batch_covariate_confounding(
+    report,
+    batch,
+    covariates,
+    timepoints,
+    save_data,
+    save_dir,
+    report_name,
+):
+    """Report batch associations with longitudinal covariates and timepoint."""
+    report.log_section("batch_covariate_confounding", "Batch-covariate confounding diagnostics")
+    if isinstance(covariates, pd.DataFrame):
+        confound_cov_df = covariates.reset_index(drop=True).copy()
+    elif covariates is None:
+        confound_cov_df = pd.DataFrame(index=range(len(batch)))
+    else:
+        confound_cov_df = pd.DataFrame(covariates)
+
+    variable_types = {}
+    if timepoints is not None:
+        timepoint_name = "timepoint"
+        if timepoint_name in confound_cov_df.columns:
+            timepoint_name = "timepoint_metadata"
+        confound_cov_df[timepoint_name] = np.asarray(timepoints)
+        variable_types[timepoint_name] = "categorical"
+
+    if confound_cov_df.shape[1] == 0:
+        report.text_simple("No covariates or timepoints provided; batch-covariate confounding diagnostics skipped.")
+        return
+
+    try:
+        confounding = DiagnosticFunctions.calculate_batch_covariate_confounding(
+            confound_cov_df, batch, variable_types=variable_types or None
+        )
+        report.text_simple(
+            "Batch-covariate confounding quantifies potential imbalance of each covariate across batches,\n "
+            "Continuous covariates are summarised by the omnibus R2 from covariate ~ batch; binary/categorical\n"
+            "covariates, including timepoint, are summarised by Cramer's V. Batch is always treated as nominal\n"
+            "categorical regardless of its input encoding. Larger values indicate greater covariate imbalance\n"
+            "across batches and therefore greater potential for confounding.\n"
+        )
+        report.text_simple(confounding["tidy"].round(3).to_string(index=False))
+        PlotDiagnosticResults.plot_batch_covariate_confounding(
+            confound_cov_df, batch, confounding, rep=report, show=False
+        )
+        if save_data:
+            from DiagnoseHarmonisation.SaveDiagnosticResults import save_test_results
+
+            save_test_results(
+                confounding["tidy"],
+                test_name="Batch_Covariate_Confounding",
+                save_root=save_dir,
+                feature_names=list(confounding["tidy"].columns),
+                report_date=datetime.now().date().isoformat(),
+                report_name=report_name,
+            )
+    except Exception as exc:
+        report.text_simple(f"Failed to compute batch-covariate confounding diagnostics: {exc}")
+
 # Longitudinal testing:
 from typing import Optional, Union
 def LongitudinalReport(data, batch,
@@ -3712,11 +3873,6 @@ def LongitudinalReport(data, batch,
         # --------------------------------------------------------------
         # Raw IDP distributions across sites (first plot in report)
         # --------------------------------------------------------------
-        report.log_section(
-            "Raw_IDP_across_sites",
-            "Raw imaging-derived phenotypes across sites"
-        )
-
         site_counts = pd.Series(batch).astype(str).value_counts()
         site_subject_counts = (
             pd.DataFrame({
@@ -3760,6 +3916,20 @@ def LongitudinalReport(data, batch,
             data = data_df.to_numpy(dtype=float)
             covariates = covariates_df.to_dict(orient="list")
 
+        _report_longitudinal_batch_covariate_confounding(
+            report=report,
+            batch=batch,
+            covariates=covariates,
+            timepoints=timepoints,
+            save_data=save_data,
+            save_dir=save_dir,
+            report_name=report_name,
+        )
+
+        report.log_section(
+            "Raw_IDP_across_sites",
+            "Raw imaging-derived phenotypes across sites"
+        )
         report.text_simple(
             f"""
             📋 OVERVIEW
@@ -5318,6 +5488,16 @@ def LongitudinalComparisonReport(
         ]
         report.text_simple("Comparison dataset characteristics:")
         report.text_simple("\n".join(overview_lines))
+
+        _report_longitudinal_batch_covariate_confounding(
+            report=report,
+            batch=batch_arr,
+            covariates=covariates_dict,
+            timepoints=timepoint_arr,
+            save_data=save_data,
+            save_dir=save_dir,
+            report_name=report_name,
+        )
 
         method_results: dict[str, LongitudinalDiagnosticResult] = {}
         saved_paths: dict[str, dict[str, str]] = {}

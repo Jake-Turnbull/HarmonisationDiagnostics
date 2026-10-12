@@ -780,6 +780,18 @@ def Run_LMM_cross_sectional(
 """_______Covariate handling functions_________"""
 
 
+def _infer_legacy_covariate_types(covariates, covariate_names):
+    from DiagnoseHarmonisation.HarmonisationFunctions import _infer_covariate_type
+
+    if covariate_names is None:
+        covariate_names = [f"cov_{i}" for i in range(covariates.shape[1])]
+    type_codes = {"binary": 0, "categorical": 2, "continuous": 3}
+    return [
+        type_codes[_infer_covariate_type(pd.Series(covariates[:, i]))]
+        for i in range(covariates.shape[1])
+    ]
+
+
 def RobustOLS_Orig(data,covariates,batch,covariate_names,covariate_types,report=None):
     """Defining this function that can be called by cohen's d, variance ratio and KS test functions to residualise out covariate effects before calculating batch effects.
     Here, we support Dummy encoding of categorical covariates and mean-centering of continuous covariates
@@ -789,35 +801,23 @@ def RobustOLS_Orig(data,covariates,batch,covariate_names,covariate_types,report=
 
     
     """
-    # Check if covariate types are provided, if not, infer them from data and report mapping:
+    if covariate_names is None:
+        covariate_names = [f"cov_{i}" for i in range(covariates.shape[1])]
     if covariate_types is None:
-        covariate_types = []
-        for i in range(covariates.shape[1]):
-            unique_vals = np.unique(covariates[:, i])
-            if len(unique_vals) == 2:
-                covariate_types.append(0)  # binary
-            elif len(unique_vals) < 10:
-                covariate_types.append(2)  # categorical
-            else:
-                covariate_types.append(3)  # continuous
-                if report is not None and hasattr(report, "log_text"):
-                    report.log_text(f"Covariate {covariate_names[i]} inferred as continuous with {len(unique_vals)} unique values.")
-                    report.log_text(f"Please see https://link.springer.com/article/10.1007/s10459-010-9222-y for more information and consider passing the variable covariate_types to function"
-                                    f" to ensure correct handling of covariates in the report. (list of length unique covariates, 0 binary, 2 categorical, 3 continuous)")
+        covariate_types = _infer_legacy_covariate_types(covariates, covariate_names)
 
-    # Create a DataFrame for OLS regression
-    df = pd.DataFrame(data, columns=[f'feature_{i}' for i in range(data.shape[1])])
+    df = pd.DataFrame(data, columns=[f"feature_{i}" for i in range(data.shape[1])])
     for i, (name, ctype) in enumerate(zip(covariate_names, covariate_types)):
-        if ctype == 0:  # binary
+        if ctype == 0:
             df[name] = covariates[:, i]
-        elif ctype == 2:  # categorical
-            df[name] = covariates[:, i].astype(str)  # convert to string for dummy encoding
-        elif ctype == 3:  # continuous
+        elif ctype == 2:
+            df[name] = covariates[:, i].astype(str)
+        elif ctype == 3:
             df[name] = covariates[:, i]
         else:
             raise ValueError(f"Unknown covariate type {ctype} for covariate {name}")
 
-    df['batch'] = batch.astype(str)  # ensure batch is treated as categorical
+    df["batch"] = batch.astype(str)
     # Combine batch and covariates, fit OLS and add batch x beta back in
     # Create one array as design for OLS:
     design = np.ones((data.shape[0], 1))  # intercept
@@ -873,21 +873,7 @@ def RobustOLS(data, covariates, batch, covariate_names, covariate_types=None, re
         covariate_names = [f'cov_{i}' for i in range(covariates.shape[1])]
 
     if covariate_types is None:
-        covariate_types = []
-        for i in range(covariates.shape[1]):
-            unique_vals = np.unique(covariates[:, i])
-            if len(unique_vals) == 2:
-                covariate_types.append(0)  # binary
-            elif len(unique_vals) < 10:
-                covariate_types.append(2)  # categorical
-            else:
-                covariate_types.append(3)  # continuous
-                if report is not None and hasattr(report, "log_text"):
-                    report.log_text(
-                        f"Covariate {covariate_names[i]} inferred as continuous with {len(unique_vals)} unique values.")
-                    report.log_text(
-                        "Please see https://link.springer.com/article/10.1007/s10459-010-9222-y for more information and consider passing the variable covariate_types to function"
-                        " to ensure correct handling of covariates in the report. (list of length unique covariates, 0 binary, 2 categorical, 3 continuous)")
+        covariate_types = _infer_legacy_covariate_types(covariates, covariate_names)
 
     # -------------------------
     # Create DataFrame (for dummy encoding) and prepare to build design matrix

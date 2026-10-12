@@ -2533,12 +2533,13 @@ def _coerce_covariates(
         raise ValueError("covariate_names length mismatch.")
     return pd.DataFrame(arr, columns=names)
 
-def _infer_covariate_type(series: pd.Series, unique_fraction_threshold: float = 0.30) -> str:
+def _infer_covariate_type(series: pd.Series, unique_fraction_threshold: float = 0.05) -> str:
     """Infer binary/categorical/continuous using values, dtype and uniqueness.
 
-    Numeric non-integer columns are continuous. Numeric integer-like columns are
-    continuous when their unique fraction exceeds the threshold; otherwise they
-    are categorical. Two-level columns are always binary.
+    Floating-point numeric columns are continuous, even when observed values
+    happen to be integers. Integer columns with three to ten levels are
+    categorical only when their unique fraction is at most the threshold.
+    Two-level columns are binary.
     """
     non_missing = series.dropna()
     n = len(non_missing)
@@ -2550,11 +2551,11 @@ def _infer_covariate_type(series: pd.Series, unique_fraction_threshold: float = 
     if pd.api.types.is_bool_dtype(non_missing) or isinstance(non_missing.dtype, pd.CategoricalDtype):
         return "categorical"
     if pd.api.types.is_numeric_dtype(non_missing):
-        numeric = pd.to_numeric(non_missing, errors="coerce").to_numpy(dtype=float)
-        integer_like = bool(np.all(np.isclose(numeric, np.round(numeric), equal_nan=True)))
-        if not integer_like:
+        if not pd.api.types.is_integer_dtype(non_missing):
             return "continuous"
-        return "continuous" if (n_unique / n) > unique_fraction_threshold else "categorical"
+        if n_unique <= 10 and (n_unique / n) <= unique_fraction_threshold:
+            return "categorical"
+        return "continuous"
     return "categorical"
 
 def _normalise_covariate_types(

@@ -67,6 +67,9 @@ def test_longitudinal_comparison_report_generates_html(test_results_dir):
     report_path = Path(report.report_path)
     assert report_path.exists() and report_path.stat().st_size > 100
     assert report_path.suffix == ".html"
+    report_html = report_path.read_text(encoding="utf-8")
+    assert "Batch-covariate confounding diagnostics" in report_html
+    assert "timepoint" in report_html
 
     assert isinstance(report.comparison_results, dict)
     assert isinstance(report.comparison_scorecard, pd.DataFrame)
