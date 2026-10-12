@@ -7,7 +7,7 @@ name = "DiagnoseHarmonisation"
 dynamic = ["version"]
 description = "Diagnostics for pre- and post- Harmonisation"
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { file = "LICENSE" }
 
 authors = [
