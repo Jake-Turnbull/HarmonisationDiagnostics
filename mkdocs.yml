@@ -29,6 +29,7 @@ nav:
       - Longitudinal Workflow: api/LongitudinalWorkflow.md
       - Power Analysis: api/PowerAnalysis.md
       - "Demo: Run local priors": api/RunDemoLocalPriors.md
+      - Imputation Functions: api/Imputations.md
 
 plugins:
   - search

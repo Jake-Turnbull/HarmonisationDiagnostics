@@ -12,7 +12,6 @@ license = { file = "LICENSE" }
 
 authors = [
   { name = "Jacob Turnbull", email = "jacob.turnbull@ndcn.ox.ac.uk" },
-  { name = "Gaurav Bhalerao", email = "gaurv.bhalerao@ndcn.ox.ac.uk" },
 ]
 
 # Based on pip freeze and package imports as of 2026-01-09
