@@ -3868,6 +3868,10 @@ def LongitudinalReport(data, batch,
         For each pair of visits, Spearman rank correlation (ρ)
         is computed using subjects measured at both timepoints.
 
+        The plots show median rho across IDPs for each timepoint
+        pair, together with median rho across timepoint pairs for
+        each IDP.
+
         Statistical significance is assessed using permutation
         testing, where subject labels are randomly shuffled to
         generate a null distribution of correlation values.
@@ -3879,8 +3883,8 @@ def LongitudinalReport(data, batch,
         of subject ordering across visits and greater longitudinal
         consistency.
 
-        A significant permutation test (p < 0.05) suggests that
-        the observed consistency is unlikely to arise by chance.
+        The heatmap uses a diverging scale so negative and positive
+        rank consistency can be distinguished.
 
         ⚠️ LIMITATIONS
         ────────────────────────────────────────────────────────
@@ -3932,19 +3936,15 @@ def LongitudinalReport(data, batch,
         ⚙️ METHOD
         ────────────────────────────────────────────────────────
 
-        For datasets containing more than two visits,
-        within-subject variability is summarised using the
-        Coefficient of Variation (CV).
-
-            CV = standard deviation / mean
-
-        For datasets containing exactly two visits,
-        variability is summarised using the Relative Percent
-        Difference (RPD).
+        Within-subject variability is calculated as the median
+        pairwise Relative Percent Difference (RPD) across each
+        subject's available visits.
 
         All variability measures are computed at the subject
         level and subsequently summarised across subjects and
-        features.
+        features. Small datasets show subject-specific markers;
+        datasets with more than 10 subjects or IDPs show the
+        median RPD per IDP.
 
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
@@ -4021,6 +4021,9 @@ def LongitudinalReport(data, batch,
         with batch included as a fixed effect and subject
         included as a random effect.
 
+        The plot shows -log10(p-value) per IDP; the dashed line
+        marks p = 0.05.
+
         A Kenward–Roger F-test is then used to compare the full
         model against a nested model without the batch term.
 
@@ -4094,6 +4097,8 @@ def LongitudinalReport(data, batch,
 
         For each feature, the number of significant batch pairs
         is reported following multiple-comparison correction.
+
+        The plot uses one point per IDP for this count.
 
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
@@ -4195,6 +4200,9 @@ def LongitudinalReport(data, batch,
 
         For each feature, a p-value is computed to assess
         whether variance differs significantly between batches.
+
+        The plot shows -log10(p-value) per IDP; the dashed line
+        marks p = 0.05.
 
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
@@ -4396,6 +4404,9 @@ def LongitudinalReport(data, batch,
         Higher ICC values indicate stronger subject-specific
         signal relative to residual variability.
 
+        The per-IDP dot plot marks ICC reference values at 0.50,
+        0.75, and 0.90.
+
         When evaluating harmonisation strategies, preservation
         or improvement of ICC suggests that meaningful
         between-subject variation has been retained while
@@ -4433,7 +4444,7 @@ def LongitudinalReport(data, batch,
                       plot_type='box',
                       limit_idps=2,
                       seed=123,
-                      figsize=_plot_figsize("summary_box", len(features)))
+                      figsize=_plot_figsize("summary_box", len(features)), rep=report)
         report.log_text("ICC plot added to report")  
         
         # Biological variability
@@ -4467,6 +4478,10 @@ def LongitudinalReport(data, batch,
             • Statistical significance (p-value)
             • Effect size (β coefficient)
             • 95% confidence interval
+
+            For up to 10 IDPs, estimates are shown with confidence
+            intervals and IDP labels. Larger sets show blue effect
+            estimates without intervals or IDP labels.
 
             📈 INTERPRETATION
             ────────────────────────────────────────────────────────

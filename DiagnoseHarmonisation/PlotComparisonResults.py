@@ -11,6 +11,8 @@ from matplotlib.lines import Line2D
 
 from DiagnoseHarmonisation import PlotDiagnosticResults
 
+LONGITUDINAL_DOT_COLOR = "tab:blue"
+
 
 def _method_items(results: dict[str, Any]) -> list[tuple[str, Any]]:
     return list(results.items())
@@ -1073,14 +1075,19 @@ def plot_compare_long_subject_order(results, significance: float = 0.05):
     if len(items) == 0:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.2, max_cols=2)
+    fig, axes = plt.subplots(
+        len(items), 2, figsize=(10.4, 5.2 * len(items)), squeeze=False,
+        gridspec_kw={"width_ratios": [1, 0.8]},
+    )
     n_valid = 0
 
-    for ax, (method, res) in zip(axes, items):
+    for row_index, (method, res) in enumerate(items):
+        ax, idp_ax = axes[row_index]
         df = getattr(res, "subject_order", None)
         if not isinstance(df, pd.DataFrame) or df.empty:
             ax.set_title(_title(f"{method} (subject order unavailable)"))
             ax.axis("off")
+            idp_ax.axis("off")
             continue
 
         tmp = df.copy()
@@ -1096,6 +1103,7 @@ def plot_compare_long_subject_order(results, significance: float = 0.05):
         if agg.empty:
             ax.set_title(_title(f"{method} (no valid subject-order pairs)"))
             ax.axis("off")
+            idp_ax.axis("off")
             continue
 
         time_order = list(pd.Index(pd.concat([agg["TimeA"], agg["TimeB"]], ignore_index=True)).unique())
@@ -1126,9 +1134,22 @@ def plot_compare_long_subject_order(results, significance: float = 0.05):
         sig_prop_all = float(np.nanmean(tmp["pValue"] < significance)) if np.isfinite(tmp["pValue"]).any() else np.nan
         ax.set_title(_title(f"{method}\nmedian rho={median_all:.2f}, sig={sig_prop_all:.2f}"))
         _add_right_colorbar(fig, ax, im, label="Median Spearman rho")
+        if "IDP" in tmp.columns:
+            idp_medians = tmp.groupby("IDP", sort=False)["SpearmanRho"].median().dropna()
+            y = np.arange(len(idp_medians))
+            idp_ax.scatter(idp_medians.to_numpy(dtype=float), y, color=LONGITUDINAL_DOT_COLOR, zorder=3)
+            idp_ax.set_yticks(y, idp_medians.index.astype(str))
+            idp_ax.invert_yaxis()
+            idp_ax.set_xlim(-1, 1)
+            idp_ax.set_xlabel("Median Spearman rho")
+            idp_ax.set_title("Median rho by IDP")
+            idp_ax.grid(axis="x", alpha=0.2)
+        else:
+            idp_ax.set_title("Per-IDP median rho unavailable")
+            idp_ax.axis("off")
         n_valid += 1
 
-    _hide_unused_axes(axes, len(items))
+    _hide_unused_axes(axes.ravel(), len(items) * 2)
     if n_valid == 0:
         plt.close(fig)
         return figs
@@ -1170,7 +1191,7 @@ def plot_compare_long_within_subject_variability(results):
             continue
 
         y = np.arange(len(med))
-        ax.barh(y, med.to_numpy(dtype=float), color="C0", alpha=0.85)
+        ax.scatter(med.to_numpy(dtype=float), y, color=LONGITUDINAL_DOT_COLOR, zorder=3)
         ax.set_yticks(y)
         labels, _ = _feature_labels(len(med))
         if all(lbl == "" for lbl in labels):
@@ -1218,8 +1239,7 @@ def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05):
 
             y = _safe_log10_p(pvals)
             x = np.arange(len(y))
-            colors = np.where(np.isfinite(pvals) & (pvals < p_thr), "C3", "C2")
-            ax.scatter(x, y, c=colors, s=16, zorder=3)
+            ax.scatter(x, y, color=LONGITUDINAL_DOT_COLOR, s=16, zorder=3)
             ax.axhline(-np.log10(p_thr), color="black", linestyle="--", linewidth=1)
             ax.set_title(_title(method))
             ax.set_xlabel("Feature")
@@ -1270,7 +1290,7 @@ def plot_compare_long_mixed_effects(results):
 
         vals = pd.to_numeric(df["n_is_batchSig"], errors="coerce").to_numpy(dtype=float)
         x = np.arange(len(vals))
-        ax.bar(x, vals, color="C1", alpha=0.85)
+        ax.scatter(x, vals, color=LONGITUDINAL_DOT_COLOR, zorder=3)
         ax.set_title(_title(method))
         ax.set_xlabel("Feature")
         ax.set_ylabel("n significant batch pairs")
@@ -1299,8 +1319,9 @@ def plot_compare_long_mixed_effects(results):
 
         icc = pd.to_numeric(df["ICC"], errors="coerce").to_numpy(dtype=float)
         x = np.arange(len(icc))
-        ax.scatter(x, icc, c="C0", s=18, zorder=3)
-        ax.axhline(0.5, color="black", linestyle="--", linewidth=1)
+        ax.scatter(x, icc, color=LONGITUDINAL_DOT_COLOR, s=18, zorder=3)
+        for threshold in (0.5, 0.75, 0.9):
+            ax.axhline(threshold, color="black", linestyle="--", linewidth=1, alpha=0.65)
         ax.set_title(_title(method))
         ax.set_xlabel("Feature")
         ax.set_ylabel("ICC")
@@ -1322,7 +1343,7 @@ def plot_compare_long_mixed_effects(results):
 
 
 def plot_compare_long_biological_effects(results, p_thr: float = 0.05):
-    """Compare biological fixed-effect preservation across methods."""
+    """Compare per-IDP biological effect estimates across methods."""
     figs = []
     items = _method_items(results)
     if len(items) == 0:
@@ -1338,26 +1359,41 @@ def plot_compare_long_biological_effects(results, p_thr: float = 0.05):
             ax.axis("off")
             continue
 
-        pval_cols = [c for c in df.columns if str(c).endswith("_pval")]
-        if len(pval_cols) == 0:
-            ax.set_title(_title(f"{method} (no biological p-values)"))
+        idp_col = "IDP" if "IDP" in df.columns else ("Feature" if "Feature" in df.columns else None)
+        estimate_cols = [c for c in df.columns if str(c).endswith("_est")]
+        effects = [str(col)[:-4] for col in estimate_cols]
+        if idp_col is None or not effects:
+            ax.set_title(_title(f"{method} (biological effects unavailable)"))
             ax.axis("off")
             continue
 
-        cov_names = [str(c).replace("_pval", "") for c in pval_cols]
-        sig_props = []
-        for col in pval_cols:
-            pvals = pd.to_numeric(df[col], errors="coerce").to_numpy(dtype=float)
-            sig_props.append(float(np.nanmean(pvals < p_thr)) if np.isfinite(pvals).any() else np.nan)
+        idps = df[idp_col].astype(str).tolist()
+        n_idps = len(idps)
+        x = np.arange(n_idps, dtype=float)
+        offsets = (np.arange(len(effects)) - (len(effects) - 1) / 2) * 0.08
+        for effect_index, effect in enumerate(effects):
+            estimates = pd.to_numeric(df[f"{effect}_est"], errors="coerce").to_numpy(dtype=float)
+            ax.scatter(x + offsets[effect_index], estimates, color=LONGITUDINAL_DOT_COLOR, s=18, zorder=3,
+                       label=effect.replace("_", " "))
+            if n_idps <= 10 and f"{effect}_ciL" in df.columns and f"{effect}_ciU" in df.columns:
+                lower = pd.to_numeric(df[f"{effect}_ciL"], errors="coerce").to_numpy(dtype=float)
+                upper = pd.to_numeric(df[f"{effect}_ciU"], errors="coerce").to_numpy(dtype=float)
+                valid = np.isfinite(estimates) & np.isfinite(lower) & np.isfinite(upper)
+                ax.vlines(x[valid] + offsets[effect_index], lower[valid], upper[valid], color="black", linewidth=1)
+                cap = 0.025
+                ax.hlines(lower[valid], x[valid] + offsets[effect_index] - cap,
+                          x[valid] + offsets[effect_index] + cap, color="black", linewidth=1)
+                ax.hlines(upper[valid], x[valid] + offsets[effect_index] - cap,
+                          x[valid] + offsets[effect_index] + cap, color="black", linewidth=1)
 
-        y = np.arange(len(cov_names))
-        ax.barh(y, np.asarray(sig_props, dtype=float), color="C2", alpha=0.85)
-        ax.set_yticks(y)
-        ax.set_yticklabels(cov_names, fontsize=7)
-        ax.set_xlim(0, 1)
-        ax.set_xlabel("Proportion p < 0.05")
+        ax.set_xticks(x, idps if n_idps <= 10 else [""] * n_idps, rotation=45, ha="right")
+        ax.axhline(0, color="gray", linewidth=0.8, alpha=0.6)
+        ax.set_xlabel("IDP" if n_idps <= 10 else "IDP position")
+        ax.set_ylabel("Effect estimate (beta)")
         ax.set_title(_title(method))
-        ax.grid(axis="x", alpha=0.2)
+        ax.grid(axis="y", alpha=0.2)
+        if len(effects) > 1:
+            ax.legend(frameon=False, fontsize=7)
         n_valid += 1
 
     _hide_unused_axes(axes, len(items))
