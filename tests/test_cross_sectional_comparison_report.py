@@ -549,3 +549,29 @@ def test_font_size_in_report(test_results_dir):
     assert report_default_fontsize is not None
     assert report_small_fontsize is not None
     assert report_large_fontsize is not None
+
+
+def test_cross_sectional_comparison_skips_mahalanobis_for_rank_deficient_batches():
+    rng = np.random.default_rng(321)
+    batch = np.array(["A"] * 12 + ["B"] * 12)
+    independent = rng.normal(size=(len(batch), 2))
+    data = np.column_stack(
+        (independent, independent[:, 0] + independent[:, 1], np.ones(len(batch)))
+    )
+
+    result = DiagnosticReport._run_single_method_diagnostics(
+        method_name="RankDeficient",
+        data=data,
+        batch=batch,
+        covariates_numeric=None,
+        covariate_names=None,
+        covariate_types=None,
+        feature_names=["f1", "f2", "f3", "constant"],
+        ratio_type="rest",
+        compute_umap=False,
+    )
+
+    assert result.mahalanobis is None
+    assert any("Mahalanobis distance skipped" in warning for warning in result.errors)
+    assert result.cohens_d is not None
+    assert result.variance_ratios is not None

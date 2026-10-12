@@ -434,6 +434,8 @@ def Z_Score_Plot(data, batch, probablity_distribution=False,draw_PDF=True):
     Re-order by batch for better visualisaion in the heatmap, also plot batch seperators on heatmap.
     Args:
         data (np.ndarray): 2D array of Z-scored data (samples x features).
+        batch (np.ndarray): 1D array indicating batch membership for each sample.
+
     Returns:
         None: Displays plot of Z-scored data and a histogram of the values on different axes.
     """
@@ -466,7 +468,8 @@ def Z_Score_Plot(data, batch, probablity_distribution=False,draw_PDF=True):
 
     ax1.set_xlabel("Z-scores of all unique measures")
     # Set axis limits to -8 to 8 for better visualisation:
-    ax1.set_xlim([-8, 8])
+    max_z = np.max(np.abs(data))
+    ax1.set_xlim([-max_z*1.1, max_z*1.1])
     ax1.invert_xaxis()
     ax1.yaxis.tick_right()
     ax1.yaxis.set_label_position("right")
@@ -525,7 +528,9 @@ def Z_Score_Raw_Residual_Plot(raw_data, residual_data, batch, probablity_distrib
     ax_raw.set_title("Raw data")
     ax_raw.set_xlabel("Robust z-score")
     ax_raw.set_ylabel("Frequency" if not probablity_distribution else "Density")
-    ax_raw.set_xlim([-8, 8])
+    # Get maximum absolute value for setting x-axis limits consistently
+    max_abs_val = np.max(np.abs(raw_data))
+    ax_raw.set_xlim([-max_abs_val*1.1, max_abs_val*1.1])
     ax_raw.invert_xaxis()
     ax_raw.legend(title="Batch")
 
@@ -546,7 +551,15 @@ def Z_Score_Raw_Residual_Plot(raw_data, residual_data, batch, probablity_distrib
         ax_resid.set_title("Covariate-residual data")
         ax_resid.set_xlabel("Robust z-score")
         ax_resid.set_ylabel("Frequency" if not probablity_distribution else "Density")
-        ax_resid.set_xlim([-8, 8])
+        # Set x-axis limits similar to raw data for consistency
+        # Check if residual data has larger absolute values than raw data
+        if max_abs_val > np.max(np.abs(residual_data)):
+            max_abs_val = np.max(np.abs(residual_data))
+            ax_raw.set_xlim([-max_abs_val*1.1, max_abs_val*1.1])
+        else:
+            max_abs_val = max_abs_val
+        ax_resid.set_xlim([-max_abs_val*1.1, max_abs_val*1.1])
+
         ax_resid.invert_xaxis()
         ax_resid.legend(title="Batch")
 
@@ -2950,9 +2963,6 @@ def n_dim_umap_visualisation(data, batch, n_dimensions=2, covariates=None, n_nei
     # Only return the data
     return returned_embedding
     
-    
-
-
 # ============================================================================
 # STYLE REGISTRY FOR SUBJECTS / IDPs
 # ============================================================================
@@ -3134,6 +3144,218 @@ def _apply_correction(p_matrix: np.ndarray, method: str | None) -> np.ndarray:
 # ============================================================================
 # 1.  RAW IDP DISTRIBUTIONS ACROSS SITES
 # ============================================================================
+
+
+"""_------------------ Normalisation Functions ------------------"""
+def z_score(data,MAD=True):
+    """
+    Z-score normalization of the data matrix (samples x features).
+    Use median centered by default as is more robust to outliers and non-normal distributions.
+    """
+    median = np.median(data, axis=0)
+    std = np.std(data, axis=0, ddof=1)
+    zscored = (data - median) / std
+    if MAD == True:
+        MAD = np.median(np.abs(data - median), axis=0)
+        zscored = (data - median) / MAD
+
+    return zscored
+
+def _adjust_for_covariates_preserve_batch(
+    df,
+    idp_cols,
+    batch_col,
+    covariates=None,
+):
+    """
+    Remove covariate effects from each feature while preserving batch effects.
+
+    Fits:
+        feature ~ covariates + batch
+
+    and returns:
+        feature - fitted covariate contribution
+
+    Batch and intercept effects are retained.
+    """
+    if not covariates:
+        return df.copy()
+
+    adjusted = df.copy()
+
+    for idp in idp_cols:
+        model_df = pd.DataFrame(
+            {
+                "_y": pd.to_numeric(df[idp], errors="coerce"),
+                "_batch": df[batch_col].astype("category"),
+            },
+            index=df.index,
+        )
+
+        continuous = []
+        categorical = []
+
+        # Add covariates and retain categorical information where possible
+        for name, values in covariates.items():
+            values = pd.Series(values).reset_index(drop=True)
+            values.index = df.index
+
+            model_df[name] = values
+
+            if (
+                isinstance(values.dtype, pd.CategoricalDtype)
+                or not pd.api.types.is_numeric_dtype(values)
+            ):
+                categorical.append(name)
+            else:
+                continuous.append(name)
+
+        model_df = model_df.dropna()
+
+        if model_df.empty:
+            adjusted[idp] = np.nan
+            continue
+
+        # Continuous covariates
+        X_cov = model_df[continuous].astype(float).copy()
+
+        # Categorical covariates
+        if categorical:
+            X_cat = pd.get_dummies(
+                model_df[categorical],
+                drop_first=True,
+                dtype=float,
+            )
+            X_cov = pd.concat([X_cov, X_cat], axis=1)
+
+        # Batch is included in the model but will NOT be removed
+        X_batch = pd.get_dummies(
+            model_df["_batch"],
+            prefix="batch",
+            drop_first=True,
+            dtype=float,
+        )
+
+        intercept = pd.DataFrame(
+            {"intercept": 1.0},
+            index=model_df.index,
+        )
+
+        X = pd.concat(
+            [intercept, X_cov, X_batch],
+            axis=1,
+        ).astype(float)
+
+        y = model_df["_y"].to_numpy(dtype=float)
+
+        beta, *_ = np.linalg.lstsq(
+            X.to_numpy(),
+            y,
+            rcond=None,
+        )
+
+        beta = pd.Series(beta, index=X.columns)
+
+        # Remove ONLY covariate effects
+        if X_cov.shape[1]:
+            cov_effect = (
+                X_cov.to_numpy()
+                @ beta[X_cov.columns].to_numpy()
+            )
+        else:
+            cov_effect = 0.0
+
+        # Missing model rows should remain missing rather than raw
+        adjusted[idp] = np.nan
+        adjusted.loc[model_df.index, idp] = y - cov_effect
+
+    return adjusted
+  
+@rep_plot_wrapper
+def Long_Robust_Zscores(
+        data: np.ndarray,
+        batch: np.ndarray,
+        covariates: dict | None = None,
+        idp_cols: list | None = None,
+        plot_pdf: bool = True,
+        as_pdf: bool = False,
+        plot_as_residuals: bool = False,
+        rep: object | None = None,
+) -> pd.DataFrame:
+    apply_plot_theme()
+
+    # Check data and batch are the same number of rows
+    if data.shape[0] != batch.shape[0]:
+        raise ValueError("Data and batch must have the same number of rows.")
+
+    # Report number of unique batches and save
+    n_batches = len(np.unique(batch))
+    print(f"Number of unique batches: {n_batches}")
+    # if idp_cols is not provided, use all columns except the batch column
+    if idp_cols is None:
+        idp_cols = [col for col in range(data.shape[1])]
+
+    # print size of each batch
+    unique_batches, batch_counts = np.unique(batch, return_counts=True)
+    for ub, bc in zip(unique_batches, batch_counts):
+        print(f"Batch '{ub}' has {bc} samples.")
+    print()
+
+    # Decide bin number based on unique samples per batch (e.g., more samples may require more bins)
+    bin_number = max(10, min(batch_counts))
+
+    print(f"Decided bin number: {bin_number}")
+
+    batch_col = "batch"
+    # Convert the data and batch into a DataFrame for plotting
+    plot_df = pd.DataFrame(data, columns=idp_cols)
+    plot_df[batch_col] = batch
+    print(plot_df.head())
+    print(f"Plotting DataFrame shape: {plot_df.shape}")
+
+    # ------------------------------------------------------------------
+    # Remove covariate effects while preserving batch
+    # ------------------------------------------------------------------
+    if plot_as_residuals:
+        plot_df = _adjust_for_covariates_preserve_batch(
+            df=plot_df,
+            idp_cols=idp_cols,
+            batch_col=batch_col,
+            covariates=covariates,
+        )
+
+    # ------------------------------------------------------------------
+    # Convert to robust z-scores (MAD scores)
+    # ------------------------------------------------------------------
+    plot_df[idp_cols] = z_score(plot_df[idp_cols].to_numpy(), MAD=True)
+
+    # Take idp_cols and store as an array for further processing
+    idp_array = plot_df[idp_cols].to_numpy()
+    print(f"IDP array shape: {idp_array.shape}")
+    # Take batch_col and store as an array for further processing
+    batch_array = plot_df[batch_col].to_numpy()
+    print(f"Batch array shape: {batch_array.shape}")
+
+    # Use _plot_zscore_hist_on_axis to plot the z-score histograms for each batch
+    # Create figure with a single axis for batch-wise histogram overlays.
+    fig = plt.figure(figsize=(14, 8))
+    ax1 = fig.add_subplot()
+    _plot_zscore_hist_on_axis(ax1, idp_array, batch_array, bin_number)
+    ax1.set_xlabel("Z-scores of all unique measures")
+    # Set axis limits to -8 to 8 for better visualisation:
+    # get max z-score for setting axis limits
+    max_z = np.max(np.abs(idp_array))
+    ax1.set_xlim([-max_z*1.1, max_z*1.1])
+    ax1.invert_xaxis()
+    ax1.yaxis.tick_right()
+    ax1.yaxis.set_label_position("right")
+    ax1.legend(title="Batch")
+
+    figs = []
+    figs.append(("Z-score histogram", fig))
+    return figs
+
+# Legacy code: remove in future patch 
 
 def plot_RawIDPBoxplotsAcrossSites(
     df,
@@ -3459,116 +3681,6 @@ def plot_RawIDPBoxplotsAcrossSites(
 # ============================================================================
 # 1B.  RESIDUALISED IDP DISTRIBUTIONS ACROSS SITES
 # ============================================================================
-
-def _adjust_for_covariates_preserve_batch(
-    df,
-    idp_cols,
-    batch_col,
-    covariates=None,
-):
-    """
-    Remove covariate effects from each feature while preserving batch effects.
-
-    Fits:
-        feature ~ covariates + batch
-
-    and returns:
-        feature - fitted covariate contribution
-
-    Batch and intercept effects are retained.
-    """
-    if not covariates:
-        return df.copy()
-
-    adjusted = df.copy()
-
-    for idp in idp_cols:
-        model_df = pd.DataFrame(
-            {
-                "_y": pd.to_numeric(df[idp], errors="coerce"),
-                "_batch": df[batch_col].astype("category"),
-            },
-            index=df.index,
-        )
-
-        continuous = []
-        categorical = []
-
-        # Add covariates and retain categorical information where possible
-        for name, values in covariates.items():
-            values = pd.Series(values).reset_index(drop=True)
-            values.index = df.index
-
-            model_df[name] = values
-
-            if (
-                isinstance(values.dtype, pd.CategoricalDtype)
-                or not pd.api.types.is_numeric_dtype(values)
-            ):
-                categorical.append(name)
-            else:
-                continuous.append(name)
-
-        model_df = model_df.dropna()
-
-        if model_df.empty:
-            adjusted[idp] = np.nan
-            continue
-
-        # Continuous covariates
-        X_cov = model_df[continuous].astype(float).copy()
-
-        # Categorical covariates
-        if categorical:
-            X_cat = pd.get_dummies(
-                model_df[categorical],
-                drop_first=True,
-                dtype=float,
-            )
-            X_cov = pd.concat([X_cov, X_cat], axis=1)
-
-        # Batch is included in the model but will NOT be removed
-        X_batch = pd.get_dummies(
-            model_df["_batch"],
-            prefix="batch",
-            drop_first=True,
-            dtype=float,
-        )
-
-        intercept = pd.DataFrame(
-            {"intercept": 1.0},
-            index=model_df.index,
-        )
-
-        X = pd.concat(
-            [intercept, X_cov, X_batch],
-            axis=1,
-        ).astype(float)
-
-        y = model_df["_y"].to_numpy(dtype=float)
-
-        beta, *_ = np.linalg.lstsq(
-            X.to_numpy(),
-            y,
-            rcond=None,
-        )
-
-        beta = pd.Series(beta, index=X.columns)
-
-        # Remove ONLY covariate effects
-        if X_cov.shape[1]:
-            cov_effect = (
-                X_cov.to_numpy()
-                @ beta[X_cov.columns].to_numpy()
-            )
-        else:
-            cov_effect = 0.0
-
-        # Missing model rows should remain missing rather than raw
-        adjusted[idp] = np.nan
-        adjusted.loc[model_df.index, idp] = y - cov_effect
-
-    return adjusted
 
 def plot_CovariateAdjustedBoxplotsAcrossSites(
     df,

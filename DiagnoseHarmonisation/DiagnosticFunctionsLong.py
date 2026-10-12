@@ -2922,6 +2922,7 @@ def AdditiveEffect_long(
 
         # Always z-score numeric predictors per-feature (local_df)
         # _build_fixed_formula_terms will create zscore_<v> for numeric fix_eff
+        # exclude batch column from fixed effects to avoid multicollinearity
         fixed_terms = _build_fixed_formula_terms(list(fix_eff or []), local_df, do_zscore_predictors=True)
         missing_fix = [vv for vv in (fix_eff or []) if (f"zscore_{vv}" not in local_df.columns) and (vv not in local_df.columns)]
         if missing_fix:
@@ -2941,11 +2942,22 @@ def AdditiveEffect_long(
         else:
             lhs = feat  # keep original units
 
+        if f"C({batchcol})" in fixed_terms or f"{batchcol}" in fixed_terms:
+            if f"C({batchcol})" in fixed_terms:
+                fixed_terms.remove(f"C({batchcol})")
+                # print warning
+                warnings.warn(f"Removed batch column from fixed terms: C({batchcol})")
+            if f"{batchcol}" in fixed_terms:
+                fixed_terms.remove(f"{batchcol}")
+                warnings.warn(f"Removed batch column from fixed terms: {batchcol}")
+            fixed_str = " + ".join(fixed_terms) if len(fixed_terms) > 0 else "1"
+
+        # right before fitting
         fixed_str = " + ".join(fixed_terms) if len(fixed_terms) > 0 else "1"
         full_fixed = f"{lhs} ~ {fixed_str} + C({batchcol})"
         reduced_fixed = f"{lhs} ~ {fixed_str}"
+        # ensure batch isn't included in fixed terms twice
 
-        # right before fitting
         if verbose:
             print("\n[MODEL]")
             print("Feature:", feat)
@@ -3037,7 +3049,7 @@ def AdditiveEffect_long(
 
     out = pd.DataFrame(rows)
     out = out.sort_values(by="TestStat", ascending=False).reset_index(drop=True)
-    return out,model_defs_add
+    return out,model_defs_add, full_fixed, reduced_fixed
 
 model_defs_mul = []
 def MultiplicativeEffect_long(
@@ -3183,7 +3195,7 @@ def MultiplicativeEffect_long(
     # Ensure batch column is categorical (use returned batchcol)
     if batchcol in df.columns:
         try:
-            df[batchcol] = df[batchcol].astype("category")
+            df[batchcol] = pd.Categorical(df[batchcol])
         except Exception:
             pass
 
@@ -3193,12 +3205,15 @@ def MultiplicativeEffect_long(
             ran_eff = [idcol]
         else:
             raise KeyError("ran_eff not provided and idvar column not found in data.")
+    # Bug fix, batch being added twice
     if len(fix_eff) == 0:
         inferred_fix = list(covariates.keys())
+
         if tpcol in df.columns and tpcol not in inferred_fix:
             inferred_fix.append(tpcol)
-        if batchcol in df.columns and batchcol not in inferred_fix:
-            inferred_fix.append(batchcol)
+
+        # DO NOT add batch here.
+        # Batch is added explicitly as C(batchcol) below.
         fix_eff = inferred_fix
 
     # Validate referenced names exist
@@ -3240,6 +3255,8 @@ def MultiplicativeEffect_long(
 
         # Always z-score numeric predictors per-feature (in local_df)
         fixed_terms = _build_fixed_formula_terms(list(fix_eff or []), local_df, do_zscore_predictors=True)
+        fixed_terms = [term for term in fixed_terms if term not in {batchcol, f"C({batchcol})"}]
+        
         missing_fix = [vv for vv in (fix_eff or []) if (f"zscore_{vv}" not in local_df.columns) and (vv not in local_df.columns)]
         if missing_fix:
             warnings.warn(f"Fixed-effect columns not found in data (or zscore missing): {missing_fix}")
@@ -3258,7 +3275,7 @@ def MultiplicativeEffect_long(
         else:
             lhs = feat
 
-        fixed_str = " + ".join(fixed_terms) if len(fixed_terms) > 0 else "1"
+        fixed_str = " + ".join(fixed_terms) if fixed_terms else "1"
         full_fixed = f"{lhs} ~ {fixed_str} + C({batchcol})"
 
         if verbose:

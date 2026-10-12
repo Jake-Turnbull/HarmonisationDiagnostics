@@ -1128,7 +1128,25 @@ def _run_single_method_diagnostics(
         result.errors.append(f"Cohens_D failed: {exc}")
 
     try:
-        result.mahalanobis = DiagnosticFunctions.Mahalanobis_Distance(data, batch, covariates=covariates_numeric)
+        rank_deficiencies = []
+        matrices_to_check = [("raw", data)]
+        if covariates_numeric is not None and not np.array_equal(data_resid, data):
+            matrices_to_check.append(("residualized", data_resid))
+
+        for matrix_name, matrix in matrices_to_check:
+            for batch_name in np.unique(batch):
+                batch_matrix = matrix[batch == batch_name]
+                if np.linalg.matrix_rank(batch_matrix) < matrix.shape[1]:
+                    rank_deficiencies.append(f"{matrix_name} data in batch '{batch_name}'")
+
+        if rank_deficiencies:
+            result.errors.append(
+                "Mahalanobis distance skipped because the feature matrix is rank deficient for "
+                + "; ".join(rank_deficiencies)
+                + "."
+            )
+        else:
+            result.mahalanobis = DiagnosticFunctions.Mahalanobis_Distance(data, batch, covariates=covariates_numeric)
     except Exception as exc:
         result.errors.append(f"Mahalanobis_Distance failed: {exc}")
 
@@ -2236,10 +2254,20 @@ def CrossSectionalReport(
         # Mahalanobis
         report.log_section("mahalanobis", "Mahalanobis distance test")
         logger.info("Doing Mahalanobis distance test for multivariate mean differences")
-        mahalanobis_results = DiagnosticFunctions.Mahalanobis_Distance(data, batch, covariates=covariates_numeric)
-        report.log_text("Mahalanobis distance test for multivariate mean differences completed")
-        PlotDiagnosticResults.mahalanobis_distance_plot(mahalanobis_results, rep=report)
-        report.log_text("Mahalanobis distance plot added to report")
+        # Test rank of each batch, if any batch is less than full rank, Mahalanobis distance may be affected so skip and warn
+        skip_mahalanobis = False
+        for b in np.unique(batch):
+            if np.linalg.matrix_rank(data[batch == b]) < data.shape[1]:
+                logger.warning(f"Batch '{b}' is rank deficient; Mahalanobis distance may be affected.")
+                skip_mahalanobis = True
+        if not skip_mahalanobis:
+            mahalanobis_results = DiagnosticFunctions.Mahalanobis_Distance(data, batch, covariates=covariates_numeric)
+            report.log_text("Mahalanobis distance test for multivariate mean differences completed")
+            PlotDiagnosticResults.mahalanobis_distance_plot(mahalanobis_results, rep=report)
+            report.log_text("Mahalanobis distance plot added to report")
+        else:
+            mahalanobis_results = {}
+            report.log_text("Mahalanobis distance test skipped due to rank deficiency in one or more batches.")
 
         # Summaries from mahalanobis_results
         pairwise_distances = mahalanobis_results.get("pairwise_raw", {})
@@ -2267,7 +2295,10 @@ def CrossSectionalReport(
         report_date=report_date, 
         report_name=report_name,
         )
-        report.text_simple("Mahalanobis distance test summaries added to report and saved as csv if requested")
+        if skip_mahalanobis:
+            report.text_simple("Mahalanobis distance test was skipped due to rank deficiency in one or more batches.")
+        else:
+            report.text_simple("Mahalanobis distance test summaries added to report and saved as csv if requested")
         report.text_simple(line_break_in_text)
         # ---------------------
         # Mixed model tests
@@ -3280,7 +3311,103 @@ def CrossSectionalComparisonReport(
             report_ctx.__exit__(None, None, None)
 
         
+def _normalise_longitudinal_inputs(
+    data,
+    batch,
+    subject_ids,
+    timepoints,
+    features=None,
+    covariates=None,
+    covariate_names=None,
+):
+    # ---------- features ----------
+    if isinstance(data, pd.DataFrame):
+        X = data.copy()
 
+        if features is None:
+            features = list(X.columns)
+        else:
+            features = list(features)
+            X = X.loc[:, features].copy()
+
+    else:
+        X_arr = np.asarray(data)
+
+        if X_arr.ndim == 1:
+            X_arr = X_arr.reshape(-1, 1)
+
+        if X_arr.ndim != 2:
+            raise ValueError("data must be 1D or 2D.")
+
+        if features is None:
+            features = [
+                f"Feature_{i+1}"
+                for i in range(X_arr.shape[1])
+            ]
+
+        if len(features) != X_arr.shape[1]:
+            raise ValueError(
+                "features must match the number of data columns."
+            )
+
+        X = pd.DataFrame(X_arr, columns=features)
+
+    n = len(X)
+
+    # ---------- metadata ----------
+    def as_series(x, name):
+        s = pd.Series(x, name=name).reset_index(drop=True)
+        if len(s) != n:
+            raise ValueError(
+                f"{name} has {len(s)} rows; expected {n}."
+            )
+        return s
+
+    batch = as_series(batch, "batch")
+    subjects = as_series(subject_ids, "subject")
+    time = as_series(timepoints, "timepoint")
+
+    # ---------- covariates ----------
+    if covariates is None:
+        C = pd.DataFrame(index=range(n))
+
+    elif isinstance(covariates, pd.DataFrame):
+        C = covariates.reset_index(drop=True).copy()
+
+    elif isinstance(covariates, dict):
+        C = pd.DataFrame(covariates).reset_index(drop=True)
+
+    else:
+        C_arr = np.asarray(covariates)
+
+        if C_arr.ndim == 1:
+            C_arr = C_arr.reshape(-1, 1)
+
+        if C_arr.ndim != 2:
+            raise ValueError(
+                "covariates must be a dict, DataFrame, "
+                "Series, or 1D/2D array-like."
+            )
+
+        if covariate_names is None:
+            covariate_names = [
+                f"covariate_{i+1}"
+                for i in range(C_arr.shape[1])
+            ]
+
+        if len(covariate_names) != C_arr.shape[1]:
+            raise ValueError(
+                "covariate_names must match covariate columns."
+            )
+
+        C = pd.DataFrame(C_arr, columns=covariate_names)
+
+    if len(C) != n:
+        raise ValueError(
+            f"covariates have {len(C)} rows; expected {n}."
+        )
+
+    return X, batch, subjects, time, C
 
 # Longitudinal testing:
 from typing import Optional, Union
@@ -3447,7 +3574,11 @@ def LongitudinalReport(data, batch,
         report_ctx = rep
 
     if covariates is not None:
-        covariate_names = list(covariates.keys())
+        if isinstance(covariates, pd.DataFrame):
+            # take column headers
+            covariate_names = list(covariates.columns)  # keep only the column headers
+        if isinstance(covariates, dict):
+            covariate_names = list(covariates.keys())
     else:
         covariate_names = []
 
@@ -3490,20 +3621,6 @@ def LongitudinalReport(data, batch,
         )
         report.text_simple(line_break_in_text)
 
-        # Ensure batch is numeric array where needed
-        #logger.info("Checking data format")
-        #if isinstance(batch, (list, np.ndarray)):
-        #    batch = np.array(batch)
-        #    if batch.dtype.kind in {"U", "S", "O"}:  # string/object categorical
-        #        logger.info(f"Original batch categories: {list(set(batch))}")
-        #        logger.info("Creating numeric codes for batch categories")
-        #        batch_numeric, unique = pd.factorize(batch)
-        #        logger.info(f"Numeric batch codes: {list(set(batch_numeric))}")
-        #        # keep string labels in `batch` if plotting expects them; numeric conversions can be used inside tests as needed
-        #else:
-        #    raise ValueError("Batch must be a list or numpy array")
-        
-        
         # Check that covariates are an array if provided (.shape[1] throwing error with a list), convert to array if needed
         if covariates is not None:
             if isinstance(covariates, list):
@@ -3512,8 +3629,7 @@ def LongitudinalReport(data, batch,
                 pass
             elif not isinstance(covariates, np.ndarray):
                 raise ValueError(f"Covariates must be a numpy array or list if provided, covariates type: {type(covariates)}")
-
-                    
+    
         # Check if there is only one covariate and convert to 2D array if that is the case (avoid shape issue in next call):
         try:
             if covariates is not None and covariates.ndim == 1:
@@ -3536,14 +3652,6 @@ def LongitudinalReport(data, batch,
                 save_data_name = "DiagnosticReport_InputData.csv"
         else:
             data_dict = None
-        # Check batch, subject_ids, and data dimensions
-        #if not (len(batch) == len(subject_ids) == data.shape[0]):
-        #    raise ValueError("Length of batch and subject_ids must match number of samples in data")
-        #if len(covariates) is not None and len(covariates) != data.shape[0]:
-        #    raise ValueError("Number of rows in covariates must match number of samples in data")
-        #if len(covariate_names) is not None and len(covariate_names) != covariates.shape[1]:
-        #    raise ValueError("Length of covariate_names must match number of columns in covariates")
-        
 
         report.log_section("Introduction", "Longitudinal Data Diagnostic Report Introduction")
         report.text_simple(
@@ -3620,6 +3728,38 @@ def LongitudinalReport(data, batch,
             .nunique()
         )
 
+        if covariates is None:
+            data_df, batch, subject_ids, timepoints, _ = (
+                _normalise_longitudinal_inputs(
+                    data=data,
+                    batch=batch,
+                    subject_ids=subject_ids,
+                    timepoints=timepoints,
+                    features=features,
+                    covariates=covariates,
+                    covariate_names=covariate_names,
+                )
+            )
+            data = data_df.to_numpy(dtype=float)
+            features = list(data_df.columns)
+        else:
+            data_df, batch, subject_ids, timepoints, covariates_df = (
+                            _normalise_longitudinal_inputs(
+                                data=data,
+                                batch=batch,
+                                subject_ids=subject_ids,
+                                timepoints=timepoints,
+                                features=features,
+                                covariates=covariates,
+                                covariate_names=covariate_names,
+                            )
+                        )
+            features = list(data_df.columns)
+            covariate_names = list(covariates_df.columns)
+            covariates_array = covariates_df.to_numpy(dtype=float)
+            data = data_df.to_numpy(dtype=float)
+            covariates = covariates_df.to_dict(orient="list")
+
         report.text_simple(
             f"""
             📋 OVERVIEW
@@ -3652,7 +3792,38 @@ def LongitudinalReport(data, batch,
         raw_df = pd.DataFrame(data, columns=features)
         raw_df["batch"] = batch
         raw_df["subject"] = subject_ids
+        # USE NEW Z-SCORES FUNCTIONS
+        PlotDiagnosticResults.Long_Robust_Zscores(
+            data=data,
+            batch=batch,
+            covariates=covariates,
+            idp_cols=list(features),
+            plot_pdf=True,
+            as_pdf=False,
+            plot_as_residuals=False,
+            rep=report,
+        )
 
+        # Add plotting sucess to script:    
+        report.log_text("Long robust Z-scores plotted successfully")
+        # Check for covariates, if none are provided, log a message and warn use that the covariate adjusted Z-scores will not be available
+        if covariates is None:
+            report.log_text("No covariates provided; covariate-adjusted Z-scores will not be available.")
+
+        if covariates is not None:
+            report.log_text("Covariates provided; covariate-adjusted Z-scores will be available.")
+            PlotDiagnosticResults.Long_Robust_Zscores(
+                data=data,
+                batch=batch,
+                covariates=covariates,
+                idp_cols=list(features),
+                plot_pdf=True,
+                as_pdf=False,
+                plot_as_residuals=True,
+                rep=report,
+            )
+
+        """ LEGACY CODE: PLOTTING FUNCTIONS
         PlotDiagnosticResults.plot_RawIDPBoxplotsAcrossSites(
             raw_df,
             batch_col="batch",
@@ -3673,7 +3844,7 @@ def LongitudinalReport(data, batch,
                 figsize_per_panel=_plot_figsize("residuals"),
                 rep=report,
                 show=False,
-            )
+            )"""
 
         report.log_text("Raw IDP boxplots across sites added to report")
         report.text_simple("────────────────────────────────────────────")
@@ -3831,6 +4002,9 @@ def LongitudinalReport(data, batch,
             "Batch variability (Univariate): Additive batch effect analysis (mean shift)"
         )
 
+        if covariates is not None:
+            covariates_numeric = covariate_to_numeric(covariates_array)
+
         report.text_simple(
         """
         📋 OVERVIEW
@@ -3878,7 +4052,7 @@ def LongitudinalReport(data, batch,
         """
         )
 
-        addeff,model_defs_add = DiagnosticFunctionsLong.AdditiveEffect_long(
+        addeff,model_defs_add,full_fixed,reduced_fixed = DiagnosticFunctionsLong.AdditiveEffect_long(
             idp_matrix=data,
             subjects=subject_ids,
             timepoints=timepoints,
@@ -3956,10 +4130,16 @@ def LongitudinalReport(data, batch,
         pd.set_option("display.max_colwidth", None)
         print(mf) 
         #report.log_text(pformat(model_defs, width=60, sort_dicts=False))
+        # report the full and reduced model formulas
+        report.log_text(f"Full model formula: {full_fixed}")
+        report.log_text(f"Reduced model formula: {reduced_fixed}")
 
         n_batches = len(np.unique(batch))
         total_pairs = n_batches * (n_batches - 1) // 2
         report.log_text(f"Total number of pairs {total_pairs} for {len(np.unique(batch))} batches")
+        # report the full and reduced model formulas again for clarity
+        report.log_text(f"Full model formula (reiterated): {full_fixed}")
+        report.log_text(f"Reduced model formula (reiterated): {reduced_fixed}")
 
         if len(features) < 30:
             report.text_simple(
@@ -4150,18 +4330,29 @@ def LongitudinalReport(data, batch,
            subject=subject_ids,
            timepoint=timepoints, 
            idp_names=features, return_info=True)
-        print("\nMULTIVARIATE PAIRWISE SITE DIFFERENCES:")
-        print(md)
-        report.text_simple(
-            "────────────────────────────────────────────"
+        mahalanobis_diagnostics = md_info.get("raw_diagnostics", {})
+        covariance_rank = mahalanobis_diagnostics.get("covariance_rank")
+        covariance_features = mahalanobis_diagnostics.get("n_features")
+        if covariance_rank is not None and covariance_features is not None and covariance_rank < covariance_features:
+            warning = (
+                "Longitudinal Mahalanobis distance skipped because the analysis covariance matrix is "
+                f"rank deficient ({covariance_rank} of {covariance_features})."
             )
-       
-        PlotDiagnosticResults.plot_MultivariateBatchDifference(results=md,
-                                                             info=md_info,
-                                                             rep=report,
-                                                             annotate=True,
-                                                             show=False)
-        report.log_text("Multivariate batch variability plots added to report")
+            logger.warning(warning)
+            report.text_simple(f"Warning: {warning}")
+        else:
+            print("\nMULTIVARIATE PAIRWISE SITE DIFFERENCES:")
+            print(md)
+            report.text_simple(
+                "────────────────────────────────────────────"
+                )
+
+            PlotDiagnosticResults.plot_MultivariateBatchDifference(results=md,
+                                                                 info=md_info,
+                                                                 rep=report,
+                                                                 annotate=True,
+                                                                 show=False)
+            report.log_text("Multivariate batch variability plots added to report")
 
 
         report.log_section(
@@ -4250,72 +4441,78 @@ def LongitudinalReport(data, batch,
             "Biological_variability_mixed_models",
             "Biological variability analysis"
         )
+        if covariates is not None:
+            report.text_simple(
+            """
+            📋 OVERVIEW
+            ────────────────────────────────────────────────────────
 
-        report.text_simple(
-        """
-        📋 OVERVIEW
-        ────────────────────────────────────────────────────────
+            This analysis evaluates whether biologically meaningful
+            covariates remain associated with imaging-derived
+            phenotypes after accounting for repeated measurements
+            and batch-related effects.
 
-        This analysis evaluates whether biologically meaningful
-        covariates remain associated with imaging-derived
-        phenotypes after accounting for repeated measurements
-        and batch-related effects.
+            Preservation of biological associations is a key
+            requirement of successful harmonisation.
 
-        Preservation of biological associations is a key
-        requirement of successful harmonisation.
+            ⚙️ METHOD
+            ────────────────────────────────────────────────────────
 
-        ⚙️ METHOD
-        ────────────────────────────────────────────────────────
+            Linear mixed-effects models are fitted for each feature
+            with biological covariates included as fixed effects.
 
-        Linear mixed-effects models are fitted for each feature
-        with biological covariates included as fixed effects.
+            For each covariate–feature combination, the following
+            statistics are reported:
 
-        For each covariate–feature combination, the following
-        statistics are reported:
+            • Statistical significance (p-value)
+            • Effect size (β coefficient)
+            • 95% confidence interval
 
-        • Statistical significance (p-value)
-        • Effect size (β coefficient)
-        • 95% confidence interval
+            📈 INTERPRETATION
+            ────────────────────────────────────────────────────────
 
-        📈 INTERPRETATION
-        ────────────────────────────────────────────────────────
+            Significant associations indicate that variation in the
+            feature is related to the biological covariate.
 
-        Significant associations indicate that variation in the
-        feature is related to the biological covariate.
+            Preservation of significant effects and stable effect
+            sizes following harmonisation suggests that meaningful
+            biological signal has been retained.
 
-        Preservation of significant effects and stable effect
-        sizes following harmonisation suggests that meaningful
-        biological signal has been retained.
+            Substantial attenuation or loss of biological
+            associations may indicate over-correction or removal of
+            true biological variability.
 
-        Substantial attenuation or loss of biological
-        associations may indicate over-correction or removal of
-        true biological variability.
+            Strong residual batch effects may also obscure biological
+            relationships and reduce interpretability.
 
-        Strong residual batch effects may also obscure biological
-        relationships and reduce interpretability.
+            ⚠️ LIMITATIONS
+            ────────────────────────────────────────────────────────
 
-        ⚠️ LIMITATIONS
-        ────────────────────────────────────────────────────────
+            Biological effects should not be evaluated using
+            p-values alone.
 
-        Biological effects should not be evaluated using
-        p-values alone.
-
-        Effect size magnitude, effect direction, and confidence
-        intervals should all be considered when assessing the
-        impact of harmonisation.
-        """
-        )
-        inferred_fix = list(covariates.keys())
-        report.text_simple(
-            "────────────────────────────────────────────"
+            Effect size magnitude, effect direction, and confidence
+            intervals should all be considered when assessing the
+            impact of harmonisation.
+            """
             )
-        PlotDiagnosticResults.plot_MixedEffectsPart2(mf,
-                      idp_col='IDP',
-                      fix_eff=inferred_fix,
-                      p_thr=0.05,
-                      figsize=_plot_figsize("biological", len(features)),
-                      rep=report)
-        report.log_text("Biological variability plots added to report")
+            inferred_fix = list(covariates.keys())
+
+            report.text_simple(
+                "────────────────────────────────────────────"
+                )
+            
+            PlotDiagnosticResults.plot_MixedEffectsPart2(mf,
+                        idp_col='IDP',
+                        fix_eff=inferred_fix,
+                        p_thr=0.05,
+                        figsize=_plot_figsize("biological", len(features)),
+                        rep=report)
+            report.log_text("Biological variability plots added to report")
+        else:
+            report.log_text("No biological covariates provided; skipping biological variability plots")
+            report.text_simple("We highly recommend including biological covariates to assess biological variability."
+                )
 
         # Finalize
         logger.info("Diagnostic tests completed")
@@ -4700,11 +4897,22 @@ def _run_single_longitudinal_method_diagnostics(
         result.errors.append(f"MultiplicativeEffect_long failed: {exc}")
 
     try:
-        result.multivariate_batch_difference = DiagnosticFunctionsLong.MultiVariateBatchDifference_long(
+        multivariate_result, multivariate_info = DiagnosticFunctionsLong.MultiVariateBatchDifference_long(
             idp_matrix=data,
             batch=batch,
             idp_names=feature_names,
+            return_info=True,
         )
+        mahalanobis_diagnostics = multivariate_info.get("raw_diagnostics", {})
+        covariance_rank = mahalanobis_diagnostics.get("covariance_rank")
+        covariance_features = mahalanobis_diagnostics.get("n_features")
+        if covariance_rank is not None and covariance_features is not None and covariance_rank < covariance_features:
+            result.errors.append(
+                "MultiVariateBatchDifference_long skipped because the analysis covariance matrix is "
+                f"rank deficient ({covariance_rank} of {covariance_features})."
+            )
+        else:
+            result.multivariate_batch_difference = multivariate_result
     except Exception as exc:
         result.errors.append(f"MultiVariateBatchDifference_long failed: {exc}")
 

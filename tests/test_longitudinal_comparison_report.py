@@ -111,6 +111,62 @@ def test_longitudinal_comparison_report_no_covariates_runs(test_results_dir):
     assert "overall_score" in report.comparison_scorecard.columns
 
 
+def test_longitudinal_comparison_skips_rank_deficient_mahalanobis(monkeypatch):
+    from DiagnoseHarmonisation import DiagnosticFunctionsLong
+
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "SubjectOrder_long",
+        lambda **kwargs: pd.DataFrame({"SpearmanRho": [0.6], "pValue": [0.02]}),
+    )
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "WithinSubjVar_long",
+        lambda **kwargs: pd.DataFrame(
+            {"subject": ["s1"], "n_obs": [2], "metric_type": ["RPD"], "f1": [3.0]}
+        ),
+    )
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "AdditiveEffect_long",
+        lambda **kwargs: (pd.DataFrame({"p-value": [0.2]}), []),
+    )
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "MixedEffects_long",
+        lambda **kwargs: (pd.DataFrame({"ICC": [0.7], "n_is_batchSig": [1]}), []),
+    )
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "MultiplicativeEffect_long",
+        lambda **kwargs: (pd.DataFrame({"p-value": [0.3]}), []),
+    )
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "MultiVariateBatchDifference_long",
+        lambda **kwargs: (
+            {"pairwise_raw": {}, "centroid_raw": {}, "batches": ["A", "B"]},
+            {"raw_diagnostics": {"covariance_rank": 1, "n_features": 2}},
+        ),
+    )
+
+    data = np.arange(24, dtype=float).reshape(12, 2)
+    result = DiagnosticReport._run_single_longitudinal_method_diagnostics(
+        method_name="RankDeficient",
+        data=data,
+        batch=np.array(["A"] * 6 + ["B"] * 6),
+        subject_ids=np.repeat([f"s{i}" for i in range(6)], 2),
+        timepoints=np.tile(["t1", "t2"], 6),
+        covariates=None,
+        feature_names=["f1", "f2"],
+    )
+
+    assert result.multivariate_batch_difference is None
+    assert any("rank deficient (1 of 2)" in warning for warning in result.errors)
+    assert result.subject_order is not None
+    assert np.isnan(result.summary_metrics["mean_mahalanobis_distance"])
+
+
 def test_longitudinal_comparison_report_rejects_shape_mismatch():
     data = _build_longitudinal_demo_data(seed=99)
     datasets = dict(data["datasets"])
