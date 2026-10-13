@@ -3,30 +3,43 @@ name: Build and deploy MkDocs site
 on:
   push:
     branches:
-      - main        # change if your main branch is named 'master' or other
+      - main
 
 permissions:
-  contents: write  # required so gh-pages branch can be updated
+  contents: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
+          cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install documentation dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mkdocs mkdocs-material mkdocstrings[python]
+
+          python -m pip install \
+            "mkdocs>=1.6,<2" \
+            "mkdocs-material" \
+            "mkdocstrings[python]" \
+            "pymdown-extensions<11"
+
+          python -m pip check
+
+      - name: Display dependency versions
+        run: |
+          python -m pip freeze | grep -Ei 'mkdocs|mkdocstrings|pymdown|markdown'
 
       - name: Build site
-        run: mkdocs build
+        run: mkdocs build --clean
 
       - name: Deploy to GitHub Pages
         run: mkdocs gh-deploy --force

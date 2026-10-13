@@ -40,24 +40,25 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+
 dev = [
-  "pytest>=7.0",
-  "pytest-cov",
-  "black",
-  "flake8",
-  "build",
-  "twine",
-  "pip-tools",
-  "pipdeptree",
-  "mkdocs==1.*", 
-  "mkdocs-material",
-  "mkdocstrings[python]"
+    "pytest>=7.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "build",
+    "twine",
+    "pip-tools",
+    "pipdeptree",
 ]
 
 docs = [
-  "sphinx",
-  "sphinx-rtd-theme",
+    "mkdocs>=1.6,<2",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "pymdown-extensions<11",
 ]
+
 
 [project.scripts]
 DHarm = "DiagnoseHarmonisation.cli:main"

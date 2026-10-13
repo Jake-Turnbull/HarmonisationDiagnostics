@@ -11,6 +11,7 @@ nav:
   - Simulator: simulator.md
   - Terminal: terminal.md
   - API Reference:
+      - Overview: api/Overview.md
       - DiagnosticReport: api/DiagnosticReport.md
       - Cross-sectional Comparison Report: api/CrossSectionalComparisonReport.md
       - HarmonisationFunctions: api/HarmonisationFunctions.md
@@ -44,6 +45,11 @@ plugins:
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
+
+  - pymdownx.highlight:
+      use_pygments: true
+
+  - pymdownx.superfences
 
 extra_javascript:
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
