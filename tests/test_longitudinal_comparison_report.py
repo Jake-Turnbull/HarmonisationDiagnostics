@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from DiagnoseHarmonisation import DiagnosticReport
+from DiagnoseHarmonisation import PlotComparisonResults
 
 
 def _build_longitudinal_demo_data(seed: int = 42):
@@ -70,6 +71,8 @@ def test_longitudinal_comparison_report_generates_html(test_results_dir):
     report_html = report_path.read_text(encoding="utf-8")
     assert "Batch-covariate confounding diagnostics" in report_html
     assert "timepoint" in report_html
+    assert "unadjusted z-score distributions" in report_html
+    assert "covariate-adjusted z-score distributions" in report_html
 
     assert isinstance(report.comparison_results, dict)
     assert isinstance(report.comparison_scorecard, pd.DataFrame)
@@ -112,6 +115,41 @@ def test_longitudinal_comparison_report_no_covariates_runs(test_results_dir):
     report_path = Path(report.report_path)
     assert report_path.exists() and report_path.suffix == ".html"
     assert "overall_score" in report.comparison_scorecard.columns
+
+
+def test_longitudinal_comparison_zscore_histograms_have_method_subplots():
+    rng = np.random.default_rng(8)
+    batch = np.array(["A"] * 12 + ["B"] * 12)
+    features = ["f1", "f2"]
+    datasets = {
+        "Raw": rng.normal(size=(24, 2)),
+        "Adjusted": rng.normal(loc=0.5, size=(24, 2)),
+    }
+    covariates = {"age": np.linspace(20, 60, 24).tolist()}
+
+    figures = PlotComparisonResults.plot_compare_long_zscore_distributions(
+        datasets,
+        batch,
+        features,
+        covariates=covariates,
+    )
+
+    assert [caption for caption, _ in figures] == [
+        "Longitudinal comparison: unadjusted z-score distributions",
+        "Longitudinal comparison: covariate-adjusted z-score distributions",
+    ]
+    assert all(len(figure.axes) == len(datasets) for _, figure in figures)
+    assert all(axis.patches for _, figure in figures for axis in figure.axes)
+
+    no_covariate_figures = PlotComparisonResults.plot_compare_long_zscore_distributions(
+        datasets,
+        batch,
+        features,
+    )
+    assert all(
+        "No covariates supplied" in axis.texts[0].get_text()
+        for axis in no_covariate_figures[1][1].axes
+    )
 
 
 def test_longitudinal_comparison_skips_rank_deficient_mahalanobis(monkeypatch):

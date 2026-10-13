@@ -3912,6 +3912,14 @@ def LongitudinalReport(data, batch,
                         )
             features = list(data_df.columns)
             covariate_names = list(covariates_df.columns)
+            # Error ran into here, cannot convert non-numeric covariates to float directly
+            # Convert non-numeric covariates to numeric if possible
+            for col in covariates_df.columns:
+                if not pd.api.types.is_numeric_dtype(covariates_df[col]):
+                    covariates_df[col] = pd.Categorical(covariates_df[col]).codes
+                    # Return the new matched codes in the report
+                    report.log_text(f"Covariate '{col}' converted to numeric codes.")
+                    
             covariates_array = covariates_df.to_numpy(dtype=float)
             data = data_df.to_numpy(dtype=float)
             covariates = covariates_df.to_dict(orient="list")
@@ -5573,6 +5581,14 @@ def LongitudinalComparisonReport(
                 finally:
                     plt.close(fig)
 
+        _log_figures(
+            PlotComparisonResults.plot_compare_long_zscore_distributions(
+                normalized_datasets,
+                batch_arr,
+                features,
+                covariates=covariates_dict,
+            )
+        )
         _log_figures(PlotComparisonResults.plot_compare_long_subject_order(method_results))
         _log_figures(PlotComparisonResults.plot_compare_long_within_subject_variability(method_results))
         _log_figures(PlotComparisonResults.plot_compare_long_additive_multiplicative(method_results))

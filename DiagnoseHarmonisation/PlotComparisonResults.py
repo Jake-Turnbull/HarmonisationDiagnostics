@@ -1159,6 +1159,91 @@ def plot_compare_long_subject_order(results, significance: float = 0.05):
     return figs
 
 
+def plot_compare_long_zscore_distributions(
+    datasets,
+    batch,
+    features,
+    covariates=None,
+):
+    """Compare pooled robust z-score histograms by batch across methods."""
+    if not datasets:
+        return []
+
+    batch_arr = np.asarray(batch)
+    unique_batches = np.unique(batch_arr)
+    covariates = covariates or None
+
+    def _zscore_by_method(adjust: bool):
+        values_by_method = {}
+        for method, data in datasets.items():
+            frame = pd.DataFrame(np.asarray(data, dtype=float), columns=features)
+            frame["batch"] = batch_arr
+            if adjust and covariates:
+                frame = PlotDiagnosticResults._adjust_for_covariates_preserve_batch(
+                    df=frame,
+                    idp_cols=features,
+                    batch_col="batch",
+                    covariates=covariates,
+                )
+            values = PlotDiagnosticResults.z_score(
+                frame[features].to_numpy(dtype=float), MAD=True
+            )
+            values_by_method[method] = values
+        return values_by_method
+
+    def _plot_grid(values_by_method, adjusted: bool):
+        fig, axes, _, _ = _make_method_grid(len(values_by_method), square_size=4.8)
+        finite_values = [
+            values[np.isfinite(values)]
+            for values in values_by_method.values()
+            if np.isfinite(values).any()
+        ]
+        if finite_values:
+            max_abs = max(float(np.max(np.abs(values))) for values in finite_values)
+            max_abs = max(max_abs, 1.0)
+        else:
+            max_abs = 1.0
+        bins = np.linspace(-max_abs * 1.1, max_abs * 1.1, 81)
+
+        for ax, (method, values) in zip(axes, values_by_method.items()):
+            if adjusted and not covariates:
+                ax.text(0.5, 0.5, "No covariates supplied", ha="center", va="center", transform=ax.transAxes)
+                ax.set_title(_title(method))
+                ax.set_axis_off()
+                continue
+            for batch_name in unique_batches:
+                batch_values = values[batch_arr == batch_name, :]
+                batch_values = batch_values[np.isfinite(batch_values)]
+                if batch_values.size == 0:
+                    continue
+                ax.hist(
+                    batch_values,
+                    bins=bins,
+                    density=True,
+                    alpha=0.45,
+                    label=str(batch_name),
+                )
+            ax.set_xlim(bins[0], bins[-1])
+            ax.invert_xaxis()
+            ax.set_title(_title(method))
+            ax.set_xlabel("Robust z-score")
+            ax.set_ylabel("Density")
+            ax.yaxis.tick_right()
+            ax.yaxis.set_label_position("right")
+            ax.legend(title="Batch", fontsize=7, frameon=False)
+
+        _hide_unused_axes(axes, len(values_by_method))
+        fig.tight_layout()
+        title = "covariate-adjusted" if adjusted else "unadjusted"
+        return (f"Longitudinal comparison: {title} z-score distributions", fig)
+
+    raw_values = _zscore_by_method(adjust=False)
+    figures = [_plot_grid(raw_values, adjusted=False)]
+    adjusted_values = _zscore_by_method(adjust=True)
+    figures.append(_plot_grid(adjusted_values, adjusted=True))
+    return figures
+
+
 def plot_compare_long_within_subject_variability(results):
     """Compare within-subject variability summaries across methods."""
     figs = []
