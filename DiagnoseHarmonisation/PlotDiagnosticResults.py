@@ -2694,6 +2694,37 @@ def _adaptive_rotation(labels, *, threshold: int = 8, steep: int = 35, mild: int
     return 0
 
 
+def _set_feature_ticks(ax, labels, axis: str = "x", rotation: int | None = None, fontsize=None) -> bool:
+    """Name feature ticks only up to FEATURE_LABEL_HIDE_THRESHOLD; otherwise leave matplotlib's default ticks."""
+    labels = [str(x) for x in labels]
+    if len(labels) > FEATURE_LABEL_HIDE_THRESHOLD:
+        return False
+    pos = np.arange(len(labels))
+    kw = {} if fontsize is None else {"fontsize": fontsize}
+    if axis == "x":
+        rot = _adaptive_rotation(labels, threshold=8, steep=45, mild=25) if rotation is None else rotation
+        ax.set_xticks(pos)
+        ax.set_xticklabels(labels, rotation=rot, ha="right" if rot else "center", **kw)
+    else:
+        ax.set_yticks(pos)
+        ax.set_yticklabels(labels, **kw)
+    return True
+
+
+def _draw_batch_effect_significance(ax, features, pvals, p_thr: float = 0.05) -> None:
+    """Per-feature -log10(p) scatter shared by the single and comparison longitudinal reports."""
+    logp = -np.log10(np.maximum(np.asarray(pvals, dtype=float), 1e-300))
+    x = np.arange(len(logp))
+    ax.scatter(x, logp, color=LONGITUDINAL_DOT_COLOR, zorder=3)
+    ax.axhline(-np.log10(p_thr), color="black", linestyle="--", linewidth=1.2)
+    _set_feature_ticks(ax, features, rotation=45)
+    ax.set_ylabel(r"$-\log_{10}(p-value)$")
+    ax.set_xlabel("Feature / IDP")
+    ax.set_title(f"Batch effect significance per feature (p < {p_thr})")
+    ax.grid(axis="y", alpha=0.2)
+    _strip_spines(ax)
+
+
 def _icc_legend_handles() -> list:
     """Legend handles explaining ICC bar colours and threshold bands."""
     from matplotlib.patches import Patch
@@ -3282,6 +3313,7 @@ def Long_Robust_Zscores(
         as_pdf: bool = False,
         plot_as_residuals: bool = False,
         rep: object | None = None,
+        figsize: tuple = (8.0, 5.5),
 ) -> pd.DataFrame:
     apply_plot_theme()
 
@@ -3339,7 +3371,7 @@ def Long_Robust_Zscores(
 
     # Use _plot_zscore_hist_on_axis to plot the z-score histograms for each batch
     # Create figure with a single axis for batch-wise histogram overlays.
-    fig = plt.figure(figsize=(14, 8))
+    fig = plt.figure(figsize=figsize)
     ax1 = fig.add_subplot()
     _plot_zscore_hist_on_axis(ax1, idp_array, batch_array, bin_number)
     ax1.set_xlabel("Z-scores of all unique measures")
@@ -3677,7 +3709,6 @@ def plot_RawIDPBoxplotsAcrossSites(
         plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")
 
     return _handle_rep_show(fig, rep, "", show)
-
 
 # ============================================================================
 # 1B.  RESIDUALISED IDP DISTRIBUTIONS ACROSS SITES
@@ -4157,7 +4188,7 @@ def plot_SubjectOrder(
 
     y = np.arange(len(all_idps))
     ax_idp.scatter(idp_medians.to_numpy(dtype=float), y, color=LONGITUDINAL_DOT_COLOR, zorder=3)
-    ax_idp.set_yticks(y, [str(idp) for idp in all_idps])
+    _set_feature_ticks(ax_idp, all_idps, axis="y")
     ax_idp.invert_yaxis()
     ax_idp.set_xlim(-1, 1)
     ax_idp.set_xlabel("Median Spearman rho")
@@ -4260,10 +4291,10 @@ def plot_WithinSubjVar(
 
     if n_subjects > 10 or n_idps > 10:
         feature_medians = df[idp_cols].median(axis=0, skipna=True)
-        fig, ax = plt.subplots(figsize=(max(8, 0.7 * n_idps), 5))
+        fig, ax = plt.subplots(figsize=(min(figsize[0], max(8, 0.7 * n_idps), 12), min(figsize[1], 5)))
         x = np.arange(n_idps)
         ax.scatter(x, feature_medians.to_numpy(dtype=float), color=LONGITUDINAL_DOT_COLOR, zorder=3)
-        ax.set_xticks(x, [str(idp) for idp in idp_cols], rotation=_adaptive_rotation(idp_cols, threshold=8, steep=40, mild=25), ha="right")
+        _set_feature_ticks(ax, idp_cols, rotation=_adaptive_rotation(idp_cols, threshold=8, steep=40, mild=25))
         ax.set_ylabel("Median pairwise RPD (%)")
         ax.set_title("Median within-subject variability per IDP")
         ax.grid(axis="y", alpha=0.2)
@@ -4395,8 +4426,9 @@ def plot_WithinSubjVar(
         if leg is not None:
             leg.remove()
 
-    axA.set_xticks(range(len(idp_cols)))
-    axA.set_xticklabels(idp_cols)
+    if not _set_feature_ticks(axA, idp_cols, rotation=0):
+        axA.set_xticks(range(0, len(idp_cols), max(1, len(idp_cols) // 10)))
+        axA.set_xticklabels(axA.get_xticks().astype(int))
     axA.set_title(
         "Within-subject variability across IDPs",
         fontsize=STYLE.TITLE_SIZE,
@@ -5346,7 +5378,7 @@ def plot_MixedEffectsPart1(
             # ------------------------------------------------------------
             if metric_name == "n_is_batchSig":
                 ax.scatter(y_pos, vals, color=LONGITUDINAL_DOT_COLOR, zorder=3)
-                ax.set_xticks(y_pos, idps, rotation=45, ha="right")
+                _set_feature_ticks(ax, idps, rotation=45)
                 ax.set_xlabel("IDP")
                 ax.set_ylabel("Number of significant batch pairs")
                 ax.set_title("Site-pairwise batch effects")
@@ -5361,7 +5393,7 @@ def plot_MixedEffectsPart1(
                 ax.scatter(y_pos, vals, color=LONGITUDINAL_DOT_COLOR, zorder=3)
                 for threshold in (0.50, 0.75, 0.90):
                     ax.axhline(threshold, color="gray", linestyle="--", linewidth=0.8, alpha=0.55)
-                ax.set_xticks(y_pos, idps, rotation=45, ha="right")
+                _set_feature_ticks(ax, idps, rotation=45)
                 ax.set_ylim(0, 1.05)
                 ax.set_xlabel("IDP")
                 ax.set_ylabel("Intraclass correlation (ICC)")
@@ -5378,8 +5410,7 @@ def plot_MixedEffectsPart1(
                 y_pos, vals,
                 color=colors_g, edgecolor="none", alpha=STYLE.BAR_ALPHA
             )
-            ax.set_xticks(y_pos)
-            ax.set_xticklabels(idps, rotation=45, ha="right", fontsize=STYLE.TICK_SIZE)
+            _set_feature_ticks(ax, idps, rotation=45, fontsize=STYLE.TICK_SIZE)
             ax.set_ylabel(metric_name, fontsize=STYLE.AXIS_SIZE)
             ax.set_title(metric_name, fontsize=STYLE.TITLE_SIZE, fontweight="bold", pad=10)
             ax.tick_params(axis="y", labelsize=STYLE.TICK_SIZE)
@@ -5762,10 +5793,8 @@ def plot_MixedEffectsPart2(
             valid = np.isfinite(ests)
             ax.scatter(x[valid], ests[valid], color=LONGITUDINAL_DOT_COLOR, zorder=3)
 
-        ax.set_xticks(x)
         rot = xtick_rotation if xtick_rotation is not None else _adaptive_rotation(idps, threshold=7, steep=45, mild=25)
-        tick_labels = idps if n_idps <= 10 else [""] * n_idps
-        _set_ticklabels(ax, "x", tick_labels, rotation=rot, ha="right" if rot else "center")
+        _set_feature_ticks(ax, idps, rotation=rot)
         ax.set_xlim(-0.6, n_idps - 1 + 0.6)
         ax.axhline(0, color="gray", linewidth=0.7, alpha=0.6)
 
@@ -5880,16 +5909,9 @@ def plot_AddMultEffects(
             .assign(logp=lambda d: -np.log10(np.maximum(d["p"], _TINY)))
         )
 
-        x = np.arange(len(plot_df))
-        fig, ax = plt.subplots(figsize=(max(7, 0.45 * len(plot_df)), 4.5))
-        ax.scatter(x, plot_df["logp"], color=LONGITUDINAL_DOT_COLOR, zorder=3)
-        ax.axhline(-np.log10(p_thr), color="black", linestyle="--", linewidth=1.2)
-        ax.set_xticks(x, plot_df["Feature"].astype(str), rotation=45, ha="right")
-        ax.set_ylabel(r"$-\log_{10}(p-value)$")
-        ax.set_xlabel("Feature / IDP")
-        ax.set_title(f"Batch effect significance per feature (p < {p_thr})")
-        ax.grid(axis="y", alpha=0.2)
-        _strip_spines(ax)
+        fig, ax = plt.subplots(figsize=(min(figsize[0], 12), min(figsize[1], 6)))
+        _draw_batch_effect_significance(ax, plot_df["Feature"], plot_df["p"], p_thr)
+        fig.tight_layout()
 
         if savepath:
             plt.savefig(savepath, dpi=STYLE.DPI, bbox_inches="tight")

@@ -3004,6 +3004,7 @@ def CrossSectionalComparisonReport(
     base_cmap: str = "tab10",
     shared_y: bool = False,
     fontsize: int | float | None = None,
+    max_cols_in_plotting_grid: int = 3,
 ) -> StatsReporter:
     """
     Create a comparative diagnostic report for multiple harmonisation methods.
@@ -3330,6 +3331,7 @@ def CrossSectionalComparisonReport(
                 finally:
                     plt.close(fig)
 
+
         _log_figures(
             PlotComparisonResults.plot_compare_zscore_distributions(
                 method_results,
@@ -3338,6 +3340,7 @@ def CrossSectionalComparisonReport(
                 probability_distribution=probability_distribution,
                 base_cmap=base_cmap,
                 fontsize=fontsize,
+                max_cols_in_plotting_grid=max_cols_in_plotting_grid,
             )
         )
         _log_figures(
@@ -3347,19 +3350,20 @@ def CrossSectionalComparisonReport(
                 use_residual=True,
                 probability_distribution=probability_distribution,
                 base_cmap=base_cmap,
+                max_cols_in_plotting_grid=max_cols_in_plotting_grid,
                 fontsize=fontsize,
             )
         )
-        _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results, shared_y=shared_y, fontsize=fontsize))
-        _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results, shared_y=shared_y, fontsize=fontsize))
-        _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results, fontsize=fontsize))
-        _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results, fontsize=fontsize))
+        _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results, shared_y=shared_y, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results, shared_y=shared_y, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
         _log_figures(PlotComparisonResults.plot_compare_mahalanobis(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_ks(method_results, fontsize=fontsize))
-        _log_figures(PlotComparisonResults.plot_compare_covariance(method_results, batch=batch_arr, fontsize=fontsize))
-        _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr, fontsize=fontsize))
+        _log_figures(PlotComparisonResults.plot_compare_ks(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_covariance(method_results, batch=batch_arr, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
         _log_figures(confounding_figs)
-        _log_figures(PlotComparisonResults.plot_compare_pca_r2_heatmaps(method_results, fontsize=fontsize))
+        _log_figures(PlotComparisonResults.plot_compare_pca_r2_heatmaps(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
         _log_figures(
             PlotComparisonResults.plot_compare_pca_embeddings(
                 method_results,
@@ -3370,6 +3374,7 @@ def CrossSectionalComparisonReport(
                 allow_many_covariates=allow_many_covariate_embeddings,
                 base_cmap=base_cmap,
                 fontsize=fontsize,
+                max_cols_in_plotting_grid=max_cols_in_plotting_grid,
             )
         )
         if UMAP_embedding:
@@ -3383,6 +3388,7 @@ def CrossSectionalComparisonReport(
                     allow_many_covariates=allow_many_covariate_embeddings,
                     base_cmap=base_cmap,
                     fontsize=fontsize,
+                    max_cols_in_plotting_grid=max_cols_in_plotting_grid,
                 )
             )
         _log_figures(PlotComparisonResults.plot_method_scorecard(summary_df))
@@ -3427,6 +3433,9 @@ def _normalise_longitudinal_inputs(
 
         if features is None:
             features = list(X.columns)
+            # If columns are blank; generate default feature names
+            if not features:
+                features = [f"Feature_{i+1}" for i in range(X.shape[1])]
         else:
             features = list(features)
             X = X.loc[:, features].copy()
@@ -3574,7 +3583,7 @@ def _report_longitudinal_batch_covariate_confounding(
 from typing import Optional, Union
 def LongitudinalReport(data, batch,
                           subject_ids,
-                          timepoints,
+                          timepoints=None,
                           covariates=None,
                           covariate_names=None,
                           features = None,
@@ -3716,13 +3725,19 @@ def LongitudinalReport(data, batch,
         if kind == "raw":
             return (7.4, 5.2)
         if kind == "summary_hbar":
-            return (7.2, max(5.2, 0.24 * n + 2.7))
+            return (7.2, min(8.0, max(5.2, 0.24 * n + 2.7)))
         if kind == "summary_box":
-            return (7.2, max(5.8, 0.18 * n + 2.8))
+            return (7.2, min(8.0, max(5.8, 0.18 * n + 2.8)))
         if kind == "effects":
             return (7.8, 6.6)
         if kind == "biological":
             return (7.8, 6.6)
+        if kind == "subject_order":
+            return (10.0, 5.0)
+        if kind == "within_subj":
+            return (9.0, 8.0)
+        if kind == "mahalanobis":
+            return (10.0, 5.0)
         return (6.5, 6.5)
 
     # If user passed a report object, use it (do not close it here).
@@ -3883,6 +3898,7 @@ def LongitudinalReport(data, batch,
             .groupby("batch")["subject"]
             .nunique()
         )
+        
 
         if covariates is None:
             data_df, batch, subject_ids, timepoints, _ = (
@@ -3897,7 +3913,8 @@ def LongitudinalReport(data, batch,
                 )
             )
             data = data_df.to_numpy(dtype=float)
-            features = list(data_df.columns)
+            if features is None:
+                features = list(data_df.columns)
         else:
             data_df, batch, subject_ids, timepoints, covariates_df = (
                             _normalise_longitudinal_inputs(
@@ -3910,7 +3927,8 @@ def LongitudinalReport(data, batch,
                                 covariate_names=covariate_names,
                             )
                         )
-            features = list(data_df.columns)
+            if features is None:
+                features = list(data_df.columns)
             covariate_names = list(covariates_df.columns)
             # Error ran into here, cannot convert non-numeric covariates to float directly
             # Convert non-numeric covariates to numeric if possible
@@ -4024,7 +4042,7 @@ def LongitudinalReport(data, batch,
                 show=False,
             )"""
 
-        report.log_text("Raw IDP boxplots across sites added to report")
+        report.log_text("Raw IDP Z-scores across sites added to report")
         report.text_simple("────────────────────────────────────────────")
 
         report.log_section(
@@ -4078,6 +4096,9 @@ def LongitudinalReport(data, batch,
         )
         
         # Subject-level: Subject order consistency
+        # Ensure features is not none here;
+        if features is None:
+            raise ValueError("Features must be provided for subject order consistency analysis.")
         subjorder = DiagnosticFunctionsLong.SubjectOrder_long(idp_matrix=data,
                                                           subjects=subject_ids,
                                                           timepoints=timepoints,
@@ -4085,12 +4106,16 @@ def LongitudinalReport(data, batch,
                                                           nPerm=100)
         print("\nSUBJECT ORDER CONSISTENCY: RANK CORRELATIONS WITH PERMUTATION TESTS")
         print(subjorder)
+        # Give summary of subject order dataframe in the report (i.e, first n rows)
+        report.text_simple(
+            subjorder.head().to_string()
+        )
         report.text_simple(
             "────────────────────────────────────────────"
             )
         PlotDiagnosticResults.plot_SubjectOrder(subjorder,                 
                               ncols=2,
-                              figsize_per_plot=(8,6),
+                              figsize_per_plot=_plot_figsize("subject_order"),
                               limit_idps=None,
                               sample_method='random',
                               random_state=42,
@@ -4169,6 +4194,7 @@ def LongitudinalReport(data, batch,
         PlotDiagnosticResults.plot_WithinSubjVar(
             wsv,
             subject_col='subject',
+            figsize=_plot_figsize("within_subj"),
             rep=report,
             debug=False
             )
@@ -4535,6 +4561,7 @@ def LongitudinalReport(data, batch,
 
             PlotDiagnosticResults.plot_MultivariateBatchDifference(results=md,
                                                                  info=md_info,
+                                                                 figsize=_plot_figsize("mahalanobis"),
                                                                  rep=report,
                                                                  annotate=True,
                                                                  show=False)
@@ -5046,7 +5073,7 @@ def _run_single_longitudinal_method_diagnostics(
         result.errors.append(f"WithinSubjVar_long failed: {exc}")
 
     try:
-        result.additive_effects, _ = DiagnosticFunctionsLong.AdditiveEffect_long(
+        result.additive_effects, *_ = DiagnosticFunctionsLong.AdditiveEffect_long(
             idp_matrix=data,
             subjects=subject_ids,
             timepoints=timepoints,
@@ -5373,7 +5400,7 @@ def LongitudinalComparisonReport(
     datasets: dict[str, np.ndarray],
     batch,
     subject_ids,
-    timepoints,
+    timepoints=None,
     covariates=None,
     covariate_names=None,
     features=None,
@@ -5388,6 +5415,7 @@ def LongitudinalComparisonReport(
     SaveArtifacts: bool = False,
     show: bool = False,
     timestamped_reports: bool = True,
+    max_cols_in_plotting_grid: int = 2,
 ) -> StatsReporter:
     """Run and compare longitudinal diagnostics across multiple methods."""
     if not isinstance(datasets, dict) or len(datasets) == 0:
@@ -5587,14 +5615,15 @@ def LongitudinalComparisonReport(
                 batch_arr,
                 features,
                 covariates=covariates_dict,
+                max_cols_in_plotting_grid=max_cols_in_plotting_grid,
             )
         )
         _log_figures(PlotComparisonResults.plot_compare_long_subject_order(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_within_subject_variability(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_additive_multiplicative(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_mixed_effects(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_biological_effects(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_multivariate_batch_difference(method_results))
+        _log_figures(PlotComparisonResults.plot_compare_long_within_subject_variability(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_additive_multiplicative(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_mixed_effects(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_biological_effects(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_multivariate_batch_difference(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
         _log_figures(PlotComparisonResults.plot_compare_longitudinal_scorecard(summary_df))
 
         if save_data and summary_df is not None and not summary_df.empty:

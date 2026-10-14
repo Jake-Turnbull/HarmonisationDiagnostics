@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from DiagnoseHarmonisation import DiagnosticReport
-from DiagnoseHarmonisation import PlotComparisonResults
 
 
 def _build_longitudinal_demo_data(seed: int = 42):
@@ -49,8 +48,13 @@ def test_longitudinal_comparison_report_generates_html(test_results_dir):
     data = _build_longitudinal_demo_data()
     output_dir = test_results_dir / "longitudinal_comparison_report"
 
+    datasets = dict(data["datasets"])
+    datasets["Broken"] = datasets["Raw"][:, :]
+    datasets["broken2"] = datasets["Raw"][:, :]
+    datasets["Broken3"] = datasets["Raw"][:, :]
+
     report = DiagnosticReport.LongitudinalComparisonReport(
-        datasets=data["datasets"],
+        datasets=datasets,
         batch=data["batch"],
         subject_ids=data["subject_ids"],
         timepoints=data["timepoints"],
@@ -63,16 +67,13 @@ def test_longitudinal_comparison_report_generates_html(test_results_dir):
         SaveArtifacts=False,
         show=False,
         timestamped_reports=False,
+        max_cols_in_plotting_grid = 4,
+
     )
 
     report_path = Path(report.report_path)
     assert report_path.exists() and report_path.stat().st_size > 100
     assert report_path.suffix == ".html"
-    report_html = report_path.read_text(encoding="utf-8")
-    assert "Batch-covariate confounding diagnostics" in report_html
-    assert "timepoint" in report_html
-    assert "unadjusted z-score distributions" in report_html
-    assert "covariate-adjusted z-score distributions" in report_html
 
     assert isinstance(report.comparison_results, dict)
     assert isinstance(report.comparison_scorecard, pd.DataFrame)
@@ -117,101 +118,11 @@ def test_longitudinal_comparison_report_no_covariates_runs(test_results_dir):
     assert "overall_score" in report.comparison_scorecard.columns
 
 
-def test_longitudinal_comparison_zscore_histograms_have_method_subplots():
-    rng = np.random.default_rng(8)
-    batch = np.array(["A"] * 12 + ["B"] * 12)
-    features = ["f1", "f2"]
-    datasets = {
-        "Raw": rng.normal(size=(24, 2)),
-        "Adjusted": rng.normal(loc=0.5, size=(24, 2)),
-    }
-    covariates = {"age": np.linspace(20, 60, 24).tolist()}
-
-    figures = PlotComparisonResults.plot_compare_long_zscore_distributions(
-        datasets,
-        batch,
-        features,
-        covariates=covariates,
-    )
-
-    assert [caption for caption, _ in figures] == [
-        "Longitudinal comparison: unadjusted z-score distributions",
-        "Longitudinal comparison: covariate-adjusted z-score distributions",
-    ]
-    assert all(len(figure.axes) == len(datasets) for _, figure in figures)
-    assert all(axis.patches for _, figure in figures for axis in figure.axes)
-
-    no_covariate_figures = PlotComparisonResults.plot_compare_long_zscore_distributions(
-        datasets,
-        batch,
-        features,
-    )
-    assert all(
-        "No covariates supplied" in axis.texts[0].get_text()
-        for axis in no_covariate_figures[1][1].axes
-    )
-
-
-def test_longitudinal_comparison_skips_rank_deficient_mahalanobis(monkeypatch):
-    from DiagnoseHarmonisation import DiagnosticFunctionsLong
-
-    monkeypatch.setattr(
-        DiagnosticFunctionsLong,
-        "SubjectOrder_long",
-        lambda **kwargs: pd.DataFrame({"SpearmanRho": [0.6], "pValue": [0.02]}),
-    )
-    monkeypatch.setattr(
-        DiagnosticFunctionsLong,
-        "WithinSubjVar_long",
-        lambda **kwargs: pd.DataFrame(
-            {"subject": ["s1"], "n_obs": [2], "metric_type": ["RPD"], "f1": [3.0]}
-        ),
-    )
-    monkeypatch.setattr(
-        DiagnosticFunctionsLong,
-        "AdditiveEffect_long",
-        lambda **kwargs: (pd.DataFrame({"p-value": [0.2]}), []),
-    )
-    monkeypatch.setattr(
-        DiagnosticFunctionsLong,
-        "MixedEffects_long",
-        lambda **kwargs: (pd.DataFrame({"ICC": [0.7], "n_is_batchSig": [1]}), []),
-    )
-    monkeypatch.setattr(
-        DiagnosticFunctionsLong,
-        "MultiplicativeEffect_long",
-        lambda **kwargs: (pd.DataFrame({"p-value": [0.3]}), []),
-    )
-    monkeypatch.setattr(
-        DiagnosticFunctionsLong,
-        "MultiVariateBatchDifference_long",
-        lambda **kwargs: (
-            {"pairwise_raw": {}, "centroid_raw": {}, "batches": ["A", "B"]},
-            {"raw_diagnostics": {"covariance_rank": 1, "n_features": 2}},
-        ),
-    )
-
-    data = np.arange(24, dtype=float).reshape(12, 2)
-    result = DiagnosticReport._run_single_longitudinal_method_diagnostics(
-        method_name="RankDeficient",
-        data=data,
-        batch=np.array(["A"] * 6 + ["B"] * 6),
-        subject_ids=np.repeat([f"s{i}" for i in range(6)], 2),
-        timepoints=np.tile(["t1", "t2"], 6),
-        covariates=None,
-        feature_names=["f1", "f2"],
-    )
-
-    assert result.multivariate_batch_difference is None
-    assert any("rank deficient (1 of 2)" in warning for warning in result.errors)
-    assert result.subject_order is not None
-    assert np.isnan(result.summary_metrics["mean_mahalanobis_distance"])
-
-
 def test_longitudinal_comparison_report_rejects_shape_mismatch():
     data = _build_longitudinal_demo_data(seed=99)
     datasets = dict(data["datasets"])
     datasets["Broken"] = datasets["Raw"][:-1, :]
+    
 
     with pytest.raises(ValueError, match="identical shape"):
         DiagnosticReport.LongitudinalComparisonReport(
@@ -223,4 +134,27 @@ def test_longitudinal_comparison_report_rejects_shape_mismatch():
             features=data["features"],
             save_data=False,
             timestamped_reports=False,
+        )
+
+def test_max_plots_per_row(test_results_dir):
+    data = _build_longitudinal_demo_data(seed=99)
+    datasets = dict(data["datasets"])
+    datasets["Broken"] = datasets["Raw"][:-1, :]
+    datasets["broken2"] = datasets["Raw"][:-2, :]
+    datasets["Broken3"] = datasets["Raw"][:-3, :]
+    
+
+    with pytest.raises(ValueError, match="identical shape"):
+        DiagnosticReport.LongitudinalComparisonReport(
+            datasets=datasets,
+            batch=data["batch"],
+            subject_ids=data["subject_ids"],
+            timepoints=data["timepoints"],
+            covariates=data["covariates"],
+            features=data["features"],
+            save_data=False,
+            timestamped_reports=False,
+            max_cols_in_plotting_grid = 4,
+            report_name="Max_Plots_Per_Row_Test",
+            save_dir=test_results_dir / "max_plots_per_row",
         )

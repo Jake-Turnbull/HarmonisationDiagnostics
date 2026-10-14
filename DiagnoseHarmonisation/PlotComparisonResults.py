@@ -6,6 +6,7 @@ import textwrap
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy import stats
 from matplotlib import cm
 from matplotlib.lines import Line2D
 
@@ -205,6 +206,7 @@ def plot_compare_zscore_distributions(
     probability_distribution: bool = True,
     base_cmap: str = "tab10",
     fontsize: float = 10,
+    max_cols_in_plotting_grid: int = 3,
 ):
     figs = []
     items = _method_items(results)
@@ -214,7 +216,7 @@ def plot_compare_zscore_distributions(
     batch_arr = np.asarray(batch)
     unique_batches, cmap = _batch_palette(batch_arr, base_cmap)
 
-    fig, axes, _, _ = _make_method_grid(len(items))
+    fig, axes, _, _ = _make_method_grid(len(items), max_cols=max_cols_in_plotting_grid)
     shared_bins = np.linspace(-5, 5, 60)
     bin_width = float(shared_bins[1] - shared_bins[0])
     n_valid = 0
@@ -278,7 +280,7 @@ def plot_compare_zscore_distributions(
     return figs
 
 
-def plot_compare_cohens_d(results, shared_y: bool = False, fontsize: float = 10):
+def plot_compare_cohens_d(results, shared_y: bool = False, fontsize: float = 10, max_cols_in_plotting_grid: int = 3):
     figs = []
     rows = []
     featurewise = []
@@ -321,7 +323,7 @@ def plot_compare_cohens_d(results, shared_y: bool = False, fontsize: float = 10)
     figs.append(("Comparison: Cohen's d summary", fig))
 
     if featurewise:
-        fig2, axes, _, _ = _make_method_grid(len(featurewise))
+        fig2, axes, _, _ = _make_method_grid(len(featurewise), max_cols=max_cols_in_plotting_grid)
         if shared_y:
             shared_y_max = max((np.nanmax(np.abs(vec)) if np.asarray(vec).size else 1.0 for _, vec in featurewise), default=1.0)
             shared_y_max = max(1.0, shared_y_max) * 1.1
@@ -349,7 +351,7 @@ def plot_compare_cohens_d(results, shared_y: bool = False, fontsize: float = 10)
     return figs
 
 
-def plot_compare_variance_ratios(results, shared_y: bool = False, fontsize: float = 10):
+def plot_compare_variance_ratios(results, shared_y: bool = False, fontsize: float = 10, max_cols_in_plotting_grid: int = 3):
     figs = []
     rows = []
     featurewise = []
@@ -399,7 +401,7 @@ def plot_compare_variance_ratios(results, shared_y: bool = False, fontsize: floa
     max_log_ratio = max((row["max_abs_log_ratio"] for row in rows), default=0)
     
     if featurewise:
-        fig2, axes, _, _ = _make_method_grid(len(featurewise))
+        fig2, axes, _, _ = _make_method_grid(len(featurewise),max_cols=max_cols_in_plotting_grid)
         # Calculate a common limit only when explicitly requested.
         for ax2, (method, vec) in zip(axes, featurewise):
             vec = np.asarray(vec, dtype=float)
@@ -423,7 +425,7 @@ def plot_compare_variance_ratios(results, shared_y: bool = False, fontsize: floa
     return figs
 
 
-def plot_compare_lmm_icc(results, fontsize: float = 10):
+def plot_compare_lmm_icc(results, fontsize: float = 10, max_cols_in_plotting_grid: int = 3):
     figs = []
     icc_items = []
     r2_items = []
@@ -441,7 +443,7 @@ def plot_compare_lmm_icc(results, fontsize: float = 10):
             r2_items.append((method, r2_cov, r2_cov_batch))
 
     if icc_items:
-        fig_icc, axes, _, _ = _make_method_grid(len(icc_items))
+        fig_icc, axes, _, _ = _make_method_grid(len(icc_items),max_cols=max_cols_in_plotting_grid)
         for ax, (method, icc) in zip(axes, icc_items):
             x = np.arange(len(icc))
             df_method = next((res.lmm_results for m, res in _method_items(results) if m == method), None)
@@ -491,7 +493,7 @@ def plot_compare_lmm_icc(results, fontsize: float = 10):
         figs.append(("Comparison: LMM ICC per feature", fig_icc))
 
     if r2_items:
-        fig_r2, axes, _, _ = _make_method_grid(len(r2_items))
+        fig_r2, axes, _, _ = _make_method_grid(len(r2_items), max_cols=max_cols_in_plotting_grid)
         for ax, (method, r2_cov, r2_cov_batch) in zip(axes, r2_items):
             x = np.arange(len(r2_cov))
             ax.plot(x, r2_cov, label="Covariates R2", linewidth=1.2)
@@ -511,7 +513,7 @@ def plot_compare_lmm_icc(results, fontsize: float = 10):
     return figs
 
 
-def plot_compare_lmm_biological_effects(results, fontsize: float = 10):
+def plot_compare_lmm_biological_effects(results, fontsize: float = 10, max_cols_in_plotting_grid: int = 3):
     figs = []
     summary_rows = []
     ols_items = []
@@ -559,7 +561,7 @@ def plot_compare_lmm_biological_effects(results, fontsize: float = 10):
     ]:
         if not items:
             continue
-        fig_grid, axes, _, _ = _make_method_grid(len(items), square_size=5.2)
+        fig_grid, axes, _, _ = _make_method_grid(len(items), square_size=5.2, max_cols=max_cols_in_plotting_grid)
         for ax, (method, df_cov) in zip(axes, items):
 
             
@@ -583,7 +585,7 @@ def plot_compare_lmm_biological_effects(results, fontsize: float = 10):
     return figs
 
 
-def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 7, fontsize: float = 10):
+def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 7, fontsize: float = 10, max_cols_in_plotting_grid: int = 3):
     """
     Grid of omnibus R^2 heatmaps (metadata variable x PC) per method, built from
     each method's `pc_associations` (see `DiagnosticFunctions.calculate_pc_associations`).
@@ -613,7 +615,7 @@ def plot_compare_pca_r2_heatmaps(results, max_pcs: int = 7, fontsize: float = 10
     for _, matrix, _ in items:
         max_r2 = max(max_r2, np.nanmax(matrix.to_numpy(dtype=float)))
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.8, max_cols=3)
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.8, max_cols=max_cols_in_plotting_grid)
     last_im = None
     for ax, (method, matrix, explained) in zip(axes, items):
         values = matrix.to_numpy(dtype=float)
@@ -662,7 +664,7 @@ def plot_compare_mahalanobis(results):
     return figs
 
 
-def plot_compare_ks(results, fontsize: float = 10):
+def plot_compare_ks(results, fontsize: float = 10, max_cols_in_plotting_grid: int = 3):
     figs = []
     rows = []
     featurewise = []
@@ -708,7 +710,7 @@ def plot_compare_ks(results, fontsize: float = 10):
     figs.append(("Comparison: KS summary", fig))
 
     if featurewise:
-        fig2, axes, _, _ = _make_method_grid(len(featurewise))
+        fig2, axes, _, _ = _make_method_grid(len(featurewise),max_cols=max_cols_in_plotting_grid)
         for ax2, (method, min_p) in zip(axes, featurewise):
             min_p = np.asarray(min_p, dtype=float)
             x2 = np.arange(min_p.size)
@@ -733,7 +735,7 @@ def plot_compare_ks(results, fontsize: float = 10):
     return figs
 
 
-def plot_compare_covariance(results, batch=None, fontsize: float = 10):
+def plot_compare_covariance(results, batch=None, fontsize: float = 10, max_cols_in_plotting_grid: int = 3):
     figs = []
     mats = []
     names = []
@@ -769,7 +771,7 @@ def plot_compare_covariance(results, batch=None, fontsize: float = 10):
     if len(mats) == 0:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(mats))
+    fig, axes, _, _ = _make_method_grid(len(mats), max_cols=max_cols_in_plotting_grid)
 
     for ax, method, arr, labels in zip(axes, names, mats, batch_labels):
         im = ax.imshow(arr, vmin=0.0, vmax=vmax if vmax > 0 else None, aspect="equal")
@@ -794,7 +796,7 @@ def plot_compare_covariance(results, batch=None, fontsize: float = 10):
     return figs
 
 
-def plot_compare_batch_scree(results, batch, fontsize: float = 10):
+def plot_compare_batch_scree(results, batch, fontsize: float = 10, max_cols_in_plotting_grid: int = 3):
     figs = []
     items = [(m, r) for m, r in _method_items(results) if isinstance(r.pca_results, dict) and "scores" in r.pca_results]
     if len(items) == 0:
@@ -802,7 +804,7 @@ def plot_compare_batch_scree(results, batch, fontsize: float = 10):
 
     batch_arr = np.asarray(batch)
     unique_batches = np.unique(batch_arr)
-    fig, axes, _, _ = _make_method_grid(len(items))
+    fig, axes, _, _ = _make_method_grid(len(items), max_cols=max_cols_in_plotting_grid)
 
     for ax, (method, res) in zip(axes, items):
         scores = np.asarray(res.pca_results["scores"], dtype=float)
@@ -838,13 +840,14 @@ def _plot_embedding_grid(
     is_categorical: bool,
     color_label: str,
     base_cmap: str = "tab10",
+    max_cols_in_plotting_grid: int = 3,
 ):
     figs = []
     items = list(embedding_by_method.items())
     if len(items) == 0:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items))
+    fig, axes, _, _ = _make_method_grid(len(items), max_cols=max_cols_in_plotting_grid)
     mappables: list[Any] = []
 
     for ax, (method, emb) in zip(axes, items):
@@ -895,13 +898,14 @@ def plot_compare_pca_embeddings(
     allow_many_covariates: bool = False,
     base_cmap: str = "tab10",
     fontsize: float = 10,
+    max_cols_in_plotting_grid: int = 3,
 ):
     figs = []
     items = [(m, r) for m, r in _method_items(results) if isinstance(r.pca_results, dict) and "scores" in r.pca_results]
     if len(items) == 0:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8)
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=max_cols_in_plotting_grid)
 
     batch_arr = np.asarray(batch)
     unique_batches, batch_cmap = _batch_palette(batch_arr, base_cmap)
@@ -969,6 +973,7 @@ def Plot_compare_UMAP_embeddings(
     allow_many_covariates: bool = False,
     base_cmap: str = "tab10",
     fontsize: float = 10,
+    max_cols_in_plotting_grid: int = 3,
 ):
     figs = []
     try:
@@ -980,7 +985,7 @@ def Plot_compare_UMAP_embeddings(
     if len(items) == 0:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8)
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=max_cols_in_plotting_grid)
 
     batch_arr = np.asarray(batch)
     unique_batches, batch_cmap = _batch_palette(batch_arr, base_cmap)
@@ -1138,7 +1143,7 @@ def plot_compare_long_subject_order(results, significance: float = 0.05):
             idp_medians = tmp.groupby("IDP", sort=False)["SpearmanRho"].median().dropna()
             y = np.arange(len(idp_medians))
             idp_ax.scatter(idp_medians.to_numpy(dtype=float), y, color=LONGITUDINAL_DOT_COLOR, zorder=3)
-            idp_ax.set_yticks(y, idp_medians.index.astype(str))
+            PlotDiagnosticResults._set_feature_ticks(idp_ax, idp_medians.index, axis="y")
             idp_ax.invert_yaxis()
             idp_ax.set_xlim(-1, 1)
             idp_ax.set_xlabel("Median Spearman rho")
@@ -1164,6 +1169,8 @@ def plot_compare_long_zscore_distributions(
     batch,
     features,
     covariates=None,
+    draw_pdf: bool = True,
+    max_cols_in_plotting_grid: int = 3,
 ):
     """Compare pooled robust z-score histograms by batch across methods."""
     if not datasets:
@@ -1192,7 +1199,7 @@ def plot_compare_long_zscore_distributions(
         return values_by_method
 
     def _plot_grid(values_by_method, adjusted: bool):
-        fig, axes, _, _ = _make_method_grid(len(values_by_method), square_size=4.8)
+        fig, axes, _, _ = _make_method_grid(len(values_by_method), square_size=4.8, max_cols=max_cols_in_plotting_grid)
         finite_values = [
             values[np.isfinite(values)]
             for values in values_by_method.values()
@@ -1216,13 +1223,18 @@ def plot_compare_long_zscore_distributions(
                 batch_values = batch_values[np.isfinite(batch_values)]
                 if batch_values.size == 0:
                     continue
-                ax.hist(
+                counts, _, patches = ax.hist(
                     batch_values,
                     bins=bins,
                     density=True,
                     alpha=0.45,
                     label=str(batch_name),
                 )
+                mu, sd = float(np.mean(batch_values)), float(np.std(batch_values))
+                if draw_pdf and np.isfinite(sd) and sd > 0:
+                    grid = np.linspace(bins[0], bins[-1], 200)
+                    ax.plot(grid, stats.norm.pdf(grid, mu, sd), color=patches[0].get_facecolor()[:3], linewidth=2)
+
             ax.set_xlim(bins[0], bins[-1])
             ax.invert_xaxis()
             ax.set_title(_title(method))
@@ -1244,14 +1256,14 @@ def plot_compare_long_zscore_distributions(
     return figures
 
 
-def plot_compare_long_within_subject_variability(results):
+def plot_compare_long_within_subject_variability(results, max_cols_in_plotting_grid: int = 3):
     """Compare within-subject variability summaries across methods."""
     figs = []
     items = _method_items(results)
     if len(items) == 0:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=2)
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=max_cols_in_plotting_grid)
     n_valid = 0
 
     for ax, (method, res) in zip(axes, items):
@@ -1277,12 +1289,7 @@ def plot_compare_long_within_subject_variability(results):
 
         y = np.arange(len(med))
         ax.scatter(med.to_numpy(dtype=float), y, color=LONGITUDINAL_DOT_COLOR, zorder=3)
-        ax.set_yticks(y)
-        labels, _ = _feature_labels(len(med))
-        if all(lbl == "" for lbl in labels):
-            ax.set_yticklabels(["" for _ in y])
-        else:
-            ax.set_yticklabels(med.index.astype(str), fontsize=6)
+        PlotDiagnosticResults._set_feature_ticks(ax, med.index, axis="y", fontsize=6)
         ax.set_xlabel("Median within-subject variability (%)")
         ax.set_title(_title(method))
         ax.grid(axis="x", alpha=0.2)
@@ -1298,15 +1305,15 @@ def plot_compare_long_within_subject_variability(results):
     return figs
 
 
-def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05):
+def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05, max_cols_in_plotting_grid: int = 3):
     """Compare additive and multiplicative residual batch effects across methods."""
     figs = []
     items = _method_items(results)
     if len(items) == 0:
         return figs
 
-    def _build_effect_grid(attr: str, title: str, p_col: str = "p-value"):
-        fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=3)
+    def _build_effect_grid(attr: str, title: str, p_col: str = "p-value", title_suffix: str = ""):
+        fig, axes, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=max_cols_in_plotting_grid)
         n_valid = 0
         for ax, (method, res) in zip(axes, items):
             df = getattr(res, attr, None)
@@ -1322,20 +1329,8 @@ def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05):
             else:
                 x_labels = df[feature_col].astype(str).tolist()
 
-            y = _safe_log10_p(pvals)
-            x = np.arange(len(y))
-            ax.scatter(x, y, color=LONGITUDINAL_DOT_COLOR, s=16, zorder=3)
-            ax.axhline(-np.log10(p_thr), color="black", linestyle="--", linewidth=1)
-            ax.set_title(_title(method))
-            ax.set_xlabel("Feature")
-            ax.set_ylabel("-log10(p)")
-            labels, rotation = _feature_labels(len(x_labels))
-            ax.set_xticks(x)
-            if all(lbl == "" for lbl in labels):
-                ax.set_xticklabels(labels)
-            else:
-                ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=6)
-            ax.grid(True, alpha=0.2)
+            PlotDiagnosticResults._draw_batch_effect_significance(ax, x_labels, pvals, p_thr)
+            ax.set_title(_title(f"{method}\n{title_suffix}"))
             n_valid += 1
 
         _hide_unused_axes(axes, len(items))
@@ -1345,18 +1340,18 @@ def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05):
         fig.tight_layout()
         return (title, fig)
 
-    add_fig = _build_effect_grid("additive_effects", "Longitudinal comparison: additive batch effects")
+    add_fig = _build_effect_grid("additive_effects", "Longitudinal comparison: additive batch effects", title_suffix="Additive batch effect")
     if add_fig is not None:
         figs.append(add_fig)
 
-    mul_fig = _build_effect_grid("multiplicative_effects", "Longitudinal comparison: multiplicative batch effects")
+    mul_fig = _build_effect_grid("multiplicative_effects", "Longitudinal comparison: multiplicative batch effects", title_suffix="Multiplicative batch effect")
     if mul_fig is not None:
         figs.append(mul_fig)
 
     return figs
 
 
-def plot_compare_long_mixed_effects(results):
+def plot_compare_long_mixed_effects(results, max_cols_in_plotting_grid: int = 3):
     """Compare mixed-effects outputs for pairwise batch signal and ICC."""
     figs = []
     items = _method_items(results)
@@ -1364,7 +1359,7 @@ def plot_compare_long_mixed_effects(results):
         return figs
 
     # Figure 1: pairwise batch signal per feature (n_is_batchSig)
-    fig1, axes1, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=3)
+    fig1, axes1, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=max_cols_in_plotting_grid)
     n_valid1 = 0
     for ax, (method, res) in zip(axes1, items):
         df = getattr(res, "mixed_effects", None)
@@ -1379,9 +1374,7 @@ def plot_compare_long_mixed_effects(results):
         ax.set_title(_title(method))
         ax.set_xlabel("Feature")
         ax.set_ylabel("n significant batch pairs")
-        labels, _ = _feature_labels(len(vals))
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels, fontsize=6)
+        PlotDiagnosticResults._set_feature_ticks(ax, df["IDP"] if "IDP" in df.columns else [f"f{i+1}" for i in x], fontsize=6)
         ax.grid(axis="y", alpha=0.2)
         n_valid1 += 1
 
@@ -1393,7 +1386,7 @@ def plot_compare_long_mixed_effects(results):
         plt.close(fig1)
 
     # Figure 2: ICC per feature
-    fig2, axes2, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=3)
+    fig2, axes2, _, _ = _make_method_grid(len(items), square_size=4.8, max_cols=max_cols_in_plotting_grid)
     n_valid2 = 0
     for ax, (method, res) in zip(axes2, items):
         df = getattr(res, "mixed_effects", None)
@@ -1411,9 +1404,7 @@ def plot_compare_long_mixed_effects(results):
         ax.set_xlabel("Feature")
         ax.set_ylabel("ICC")
         ax.set_ylim(bottom=0)
-        labels, _ = _feature_labels(len(icc))
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels, fontsize=6)
+        PlotDiagnosticResults._set_feature_ticks(ax, df["IDP"] if "IDP" in df.columns else [f"f{i+1}" for i in x], fontsize=6)
         ax.grid(axis="y", alpha=0.2)
         n_valid2 += 1
 
@@ -1427,14 +1418,14 @@ def plot_compare_long_mixed_effects(results):
     return figs
 
 
-def plot_compare_long_biological_effects(results, p_thr: float = 0.05):
+def plot_compare_long_biological_effects(results, p_thr: float = 0.05, max_cols_in_plotting_grid: int = 3):
     """Compare per-IDP biological effect estimates across methods."""
     figs = []
     items = _method_items(results)
     if len(items) == 0:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=2)
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=max_cols_in_plotting_grid)
     n_valid = 0
 
     for ax, (method, res) in zip(axes, items):
@@ -1471,9 +1462,9 @@ def plot_compare_long_biological_effects(results, p_thr: float = 0.05):
                 ax.hlines(upper[valid], x[valid] + offsets[effect_index] - cap,
                           x[valid] + offsets[effect_index] + cap, color="black", linewidth=1)
 
-        ax.set_xticks(x, idps if n_idps <= 10 else [""] * n_idps, rotation=45, ha="right")
+        PlotDiagnosticResults._set_feature_ticks(ax, idps, rotation=45)
         ax.axhline(0, color="gray", linewidth=0.8, alpha=0.6)
-        ax.set_xlabel("IDP" if n_idps <= 10 else "IDP position")
+        ax.set_xlabel("IDP" if n_idps <= 20 else "IDP position")
         ax.set_ylabel("Effect estimate (beta)")
         ax.set_title(_title(method))
         ax.grid(axis="y", alpha=0.2)
@@ -1491,14 +1482,14 @@ def plot_compare_long_biological_effects(results, p_thr: float = 0.05):
     return figs
 
 
-def plot_compare_long_multivariate_batch_difference(results):
+def plot_compare_long_multivariate_batch_difference(results, max_cols_in_plotting_grid: int = 3):
     """Compare multivariate Mahalanobis batch differences across methods."""
     figs = []
     items = _method_items(results)
     if len(items) == 0:
         return figs
 
-    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=2)
+    fig, axes, _, _ = _make_method_grid(len(items), square_size=5.0, max_cols=max_cols_in_plotting_grid)
     n_valid = 0
 
     for ax, (method, res) in zip(axes, items):

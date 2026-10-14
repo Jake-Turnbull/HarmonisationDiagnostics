@@ -52,7 +52,48 @@ def test_longitudinal_report_runs_without_covariates(test_results_dir, monkeypat
     report_path = test_results_dir / "long_no_covariates" / "Long_without_Covariates.html"
     assert report_path.exists() and report_path.stat().st_size > 100
 
+def test_longitudinal_runs_without_timepoints(test_results_dir, monkeypatch):
+    from DiagnoseHarmonisation import PlotDiagnosticResults
+    monkeypatch.setattr(PlotDiagnosticResults, "clustering_analysis_all", lambda *args, **kwargs: None)
+    n_samples = 80
+    n_features = 10
+    rng = np.random.default_rng(123)
+    data = rng.normal(size=(n_samples, n_features))
+    # Introduce subject random intercepts
+    subject_ID = np.array(np.linspace(1, n_samples, n_samples, dtype=int))
 
+    # Number of time points per subject
+    n_timepoints = 4
+
+    # Make data array with subject random intercepts
+    # Data array is now 4 times as many rows:
+    data = np.repeat(data, n_timepoints, axis=0)
+    subject_array = np.repeat(subject_ID, n_timepoints)
+    batch = np.array(["A"] * (n_samples // 2 * n_timepoints) + ["B"] * (n_samples // 2 * n_timepoints))
+    timepoints = np.tile(np.arange(1, n_timepoints + 1), n_samples)
+    
+    features = [f"Feature_{i}" for i in range(n_features)]
+    # Create covariates array 
+    # Covaraties, age and sex, for each new timepoint, add random small age increase
+    from DiagnoseHarmonisation import DiagnosticReport
+
+    DiagnosticReport.LongitudinalReport(
+        data,
+        batch,
+        subject_array,
+        covariates=None,
+        features=features,
+        save_dir=str(test_results_dir / "long_no_covariates"),
+        report_name="Long_without_Covariates.html",
+        show=False,
+        save_data=False,
+        timestamped_reports=False,
+    )
+
+    report_path = test_results_dir / "long_no_covariates" / "Long_without_Covariates.html"
+    assert report_path.exists() and report_path.stat().st_size > 100
+
+    
 # Test actual known effects:
 
 def test_longitudinal_report_with_known_effects(test_results_dir, monkeypatch):
@@ -202,8 +243,8 @@ def test_long_with_non_numeric_covariates(test_results_dir, monkeypatch):
     monkeypatch.setenv("MPLCONFIGDIR", str(test_results_dir / "mplconfig_long_known_effects"))
     from DiagnoseHarmonisation import PlotDiagnosticResults
     monkeypatch.setattr(PlotDiagnosticResults, "clustering_analysis_all", lambda *args, **kwargs: None)
-    n_samples = 100
-    n_features = 50
+    n_samples = 1000
+    n_features = 10
     rng = np.random.default_rng(123)
     data = rng.normal(size=(n_samples, n_features))
     # Introduce subject random intercepts
