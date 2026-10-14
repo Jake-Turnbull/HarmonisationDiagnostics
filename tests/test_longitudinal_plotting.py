@@ -6,6 +6,34 @@ import pandas as pd
 import pytest
 
 from DiagnoseHarmonisation import PlotComparisonResults, PlotDiagnosticResults
+from DiagnoseHarmonisation.DiagnosticFunctionsLong import _add_fdr_pvalues
+from DiagnoseHarmonisation.DiagnosticReport import (
+    LongitudinalDiagnosticResult,
+    _extract_longitudinal_summary_metrics,
+)
+
+
+def test_longitudinal_effect_pvalues_are_bh_fdr_adjusted():
+    effects = pd.DataFrame({"Feature": ["f1", "f2", "f3"], "p-value": [0.01, 0.04, np.nan]})
+
+    adjusted = _add_fdr_pvalues(effects)
+
+    np.testing.assert_allclose(adjusted["p-value_fdr"][:2], [0.02, 0.04])
+    assert np.isnan(adjusted["p-value_fdr"].iloc[2])
+
+
+def test_longitudinal_summary_uses_fdr_pvalues_when_available():
+    result = LongitudinalDiagnosticResult(
+        method_name="method",
+        data=np.empty((0, 0)),
+        additive_effects=pd.DataFrame({"p-value": [0.01, 0.2], "p-value_fdr": [0.08, 0.2]}),
+        multiplicative_effects=pd.DataFrame({"p-value": [0.01, 0.2], "p-value_fdr": [0.08, 0.2]}),
+    )
+
+    metrics = _extract_longitudinal_summary_metrics(result)
+
+    assert metrics["prop_additive_significant"] == 0.0
+    assert metrics["prop_multiplicative_significant"] == 0.0
 
 
 def test_subject_order_uses_median_rho_heatmap_and_idp_medians():
@@ -86,6 +114,24 @@ def test_additive_multiplicative_pvalues_are_blue_dots_with_threshold():
     plt.close(figure)
 
 
+def test_effect_plot_uses_fdr_pvalues_and_labels_significance_threshold():
+    effects = pd.DataFrame(
+        {
+            "Feature": ["f1", "f2"],
+            "p-value": [0.01, 0.1],
+            "p-value_fdr": [0.02, 0.2],
+        }
+    )
+
+    figure = PlotDiagnosticResults.plot_AddMultEffects(effects)
+
+    ax = figure.axes[0]
+    np.testing.assert_allclose(ax.collections[0].get_offsets()[:, 1], -np.log10([0.02, 0.2]))
+    assert any("BH-FDR-adjusted p-value = 0.05" in text.get_text() for text in ax.texts)
+    assert "BH-FDR-adjusted p-value" in ax.get_ylabel()
+    plt.close(figure)
+
+
 def test_mixed_effect_counts_and_icc_use_blue_dots_and_reference_lines():
     df = pd.DataFrame(
         {"IDP": ["f1", "f2"], "n_is_batchSig": [1, 3], "ICC": [0.6, 0.85], "WCV": [2, 4]}
@@ -145,8 +191,12 @@ def test_comparison_longitudinal_plots_use_requested_summaries():
             within_subject_variability=pd.DataFrame(
                 {"subject": ["s1", "s2"], "f1": [1.0, 3.0], "f2": [5.0, 7.0]}
             ),
-            additive_effects=pd.DataFrame({"Feature": ["f1", "f2"], "p-value": [0.01, 0.1]}),
-            multiplicative_effects=pd.DataFrame({"Feature": ["f1", "f2"], "p-value": [0.02, 0.2]}),
+            additive_effects=pd.DataFrame(
+                {"Feature": ["f1", "f2"], "p-value": [0.01, 0.1], "p-value_fdr": [0.02, 0.2]}
+            ),
+            multiplicative_effects=pd.DataFrame(
+                {"Feature": ["f1", "f2"], "p-value": [0.02, 0.2], "p-value_fdr": [0.04, 0.2]}
+            ),
             mixed_effects=pd.DataFrame(
                 {
                     "IDP": ["f1", "f2"],
@@ -172,6 +222,12 @@ def test_comparison_longitudinal_plots_use_requested_summaries():
     assert len(variability_fig.axes[0].collections) == 1
     assert len(effect_figs) == 2
     assert all(len(fig.axes[0].collections) == 1 for _, fig in effect_figs)
+    np.testing.assert_allclose(
+        effect_figs[0][1].axes[0].collections[0].get_offsets()[:, 1], -np.log10([0.02, 0.2])
+    )
+    np.testing.assert_allclose(
+        effect_figs[1][1].axes[0].collections[0].get_offsets()[:, 1], -np.log10([0.04, 0.2])
+    )
     assert len(mixed_figs) == 2
     assert len(mixed_figs[0][1].axes[0].collections) == 1
     assert {round(line.get_ydata()[0], 2) for line in mixed_figs[1][1].axes[0].lines} >= {0.5, 0.75, 0.9}

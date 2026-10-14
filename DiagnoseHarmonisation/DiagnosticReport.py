@@ -4243,13 +4243,13 @@ def LongitudinalReport(data, batch,
         with batch included as a fixed effect and subject
         included as a random effect.
 
-        The plot shows -log10(p-value) per IDP; the dashed line
-        marks p = 0.05.
+        The plot shows -log10(BH-FDR-adjusted p-value) per IDP;
+        the dashed line marks adjusted p = 0.05.
 
         A Kenward–Roger F-test is then used to compare the full
         model against a nested model without the batch term.
 
-        The resulting p-value quantifies the contribution of
+        The BH-FDR-adjusted p-value quantifies the contribution of
         batch membership to variation in feature values.
 
         📈 INTERPRETATION
@@ -4431,8 +4431,8 @@ def LongitudinalReport(data, batch,
         For each feature, a p-value is computed to assess
         whether variance differs significantly between batches.
 
-        The plot shows -log10(p-value) per IDP; the dashed line
-        marks p = 0.05.
+        The plot shows -log10(BH-FDR-adjusted p-value) per IDP;
+        the dashed line marks adjusted p = 0.05.
 
         📈 INTERPRETATION
         ────────────────────────────────────────────────────────
@@ -5055,12 +5055,14 @@ def _extract_longitudinal_summary_metrics(
                 metrics["biological_signal_score"] = float(np.nanmean(pvals < 0.05))
 
     if isinstance(result.additive_effects, pd.DataFrame) and not result.additive_effects.empty:
-        pvals = pd.to_numeric(result.additive_effects.get("p-value"), errors="coerce").to_numpy(dtype=float)
+        p_col = "p-value_fdr" if "p-value_fdr" in result.additive_effects else "p-value"
+        pvals = pd.to_numeric(result.additive_effects.get(p_col), errors="coerce").to_numpy(dtype=float)
         if pvals.size:
             metrics["prop_additive_significant"] = float(np.nanmean(pvals < 0.05))
 
     if isinstance(result.multiplicative_effects, pd.DataFrame) and not result.multiplicative_effects.empty:
-        pvals = pd.to_numeric(result.multiplicative_effects.get("p-value"), errors="coerce").to_numpy(dtype=float)
+        p_col = "p-value_fdr" if "p-value_fdr" in result.multiplicative_effects else "p-value"
+        pvals = pd.to_numeric(result.multiplicative_effects.get(p_col), errors="coerce").to_numpy(dtype=float)
         if pvals.size:
             metrics["prop_multiplicative_significant"] = float(np.nanmean(pvals < 0.05))
 

@@ -1328,7 +1328,9 @@ def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05, max_
                 ax.axis("off")
                 continue
 
-            pvals = pd.to_numeric(df[p_col], errors="coerce").to_numpy(dtype=float)
+            fdr_col = f"{p_col}_fdr"
+            plot_p_col = fdr_col if fdr_col in df.columns else p_col
+            pvals = pd.to_numeric(df[plot_p_col], errors="coerce").to_numpy(dtype=float)
             if not np.isfinite(pvals).any():
                 ax.set_title(_title(f"{method} ({attr} unavailable)"))
                 ax.axis("off")
@@ -1339,7 +1341,10 @@ def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05, max_
             else:
                 x_labels = df[feature_col].astype(str).tolist()
 
-            PlotDiagnosticResults._draw_batch_effect_significance(ax, x_labels, pvals, p_thr)
+            p_value_label = "BH-FDR-adjusted p-value" if plot_p_col == fdr_col else "p-value"
+            PlotDiagnosticResults._draw_batch_effect_significance(
+                ax, x_labels, pvals, p_thr, p_value_label=p_value_label
+            )
             ax.set_title(_title(f"{method}\n{title_suffix}"))
             n_valid += 1
 

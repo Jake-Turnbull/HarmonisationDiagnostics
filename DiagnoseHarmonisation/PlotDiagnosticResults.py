@@ -2711,16 +2711,29 @@ def _set_feature_ticks(ax, labels, axis: str = "x", rotation: int | None = None,
     return True
 
 
-def _draw_batch_effect_significance(ax, features, pvals, p_thr: float = 0.05) -> None:
+def _draw_batch_effect_significance(
+    ax, features, pvals, p_thr: float = 0.05, p_value_label: str = "p-value"
+) -> None:
     """Per-feature -log10(p) scatter shared by the single and comparison longitudinal reports."""
     logp = -np.log10(np.maximum(np.asarray(pvals, dtype=float), 1e-300))
     x = np.arange(len(logp))
     ax.scatter(x, logp, color=LONGITUDINAL_DOT_COLOR, zorder=3)
-    ax.axhline(-np.log10(p_thr), color="black", linestyle="--", linewidth=1.2)
+    threshold_y = -np.log10(p_thr)
+    ax.axhline(threshold_y, color="black", linestyle="--", linewidth=1.2)
+    ax.text(
+        0.99,
+        threshold_y,
+        f"{p_value_label} = {p_thr:g}",
+        transform=ax.get_yaxis_transform(),
+        ha="right",
+        va="bottom",
+        fontsize=8,
+        backgroundcolor="white",
+    )
     _set_feature_ticks(ax, features, rotation=45)
-    ax.set_ylabel(r"$-\log_{10}(p-value)$")
+    ax.set_ylabel(f"-log10({p_value_label})")
     ax.set_xlabel("Feature / IDP")
-    ax.set_title(f"Batch effect significance per feature (p < {p_thr})")
+    ax.set_title(f"Batch effect significance per feature ({p_value_label} < {p_thr})")
     ax.grid(axis="y", alpha=0.2)
     _strip_spines(ax)
 
@@ -5888,6 +5901,10 @@ def plot_AddMultEffects(
     if isinstance(dfs, pd.DataFrame):
         dfs = [dfs]
 
+    fdr_col = f"{p_col}_fdr"
+    plot_p_col = fdr_col if all(fdr_col in df.columns for df in dfs) else p_col
+    p_value_label = "BH-FDR-adjusted p-value" if plot_p_col == fdr_col else "p-value"
+
     if labels is None:
         labels = [f"col{i+1}" for i in range(len(dfs))]
 
@@ -5903,7 +5920,7 @@ def plot_AddMultEffects(
 
     # ---- single DF: horizontal bar plot ----------------------------------
     if len(dfs) == 1:
-        s = dfs[0].set_index(feature_col)[p_col]
+        s = dfs[0].set_index(feature_col)[plot_p_col]
 
         plot_df = (
             pd.DataFrame({
@@ -5914,7 +5931,9 @@ def plot_AddMultEffects(
         )
 
         fig, ax = plt.subplots(figsize=(min(figsize[0], 12), min(figsize[1], 6)))
-        _draw_batch_effect_significance(ax, plot_df["Feature"], plot_df["p"], p_thr)
+        _draw_batch_effect_significance(
+            ax, plot_df["Feature"], plot_df["p"], p_thr, p_value_label=p_value_label
+        )
         fig.tight_layout()
 
         if savepath:
@@ -5926,9 +5945,9 @@ def plot_AddMultEffects(
 
     for df, lab in zip(dfs, labels):
         tmp = (
-            df[[feature_col, p_col]]
+            df[[feature_col, plot_p_col]]
             .drop_duplicates(subset=feature_col)
-            .set_index(feature_col)[p_col]
+            .set_index(feature_col)[plot_p_col]
             .astype(float)
         )
         for feat in all_features:
@@ -5948,7 +5967,7 @@ def plot_AddMultEffects(
             for c in labels:
                 v = pv_mat.at[r, c]
                 annot.at[r, c] = "" if pd.isna(v) else f"{annot_fmt.format(float(v))}{_star(v)}"
-        cbar_label = "p-value"
+        cbar_label = p_value_label
     else:
         plot_mat = logp_mat.copy().fillna(0.0)
         annot = logp_mat.copy().astype(object)
@@ -5957,7 +5976,7 @@ def plot_AddMultEffects(
                 v = logp_mat.at[r, c]
                 p_orig = pv_mat.at[r, c]
                 annot.at[r, c] = "" if pd.isna(v) else f"{v:.3f}{_star(p_orig)}"
-        cbar_label = "-log\u2081\u2080(p-value)"
+        cbar_label = f"-log\u2081\u2080({p_value_label})"
 
     fig, ax = plt.subplots(figsize=figsize)
     sns.heatmap(

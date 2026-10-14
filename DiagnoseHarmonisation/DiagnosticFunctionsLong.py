@@ -36,6 +36,17 @@ import json
 from pandas.api.types import CategoricalDtype
 
 
+def _add_fdr_pvalues(results: pd.DataFrame) -> pd.DataFrame:
+    """Add BH-FDR-adjusted p-values while preserving unavailable values as NaN."""
+    pvalues = pd.to_numeric(results["p-value"], errors="coerce").to_numpy(dtype=float)
+    adjusted = np.full(pvalues.shape, np.nan, dtype=float)
+    valid = np.isfinite(pvalues)
+    if valid.any():
+        adjusted[valid] = multipletests(pvalues[valid], method="fdr_bh")[1]
+    results["p-value_fdr"] = adjusted
+    return results
+
+
 def _classify_longitudinal_design(
     batch: Sequence,
     subject: Optional[Sequence] = None,
@@ -3090,7 +3101,7 @@ def AdditiveEffect_long(
                 for feature in feature_cols
             ]
         )
-        return unavailable, model_defs_add, None, None
+        return _add_fdr_pvalues(unavailable), model_defs_add, None, None
 
     V = len(feature_cols)
     if verbose:
@@ -3243,7 +3254,7 @@ def AdditiveEffect_long(
 
     out = pd.DataFrame(rows)
     out = out.sort_values(by="TestStat", ascending=False).reset_index(drop=True)
-    return out,model_defs_add, full_fixed, reduced_fixed
+    return _add_fdr_pvalues(out), model_defs_add, full_fixed, reduced_fixed
 
 model_defs_mul = []
 def MultiplicativeEffect_long(
@@ -3451,7 +3462,7 @@ def MultiplicativeEffect_long(
                 for feature in feature_cols
             ]
         )
-        return unavailable, model_defs_mul
+        return _add_fdr_pvalues(unavailable), model_defs_mul
 
     V = len(feature_cols)
     if verbose:
@@ -3556,4 +3567,4 @@ def MultiplicativeEffect_long(
 
     out = pd.DataFrame(rows)
     out = out.sort_values(by="ChiSq", ascending=False).reset_index(drop=True)
-    return out, model_defs_mul
+    return _add_fdr_pvalues(out), model_defs_mul
