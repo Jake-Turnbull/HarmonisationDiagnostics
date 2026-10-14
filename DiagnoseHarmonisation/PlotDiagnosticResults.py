@@ -4142,6 +4142,8 @@ def plot_SubjectOrder(
     p_correction:     str   = "fdr_bh",
 ):
     """Summarize subject-order stability by timepoint pair and by IDP."""
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return []
     apply_plot_theme()
 
     required = {idp_col, time_a_col, time_b_col, rho_col}
@@ -4237,6 +4239,8 @@ def plot_WithinSubjVar(
 
         C — top 10 subjects with highest average variability
     """
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return []
     apply_plot_theme()
 
     metadata_cols = {subject_col, "n_obs", "metric_type", "MetricType", "N"}

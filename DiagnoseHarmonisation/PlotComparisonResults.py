@@ -1317,12 +1317,22 @@ def plot_compare_long_additive_multiplicative(results, p_thr: float = 0.05, max_
         n_valid = 0
         for ax, (method, res) in zip(axes, items):
             df = getattr(res, attr, None)
-            if not isinstance(df, pd.DataFrame) or df.empty or p_col not in df.columns:
+            status = (getattr(res, "diagnostic_status", None) or {}).get(attr, {})
+            if (
+                not isinstance(df, pd.DataFrame)
+                or df.empty
+                or p_col not in df.columns
+                or status.get("available") is False
+            ):
                 ax.set_title(_title(f"{method} ({attr} unavailable)"))
                 ax.axis("off")
                 continue
 
             pvals = pd.to_numeric(df[p_col], errors="coerce").to_numpy(dtype=float)
+            if not np.isfinite(pvals).any():
+                ax.set_title(_title(f"{method} ({attr} unavailable)"))
+                ax.axis("off")
+                continue
             feature_col = "Feature" if "Feature" in df.columns else ("IDP" if "IDP" in df.columns else None)
             if feature_col is None:
                 x_labels = [f"f{i+1}" for i in range(len(pvals))]
@@ -1363,12 +1373,22 @@ def plot_compare_long_mixed_effects(results, max_cols_in_plotting_grid: int = 3)
     n_valid1 = 0
     for ax, (method, res) in zip(axes1, items):
         df = getattr(res, "mixed_effects", None)
-        if not isinstance(df, pd.DataFrame) or df.empty or "n_is_batchSig" not in df.columns:
+        status = (getattr(res, "diagnostic_status", None) or {}).get("mixed_effects", {})
+        if (
+            not isinstance(df, pd.DataFrame)
+            or df.empty
+            or "n_is_batchSig" not in df.columns
+            or status.get("available") is False
+        ):
             ax.set_title(_title(f"{method} (pairwise batch signal unavailable)"))
             ax.axis("off")
             continue
 
         vals = pd.to_numeric(df["n_is_batchSig"], errors="coerce").to_numpy(dtype=float)
+        if not np.isfinite(vals).any():
+            ax.set_title(_title(f"{method} (pairwise batch signal unavailable)"))
+            ax.axis("off")
+            continue
         x = np.arange(len(vals))
         ax.scatter(x, vals, color=LONGITUDINAL_DOT_COLOR, zorder=3)
         ax.set_title(_title(method))
@@ -1494,6 +1514,7 @@ def plot_compare_long_multivariate_batch_difference(results, max_cols_in_plottin
 
     for ax, (method, res) in zip(axes, items):
         df = getattr(res, "multivariate_batch_difference", None)
+        status = (getattr(res, "diagnostic_status", None) or {}).get("multivariate_batch_difference", {})
         if not isinstance(df, pd.DataFrame) or df.empty or "mdval" not in df.columns:
             ax.set_title(_title(f"{method} (multivariate batch difference unavailable)"))
             ax.axis("off")
@@ -1517,7 +1538,9 @@ def plot_compare_long_multivariate_batch_difference(results, max_cols_in_plottin
         ax.set_yticks(y)
         ax.set_yticklabels(labels, fontsize=7)
         ax.set_xlabel("Mahalanobis distance")
-        ax.set_title(_title(method))
+        interpretation = status.get("interpretation")
+        title = f"{method} (combined batch-time difference)" if interpretation == "combined_batch_timepoint_difference" else method
+        ax.set_title(_title(title))
         ax.grid(axis="x", alpha=0.2)
         if np.isfinite(avg_val):
             ax.axvline(avg_val, color="black", linestyle="--", linewidth=1)

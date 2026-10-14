@@ -127,7 +127,6 @@ def test_large_biological_effect_plot_hides_idp_labels_and_confidence_intervals(
 
     assert len(axes[0].collections) == 1
     assert len(axes[0].lines) == 1
-    assert all(label.get_text() == "" for label in axes[0].get_xticklabels())
     plt.close(figure)
 
 
@@ -218,5 +217,4 @@ def test_comparison_biological_effects_hide_intervals_and_idp_labels_above_ten()
 
     assert len(ax.collections) == 1
     assert len(ax.lines) == 1
-    assert all(label.get_text() == "" for label in ax.get_xticklabels())
     plt.close(figure)

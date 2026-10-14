@@ -5,7 +5,7 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import rankdata
-from typing import Sequence, Optional
+from typing import Any, Dict, Sequence, Optional
 import warnings
 from collections import Counter
 import re
@@ -34,6 +34,122 @@ from scipy.stats import (
 from statsmodels.stats.multitest import multipletests
 import json
 from pandas.api.types import CategoricalDtype
+
+
+def _classify_longitudinal_design(
+    batch: Sequence,
+    subject: Optional[Sequence] = None,
+    timepoint: Optional[Sequence] = None,
+) -> Dict[str, Any]:
+    """Describe the observed categorical batch, subject, and time design."""
+    batch_values = np.asarray(batch).ravel()
+    if subject is None:
+        subject_values = None
+    else:
+        subject_values = np.asarray(subject).ravel()
+        if subject_values.size != batch_values.size:
+            raise ValueError("subject and batch must have the same length.")
+    if timepoint is None:
+        time_values = None
+    else:
+        time_values = np.asarray(timepoint).ravel()
+        if time_values.size != batch_values.size:
+            raise ValueError("timepoint and batch must have the same length.")
+
+    valid_batch = pd.notna(batch_values)
+    batches = pd.unique(batch_values[valid_batch])
+    has_subject = subject_values is not None and bool(pd.notna(subject_values).any())
+    has_timepoint = time_values is not None and bool(pd.notna(time_values).any())
+    if has_timepoint:
+        valid_time = pd.notna(time_values)
+        timepoints = pd.unique(time_values[valid_time])
+    else:
+        valid_time = np.zeros(batch_values.size, dtype=bool)
+        timepoints = []
+
+    n_batches = len(batches)
+    n_timepoints = len(timepoints)
+    is_repeated = False
+    if has_subject:
+        valid_subjects = subject_values[pd.notna(subject_values)]
+        is_repeated = pd.Series(valid_subjects).duplicated().any()
+
+    perfect = False
+    partial = False
+    separately_estimable = True
+    if n_batches > 1 and n_timepoints > 1:
+        valid_design = valid_batch & valid_time
+        batch_design = batch_values[valid_design]
+        time_design = time_values[valid_design]
+        contingency = pd.crosstab(
+            pd.Categorical(batch_design, categories=batches),
+            pd.Categorical(time_design, categories=timepoints),
+        )
+        expected_rank = n_batches + n_timepoints - 1
+        batch_dummies = pd.get_dummies(batch_design, drop_first=True, dtype=float)
+        time_dummies = pd.get_dummies(time_design, drop_first=True, dtype=float)
+        design_matrix = np.column_stack(
+            [np.ones(len(batch_design)), batch_dummies.to_numpy(), time_dummies.to_numpy()]
+        )
+        separately_estimable = np.linalg.matrix_rank(design_matrix) == expected_rank
+        batch_to_time_unique = bool((contingency.gt(0).sum(axis=1) <= 1).all())
+        time_to_batch_unique = bool((contingency.gt(0).sum(axis=0) <= 1).all())
+        perfect = not separately_estimable or (batch_to_time_unique and time_to_batch_unique)
+        partial = bool((contingency == 0).any().any()) and not perfect
+
+    batch_identifiable = n_batches > 1 and separately_estimable
+    time_identifiable = n_timepoints > 1 and separately_estimable
+    if perfect:
+        recommended_mode = "confounded"
+        reason = "Batch and timepoint effects are not separately identifiable."
+    elif n_timepoints <= 1 or not has_subject:
+        recommended_mode = "cross_sectional"
+        reason = "No subject-level repeated-measures structure is available."
+    else:
+        recommended_mode = "longitudinal"
+        reason = "Batch and timepoint effects are separately estimable."
+
+    return {
+        "has_subject": has_subject,
+        "has_timepoint": has_timepoint,
+        "n_timepoints": n_timepoints,
+        "n_batches": n_batches,
+        "is_repeated_measures": bool(is_repeated),
+        "batch_timepoint_perfectly_confounded": bool(perfect),
+        "batch_timepoint_partially_confounded": bool(partial),
+        "batch_effect_identifiable": bool(batch_identifiable),
+        "time_effect_identifiable": bool(time_identifiable),
+        "recommended_mode": recommended_mode,
+        "reason": reason,
+    }
+
+
+def _resolve_time_adjustment(
+    design_info: Dict[str, Any],
+    adjust_for_time: bool | str = "auto",
+) -> Dict[str, Any]:
+    """Resolve whether a model can include a separate timepoint effect."""
+    if adjust_for_time not in (True, False, "auto"):
+        raise ValueError("adjust_for_time must be True, False, or 'auto'.")
+    usable_time = bool(design_info.get("has_timepoint")) and int(
+        design_info.get("n_timepoints", 0)
+    ) > 1
+    identifiable = bool(design_info.get("time_effect_identifiable"))
+    if adjust_for_time is True and (not usable_time or not identifiable):
+        reason = (
+            "timepoint is unavailable"
+            if not usable_time
+            else "batch and timepoint effects are not separately identifiable"
+        )
+        raise ValueError(f"Cannot adjust for time: {reason}.")
+    include_time = adjust_for_time is True or (
+        adjust_for_time == "auto" and usable_time and identifiable
+    )
+    return {
+        "include_time": bool(include_time),
+        "status": "available" if include_time else "omitted",
+        "reason": None if include_time else design_info.get("reason"),
+    }
 
 def _force_numeric_vector(series_like) -> np.ndarray:
     """Convert input to 1D float numpy array; non-convertible -> np.nan."""
@@ -266,7 +382,7 @@ def _pairwise_rpd(arr: np.ndarray) -> float:
 def WithinSubjVar_long(
     idp_matrix: np.ndarray,
     subjects: Sequence,
-    timepoints: Sequence,
+    timepoints: Optional[Sequence] = None,
     idp_names: Optional[Sequence[str]] = None,
 ) -> pd.DataFrame:
     """
@@ -289,8 +405,9 @@ def WithinSubjVar_long(
         Numeric matrix of shape (n_samples, n_idps).
     subjects : Sequence
         Subject identifiers aligned to rows of idp_matrix.
-    timepoints : Sequence
-        Timepoint labels aligned to rows of idp_matrix. Kept for validation.
+    timepoints : Sequence, optional
+        Optional labels aligned to rows. They are not required for the current
+        pairwise-RPD calculation; repeated observations are identified by subject ID.
     idp_names : Optional[Sequence[str]]
         Optional list of IDP names. Defaults to idp_1, idp_2, ...
 
@@ -309,7 +426,7 @@ def WithinSubjVar_long(
 
     if len(subjects) != n_samples:
         raise ValueError("Length of subjects must match number of rows in idp_matrix.")
-    if len(timepoints) != n_samples:
+    if timepoints is not None and len(timepoints) != n_samples:
         raise ValueError("Length of timepoints must match number of rows in idp_matrix.")
 
     if idp_names is None:
@@ -576,6 +693,12 @@ def MultiVariateBatchDifference_long(
     else:
         timepoint_ser = None
 
+    design_info = _classify_longitudinal_design(
+        batch_ser,
+        subject_ser,
+        timepoint_ser,
+    )
+
     # ============================================================
     # 5. IDP names
     # ============================================================
@@ -720,12 +843,9 @@ def MultiVariateBatchDifference_long(
         else:
 
             if subject_ser is None:
-                raise ValueError(
-                    "subject must be provided when multiple "
-                    "timepoints are present."
-                )
-
-            analysis_mode = "longitudinal"
+                analysis_mode = "regular"
+            else:
+                analysis_mode = "longitudinal"
 
     # ============================================================
     # 8. Helper: residualize covariates
@@ -1208,6 +1328,9 @@ def MultiVariateBatchDifference_long(
                 idp_names
             ),
         }
+        info.update(design_info)
+        if design_info["batch_timepoint_perfectly_confounded"]:
+            info["interpretation"] = "combined_batch_timepoint_difference"
 
         if return_info:
             return results, info
@@ -1671,6 +1794,9 @@ def MultiVariateBatchDifference_long(
                 idp_names
             ),
         }
+        info.update(design_info)
+        if design_info["batch_timepoint_perfectly_confounded"]:
+            info["interpretation"] = "combined_batch_timepoint_difference"
 
         if return_info:
             return results, info
@@ -1901,6 +2027,9 @@ def MultiVariateBatchDifference_long(
             idp_names
         ),
     }
+    info.update(design_info)
+    if design_info["batch_timepoint_perfectly_confounded"]:
+        info["interpretation"] = "combined_batch_timepoint_difference"
 
     if return_info:
         return results, info
@@ -2349,9 +2478,9 @@ model_defs = []
 def MixedEffects_long(
     idp_matrix: np.ndarray,
     subjects: Sequence,
-    timepoints: Sequence,
-    batches: Sequence,
-    idp_names: Sequence,
+    timepoints: Optional[Sequence] = None,
+    batches: Optional[Sequence] = None,
+    idp_names: Optional[Sequence] = None,
     *,
     covariates: Optional[Dict[str, Sequence]] = None,
     fix_eff: Sequence = (),
@@ -2363,6 +2492,7 @@ def MixedEffects_long(
     p_thr: float = 0.05,
     p_corr: int = 1,
     reml: bool = True,
+    adjust_for_time: bool | str = "auto",
 ) -> Tuple[pd.DataFrame, list]:
     if not isinstance(idp_matrix, np.ndarray):
         idp_matrix = np.asarray(idp_matrix, dtype=float)
@@ -2372,12 +2502,12 @@ def MixedEffects_long(
 
     if len(subjects) != n_samples:
         raise ValueError("Length of subjects must match number of rows in idp_matrix.")
-    if len(timepoints) != n_samples:
+    if timepoints is not None and len(timepoints) != n_samples:
         raise ValueError("Length of timepoints must match number of rows in idp_matrix.")
-    if len(batches) != n_samples:
+    if batches is None or len(batches) != n_samples:
         raise ValueError("Length of batches must match number of rows in idp_matrix.")
 
-    idp_names = list(idp_names)
+    idp_names = [f"idp_{i + 1}" for i in range(n_features)] if idp_names is None else list(idp_names)
     if len(idp_names) != n_features:
         raise ValueError("idp_names length must match number of idp columns.")
 
@@ -2392,10 +2522,18 @@ def MixedEffects_long(
 
     df = pd.DataFrame(idp_matrix, columns=idp_names)
     df[subjects_col] = pd.Series(subjects).astype(str)
-    df[timepoints_col] = pd.Series(timepoints).astype(str)
+    if timepoints is not None:
+        df[timepoints_col] = pd.Series(timepoints).astype(str)
     df[batches_col] = pd.Series(batches).astype(str).astype("category")
     for k, seq in covariates.items():
         df[k] = pd.Series(seq)
+
+    design_info = _classify_longitudinal_design(
+        batches,
+        subjects,
+        timepoints,
+    )
+    time_resolution = _resolve_time_adjustment(design_info, adjust_for_time)
 
     fix_eff = list(fix_eff or [])
     ran_eff = list(ran_eff or [])
@@ -2408,6 +2546,10 @@ def MixedEffects_long(
 
     if len(fix_eff) == 0:
         fix_eff = list(covariates.keys())
+    if time_resolution["include_time"] and timepoints_col not in fix_eff:
+        fix_eff.append(timepoints_col)
+    elif not time_resolution["include_time"]:
+        fix_eff = [name for name in fix_eff if name != timepoints_col]
 
     if len(force_numeric) == 0 and len(force_categorical) == 0:
         for k in covariates.keys():
@@ -2416,7 +2558,7 @@ def MixedEffects_long(
                 force_numeric.append(k)
             else:
                 force_categorical.append(k)
-        if timepoints_col not in force_categorical:
+        if timepoints_col in df.columns and timepoints_col not in force_categorical:
             force_categorical.append(timepoints_col)
         if batches_col not in force_categorical:
             force_categorical.append(batches_col)
@@ -2488,15 +2630,19 @@ def MixedEffects_long(
         fixed_formula_full = formulas[0]
         ml_formula_full = re.sub(r"\s*\+\s*\(1\|[^)]+\)", "", fixed_formula_full)
 
-        try:
-            if len(ran_eff) > 0 and ran_eff[0] in all_data.columns:
-                groups_col = all_data[ran_eff[0]]
-            else:
-                groups_col = all_data[subjects_col]
+        res1 = None
+        if design_info["batch_effect_identifiable"]:
+            try:
+                if len(ran_eff) > 0 and ran_eff[0] in all_data.columns:
+                    groups_col = all_data[ran_eff[0]]
+                else:
+                    groups_col = all_data[subjects_col]
 
-            mdl1 = smf.mixedlm(ml_formula_full, all_data, groups=groups_col)
-            res1 = mdl1.fit(reml=reml, method="lbfgs")
-        except Exception:
+                mdl1 = smf.mixedlm(ml_formula_full, all_data, groups=groups_col)
+                res1 = mdl1.fit(reml=reml, method="lbfgs")
+            except Exception:
+                res1 = None
+        if res1 is None and design_info["batch_effect_identifiable"]:
             rowd.update({
                 "n_is_batchSig": np.nan,
                 "n_is_batchSig_raw": np.nan,
@@ -2517,10 +2663,14 @@ def MixedEffects_long(
             continue
 
         # Pairwise batch/site tests
-        try:
-            n_sig_raw, full_tab = pairwise_site_tests(res1, batches_col, all_data, alpha=p_thr, debug=False)
-        except Exception:
-            n_sig_raw = 0
+        if design_info["batch_effect_identifiable"]:
+            try:
+                n_sig_raw, full_tab = pairwise_site_tests(res1, batches_col, all_data, alpha=p_thr, debug=False)
+            except Exception:
+                n_sig_raw = 0
+                full_tab = pd.DataFrame(columns=["siteA", "siteB", "p", "sig"])
+        else:
+            n_sig_raw = np.nan
             full_tab = pd.DataFrame(columns=["siteA", "siteB", "p", "sig"])
 
         full_tab = full_tab.copy()
@@ -2537,22 +2687,32 @@ def MixedEffects_long(
                 full_tab.loc[valid, "p_adj_bonf"] = p_adj
                 full_tab.loc[valid, "sig_bonf"] = p_adj < p_thr
 
-        n_sig_bonf = int(np.nansum(full_tab["sig_bonf"].astype(int))) if len(full_tab) else 0
+        n_sig_bonf = (
+            int(np.nansum(full_tab["sig_bonf"].astype(int)))
+            if len(full_tab)
+            else (0 if design_info["batch_effect_identifiable"] else np.nan)
+        )
 
         # keep backward compatibility: n_is_batchSig follows p_corr
-        if p_corr == 0:
+        if not design_info["batch_effect_identifiable"]:
+            rowd["n_is_batchSig"] = np.nan
+        elif p_corr == 0:
             rowd["n_is_batchSig"] = int(n_sig_raw)
         else:
             rowd["n_is_batchSig"] = int(n_sig_bonf)
 
-        rowd["n_is_batchSig_raw"] = int(n_sig_raw)
-        rowd["n_is_batchSig_bonf"] = int(n_sig_bonf)
+        rowd["n_is_batchSig_raw"] = n_sig_raw
+        rowd["n_is_batchSig_bonf"] = n_sig_bonf
+        rowd["status"] = "available" if design_info["batch_effect_identifiable"] else "non_identifiable"
+        rowd["status_reason"] = None if design_info["batch_effect_identifiable"] else design_info["reason"]
 
         try:
             fe_pvals = res1.pvalues
             batch_mask = [bool(re.search(rf"{re.escape(str(batches_col))}", str(name))) for name in fe_pvals.index]
             anova_batches = int(np.sum(fe_pvals[batch_mask] < 0.05)) if any(batch_mask) else 0
         except Exception:
+            anova_batches = np.nan
+        if not design_info["batch_effect_identifiable"]:
             anova_batches = np.nan
         rowd["anova_batches"] = anova_batches
 
@@ -2626,7 +2786,7 @@ def MixedEffects_long(
         "IDP", "batch",
         "n_is_batchSig", "n_is_batchSig_raw", "n_is_batchSig_bonf",
         "anova_batches", "Subj_Var", "Resid_Var", "ICC", "WCV",
-        "pairwise_site_tests",
+        "pairwise_site_tests", "status", "status_reason",
     ] + mdlnames
 
     rows_df = pd.DataFrame(outs)
@@ -2783,6 +2943,7 @@ def AdditiveEffect_long(
     do_zscore: bool = True,
     reml: bool = False,
     verbose: bool = True,
+    adjust_for_time: bool | str = "auto",
 ) -> pd.DataFrame:
     """
     Test for additive (mean/location) batch effects per feature using mixed models.
@@ -2869,10 +3030,20 @@ def AdditiveEffect_long(
     )
 
     covariates = dict(covariates or {})
+    design_info = _classify_longitudinal_design(
+        df[batchcol],
+        df[idcol] if idcol in df.columns else None,
+        df[tpcol] if tpcol in df.columns else None,
+    )
+    time_adjustment = _resolve_time_adjustment(design_info, adjust_for_time)
     if fix_eff is None:
         fix_eff = list(covariates.keys())
     else:
         fix_eff = list(fix_eff)
+    if time_adjustment["include_time"] and tpcol not in fix_eff:
+        fix_eff.append(tpcol)
+    elif not time_adjustment["include_time"]:
+        fix_eff = [name for name in fix_eff if name != tpcol]
 
     # RANDOM EFFECTS: infer only when caller omitted ran_eff (is None).
     if ran_eff is None:
@@ -2897,6 +3068,29 @@ def AdditiveEffect_long(
         feature_cols = list(idp_names)
     else:
         feature_cols = [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
+
+    if not design_info["batch_effect_identifiable"]:
+        unavailable_status = "not_applicable" if design_info["n_batches"] < 2 else "non_identifiable"
+        unavailable_reason = (
+            "At least two batches are required."
+            if design_info["n_batches"] < 2
+            else design_info["reason"]
+        )
+        unavailable = pd.DataFrame(
+            [
+                {
+                    "Feature": feature,
+                    "TestStat": np.nan,
+                    "df": np.nan,
+                    "p-value": np.nan,
+                    "method": unavailable_status,
+                    "status": unavailable_status,
+                    "status_reason": unavailable_reason,
+                }
+                for feature in feature_cols
+            ]
+        )
+        return unavailable, model_defs_add, None, None
 
     V = len(feature_cols)
     if verbose:
@@ -3069,6 +3263,7 @@ def MultiplicativeEffect_long(
     do_zscore: bool = True,
     reml: bool = False,
     verbose: bool = True,
+    adjust_for_time: bool | str = "auto",
 ) -> pd.DataFrame:
     """
     Test for multiplicative (variance / heteroskedasticity) batch effects per feature.
@@ -3178,6 +3373,12 @@ def MultiplicativeEffect_long(
 
     # now df is a DataFrame and idcol/batchcol/tpcol are set
     covariates = dict(covariates or {})
+    design_info = _classify_longitudinal_design(
+        df[batchcol],
+        df[idcol] if idcol in df.columns else None,
+        df[tpcol] if tpcol in df.columns else None,
+    )
+    time_adjustment = _resolve_time_adjustment(design_info, adjust_for_time)
     if fix_eff is None:
         fix_eff = list(covariates.keys())
     else:
@@ -3208,13 +3409,11 @@ def MultiplicativeEffect_long(
     # Bug fix, batch being added twice
     if len(fix_eff) == 0:
         inferred_fix = list(covariates.keys())
-
-        if tpcol in df.columns and tpcol not in inferred_fix:
-            inferred_fix.append(tpcol)
-
-        # DO NOT add batch here.
-        # Batch is added explicitly as C(batchcol) below.
         fix_eff = inferred_fix
+    if time_adjustment["include_time"] and tpcol not in fix_eff:
+        fix_eff.append(tpcol)
+    elif not time_adjustment["include_time"]:
+        fix_eff = [name for name in fix_eff if name != tpcol]
 
     # Validate referenced names exist
     to_check = {"fix_eff": fix_eff, "ran_eff": ran_eff}
@@ -3230,6 +3429,29 @@ def MultiplicativeEffect_long(
         feature_cols = list(idp_names)
     else:
         feature_cols = [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
+
+    if not design_info["batch_effect_identifiable"]:
+        unavailable_status = "not_applicable" if design_info["n_batches"] < 2 else "non_identifiable"
+        unavailable_reason = (
+            "At least two batches are required."
+            if design_info["n_batches"] < 2
+            else design_info["reason"]
+        )
+        unavailable = pd.DataFrame(
+            [
+                {
+                    "Feature": feature,
+                    "ChiSq": np.nan,
+                    "DF": np.nan,
+                    "p-value": np.nan,
+                    "method": unavailable_status,
+                    "status": unavailable_status,
+                    "status_reason": unavailable_reason,
+                }
+                for feature in feature_cols
+            ]
+        )
+        return unavailable, model_defs_mul
 
     V = len(feature_cols)
     if verbose:

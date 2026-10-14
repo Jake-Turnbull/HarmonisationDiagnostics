@@ -3475,7 +3475,7 @@ def _normalise_longitudinal_inputs(
 
     batch = as_series(batch, "batch")
     subjects = as_series(subject_ids, "subject")
-    time = as_series(timepoints, "timepoint")
+    time = as_series(timepoints, "timepoint") if timepoints is not None else None
 
     # ---------- covariates ----------
     if covariates is None:
@@ -3942,6 +3942,18 @@ def LongitudinalReport(data, batch,
             data = data_df.to_numpy(dtype=float)
             covariates = covariates_df.to_dict(orient="list")
 
+        design_info = DiagnosticFunctionsLong._classify_longitudinal_design(
+            batch=batch,
+            subject=subject_ids,
+            timepoint=timepoints,
+        )
+        report.log_text(f"Longitudinal design: {design_info}")
+        if design_info["batch_timepoint_perfectly_confounded"]:
+            report.text_simple(
+                "Batch and timepoint are perfectly confounded. Separate batch and time effects "
+                "are non-identifiable; inferential batch-effect diagnostics are unavailable."
+            )
+
         _report_longitudinal_batch_covariate_confounding(
             report=report,
             batch=batch,
@@ -4099,28 +4111,34 @@ def LongitudinalReport(data, batch,
         # Ensure features is not none here;
         if features is None:
             raise ValueError("Features must be provided for subject order consistency analysis.")
-        subjorder = DiagnosticFunctionsLong.SubjectOrder_long(idp_matrix=data,
-                                                          subjects=subject_ids,
-                                                          timepoints=timepoints,
-                                                          idp_names=features,
-                                                          nPerm=100)
-        print("\nSUBJECT ORDER CONSISTENCY: RANK CORRELATIONS WITH PERMUTATION TESTS")
-        print(subjorder)
-        # Give summary of subject order dataframe in the report (i.e, first n rows)
-        report.text_simple(
-            subjorder.head().to_string()
-        )
-        report.text_simple(
-            "────────────────────────────────────────────"
+        subject_order_available = design_info["has_timepoint"] and design_info["n_timepoints"] >= 2
+        if subject_order_available:
+            subjorder = DiagnosticFunctionsLong.SubjectOrder_long(
+                idp_matrix=data,
+                subjects=subject_ids,
+                timepoints=timepoints,
+                idp_names=features,
+                nPerm=100,
             )
-        PlotDiagnosticResults.plot_SubjectOrder(subjorder,                 
-                              ncols=2,
-                              figsize_per_plot=_plot_figsize("subject_order"),
-                              limit_idps=None,
-                              sample_method='random',
-                              random_state=42,
-                              rep=report) 
-        report.log_text("Subject order consistency plots added to report")
+            print("\nSUBJECT ORDER CONSISTENCY: RANK CORRELATIONS WITH PERMUTATION TESTS")
+            print(subjorder)
+            report.text_simple(subjorder.head().to_string())
+            report.text_simple("────────────────────────────────────────────")
+            PlotDiagnosticResults.plot_SubjectOrder(
+                subjorder,
+                ncols=2,
+                figsize_per_plot=_plot_figsize("subject_order"),
+                limit_idps=None,
+                sample_method="random",
+                random_state=42,
+                rep=report,
+            )
+            report.log_text("Subject order consistency plots added to report")
+        else:
+            subjorder = None
+            report.text_simple(
+                "Subject-order diagnostic unavailable: requires at least two known timepoints."
+            )
 
         # Subject-level: Within Subject Consistency 
         report.log_section(
@@ -4278,16 +4296,21 @@ def LongitudinalReport(data, batch,
             "────────────────────────────────────────────"
             )
         
-        PlotDiagnosticResults.plot_AddMultEffects(addeff,
-                                     feature_col='Feature',
-                                     p_col='p-value',
-                                     labels=['Additive batch effect'],
-                                     p_thr=0.05,
-                                     annot_fmt="{:.3f}",
-                                     value_scale='p',
-                                     figsize=_plot_figsize("summary_hbar", len(addeff)),
-                                     rep=report)
-        report.log_text("Additive batch effect plot added to report")
+        if design_info["batch_effect_identifiable"]:
+            PlotDiagnosticResults.plot_AddMultEffects(
+                addeff,
+                feature_col="Feature",
+                p_col="p-value",
+                labels=["Additive batch effect"],
+                p_thr=0.05,
+                annot_fmt="{:.3f}",
+                value_scale="p",
+                figsize=_plot_figsize("summary_hbar", len(addeff)),
+                rep=report,
+            )
+            report.log_text("Additive batch effect plot added to report")
+        else:
+            report.text_simple("Additive batch-effect plot unavailable: batch and time are not separately identifiable.")
         
         # Batch-level: Pairwise batch comparison
         report.text_simple(
@@ -4350,7 +4373,7 @@ def LongitudinalReport(data, batch,
         report.log_text(f"Full model formula (reiterated): {full_fixed}")
         report.log_text(f"Reduced model formula (reiterated): {reduced_fixed}")
 
-        if len(features) < 30:
+        if design_info["batch_effect_identifiable"] and len(features) < 30:
             report.text_simple(
             "────────────────────────────────────────────"
             )
@@ -4360,7 +4383,7 @@ def LongitudinalReport(data, batch,
                         plot_type='bar',
                         seed=123,
                         figsize=_plot_figsize("summary_hbar", len(features)), rep=report)
-        else:
+        elif design_info["batch_effect_identifiable"]:
             report.text_simple(
             "────────────────────────────────────────────"
             )
@@ -4371,7 +4394,10 @@ def LongitudinalReport(data, batch,
                       limit_idps=2,
                       seed=123,
                       figsize=_plot_figsize("summary_box", len(features)), rep=report)
-        report.log_text("Pairwise batch variability plots added to report")
+        if design_info["batch_effect_identifiable"]:
+            report.log_text("Pairwise batch variability plots added to report")
+        else:
+            report.text_simple("Pairwise batch-effect plot unavailable: batch and time are not separately identifiable.")
 
         # Multiplicative batch effects
         report.log_section(
@@ -4449,16 +4475,21 @@ def LongitudinalReport(data, batch,
         report.text_simple(
             "────────────────────────────────────────────"
             )
-        PlotDiagnosticResults.plot_AddMultEffects(muleff,
-                                     feature_col='Feature',
-                                     p_col='p-value',
-                                     labels=['Multiplicative batch effect'],
-                                     p_thr=0.05,
-                                     annot_fmt="{:.3f}",
-                                     value_scale='p',
-                                     figsize=_plot_figsize("summary_hbar", len(muleff)),
-                                     rep=report)
-        report.log_text("Multiplicative batch effect plots added to report")
+        if design_info["batch_effect_identifiable"]:
+            PlotDiagnosticResults.plot_AddMultEffects(
+                muleff,
+                feature_col="Feature",
+                p_col="p-value",
+                labels=["Multiplicative batch effect"],
+                p_thr=0.05,
+                annot_fmt="{:.3f}",
+                value_scale="p",
+                figsize=_plot_figsize("summary_hbar", len(muleff)),
+                rep=report,
+            )
+            report.log_text("Multiplicative batch effect plots added to report")
+        else:
+            report.text_simple("Multiplicative batch-effect plot unavailable: batch and time are not separately identifiable.")
        
        # Multivariate site differences using Mahalanobis distances
         report.log_section(
@@ -4542,6 +4573,11 @@ def LongitudinalReport(data, batch,
            subject=subject_ids,
            timepoint=timepoints, 
            idp_names=features, return_info=True)
+        if md_info.get("batch_timepoint_perfectly_confounded"):
+            report.text_simple(
+                "Batch and timepoint are perfectly confounded. Multivariate distances are descriptive "
+                "combined batch-time differences and do not identify a separate batch effect."
+            )
         mahalanobis_diagnostics = md_info.get("raw_diagnostics", {})
         covariance_rank = mahalanobis_diagnostics.get("covariance_rank")
         covariance_features = mahalanobis_diagnostics.get("n_features")
@@ -4815,6 +4851,8 @@ class LongitudinalDiagnosticResult:
     multiplicative_effects: pd.DataFrame | None = None
     multivariate_batch_difference: pd.DataFrame | None = None
     summary_metrics: dict[str, float] | None = None
+    design_info: dict[str, Any] | None = None
+    diagnostic_status: dict[str, dict[str, Any]] | None = None
     errors: list[str] | None = None
 
 
@@ -4950,7 +4988,8 @@ def validate_longitudinal_comparison_datasets(
     n_samples, n_features = expected_shape
     _normalize_batch_vector(batch, n_samples)
     _normalize_longitudinal_vector(subject_ids, n_samples, "subject_ids")
-    _normalize_longitudinal_vector(timepoints, n_samples, "timepoints")
+    if timepoints is not None:
+        _normalize_longitudinal_vector(timepoints, n_samples, "timepoints")
     _normalize_longitudinal_covariates(covariates, n_samples, covariate_names=covariate_names)
 
     if feature_names is None and inferred_feature_names is not None:
@@ -5033,6 +5072,12 @@ def _extract_longitudinal_summary_metrics(
         if mdv.size:
             metrics["mean_mahalanobis_distance"] = float(np.nanmean(mdv))
 
+    if result.design_info and not result.design_info.get("batch_effect_identifiable", True):
+        metrics["mean_n_is_batchSig"] = np.nan
+        metrics["prop_additive_significant"] = np.nan
+        metrics["prop_multiplicative_significant"] = np.nan
+        metrics["mean_mahalanobis_distance"] = np.nan
+
     return metrics
 
 
@@ -5041,26 +5086,50 @@ def _run_single_longitudinal_method_diagnostics(
     data: np.ndarray,
     batch: np.ndarray,
     subject_ids: np.ndarray,
-    timepoints: np.ndarray,
+    timepoints: np.ndarray | None,
     covariates: dict[str, list] | None,
     feature_names: list[str],
 ) -> LongitudinalDiagnosticResult:
     """Run the longitudinal diagnostics in the same order as LongitudinalReport."""
     from DiagnoseHarmonisation import DiagnosticFunctionsLong
 
-    result = LongitudinalDiagnosticResult(method_name=method_name, data=data, errors=[])
+    design_info = DiagnosticFunctionsLong._classify_longitudinal_design(
+        batch=batch,
+        subject=subject_ids,
+        timepoint=timepoints,
+    )
+    result = LongitudinalDiagnosticResult(
+        method_name=method_name,
+        data=data,
+        errors=[],
+        design_info=design_info,
+        diagnostic_status={},
+    )
 
-    try:
-        result.subject_order = DiagnosticFunctionsLong.SubjectOrder_long(
-            idp_matrix=data,
-            subjects=subject_ids,
-            timepoints=timepoints,
-            idp_names=feature_names,
-            nPerm=100,
-            seed=42,
-        )
-    except Exception as exc:
-        result.errors.append(f"SubjectOrder_long failed: {exc}")
+    if design_info["has_timepoint"] and design_info["n_timepoints"] >= 2:
+        try:
+            result.subject_order = DiagnosticFunctionsLong.SubjectOrder_long(
+                idp_matrix=data,
+                subjects=subject_ids,
+                timepoints=timepoints,
+                idp_names=feature_names,
+                nPerm=100,
+                seed=42,
+            )
+            result.diagnostic_status["subject_order"] = {"available": True, "status": "available"}
+        except Exception as exc:
+            result.diagnostic_status["subject_order"] = {
+                "available": False,
+                "status": "model_failure",
+                "reason": str(exc),
+            }
+            result.errors.append(f"SubjectOrder_long failed: {exc}")
+    else:
+        result.diagnostic_status["subject_order"] = {
+            "available": False,
+            "status": "missing_timepoint" if not design_info["has_timepoint"] else "insufficient_timepoints",
+            "reason": "Subject-order analysis requires at least two known timepoints.",
+        }
 
     try:
         result.within_subject_variability = DiagnosticFunctionsLong.WithinSubjVar_long(
@@ -5069,8 +5138,18 @@ def _run_single_longitudinal_method_diagnostics(
             timepoints=timepoints,
             idp_names=feature_names,
         )
+        result.diagnostic_status["within_subject_variability"] = {
+            "available": bool(design_info["is_repeated_measures"]),
+            "status": "available" if design_info["is_repeated_measures"] else "not_applicable",
+            "reason": None if design_info["is_repeated_measures"] else "Repeated subject observations are required.",
+        }
     except Exception as exc:
         result.errors.append(f"WithinSubjVar_long failed: {exc}")
+        result.diagnostic_status["within_subject_variability"] = {
+            "available": False,
+            "status": "model_failure",
+            "reason": str(exc),
+        }
 
     try:
         result.additive_effects, *_ = DiagnosticFunctionsLong.AdditiveEffect_long(
@@ -5084,8 +5163,27 @@ def _run_single_longitudinal_method_diagnostics(
             reml=False,
             verbose=False,
         )
+        if not design_info["batch_effect_identifiable"]:
+            result.diagnostic_status["additive_effects"] = {
+                "available": False,
+                "status": "not_applicable" if design_info["n_batches"] < 2 else "non_identifiable",
+                "reason": "At least two batches are required." if design_info["n_batches"] < 2 else design_info["reason"],
+            }
+        elif not np.isfinite(pd.to_numeric(result.additive_effects.get("p-value"), errors="coerce")).any():
+            result.diagnostic_status["additive_effects"] = {
+                "available": False,
+                "status": "model_failure",
+                "reason": "No feature produced a valid additive batch test.",
+            }
+        else:
+            result.diagnostic_status["additive_effects"] = {"available": True, "status": "available"}
     except Exception as exc:
         result.errors.append(f"AdditiveEffect_long failed: {exc}")
+        result.diagnostic_status["additive_effects"] = {
+            "available": False,
+            "status": "model_failure",
+            "reason": str(exc),
+        }
 
     try:
         result.mixed_effects, _ = DiagnosticFunctionsLong.MixedEffects_long(
@@ -5098,8 +5196,33 @@ def _run_single_longitudinal_method_diagnostics(
             p_corr=1,
             reml=True,
         )
+        mixed_has_batch_result = np.isfinite(
+            pd.to_numeric(result.mixed_effects.get("n_is_batchSig"), errors="coerce")
+        ).any()
+        result.diagnostic_status["mixed_effects"] = {
+            "available": bool(design_info["batch_effect_identifiable"] and mixed_has_batch_result),
+            "status": (
+                "not_applicable"
+                if design_info["n_batches"] < 2
+                else "non_identifiable"
+                if not design_info["batch_effect_identifiable"]
+                else "available" if mixed_has_batch_result else "model_failure"
+            ),
+            "reason": (
+                "At least two batches are required."
+                if design_info["n_batches"] < 2
+                else design_info["reason"]
+                if not design_info["batch_effect_identifiable"]
+                else None if mixed_has_batch_result else "No feature produced a valid mixed-model batch test."
+            ),
+        }
     except Exception as exc:
         result.errors.append(f"MixedEffects_long failed: {exc}")
+        result.diagnostic_status["mixed_effects"] = {
+            "available": False,
+            "status": "model_failure",
+            "reason": str(exc),
+        }
 
     try:
         result.multiplicative_effects, _ = DiagnosticFunctionsLong.MultiplicativeEffect_long(
@@ -5113,13 +5236,40 @@ def _run_single_longitudinal_method_diagnostics(
             reml=False,
             verbose=False,
         )
+        has_multiplicative_result = np.isfinite(
+            pd.to_numeric(result.multiplicative_effects.get("p-value"), errors="coerce")
+        ).any()
+        result.diagnostic_status["multiplicative_effects"] = {
+            "available": bool(design_info["batch_effect_identifiable"] and has_multiplicative_result),
+            "status": (
+                "not_applicable"
+                if design_info["n_batches"] < 2
+                else "non_identifiable"
+                if not design_info["batch_effect_identifiable"]
+                else "available" if has_multiplicative_result else "model_failure"
+            ),
+            "reason": (
+                "At least two batches are required."
+                if design_info["n_batches"] < 2
+                else design_info["reason"]
+                if not design_info["batch_effect_identifiable"]
+                else None if has_multiplicative_result else "No feature produced a valid multiplicative batch test."
+            ),
+        }
     except Exception as exc:
         result.errors.append(f"MultiplicativeEffect_long failed: {exc}")
+        result.diagnostic_status["multiplicative_effects"] = {
+            "available": False,
+            "status": "model_failure",
+            "reason": str(exc),
+        }
 
     try:
         multivariate_result, multivariate_info = DiagnosticFunctionsLong.MultiVariateBatchDifference_long(
             idp_matrix=data,
             batch=batch,
+            subject=subject_ids,
+            timepoint=timepoints,
             idp_names=feature_names,
             return_info=True,
         )
@@ -5132,9 +5282,28 @@ def _run_single_longitudinal_method_diagnostics(
                 f"rank deficient ({covariance_rank} of {covariance_features})."
             )
         else:
-            result.multivariate_batch_difference = multivariate_result
+            distance_rows = [
+                {"batch": f"{batch_a} vs {batch_b}", "mdval": distance}
+                for (batch_a, batch_b), distance in multivariate_result.get("pairwise_raw", {}).items()
+            ]
+            distance_rows.extend(
+                {"batch": batch_label, "mdval": distance}
+                for (batch_label, _), distance in multivariate_result.get("centroid_raw", {}).items()
+            )
+            result.multivariate_batch_difference = pd.DataFrame(distance_rows, columns=["batch", "mdval"])
+            result.diagnostic_status["multivariate_batch_difference"] = {
+                "available": bool(multivariate_info.get("batch_effect_identifiable", True)),
+                "status": "available" if multivariate_info.get("batch_effect_identifiable", True) else "non_identifiable",
+                "reason": multivariate_info.get("reason"),
+                "interpretation": multivariate_info.get("interpretation"),
+            }
     except Exception as exc:
         result.errors.append(f"MultiVariateBatchDifference_long failed: {exc}")
+        result.diagnostic_status["multivariate_batch_difference"] = {
+            "available": False,
+            "status": "model_failure",
+            "reason": str(exc),
+        }
 
     result.summary_metrics = _extract_longitudinal_summary_metrics(result)
     return result
@@ -5444,7 +5613,11 @@ def LongitudinalComparisonReport(
     n_samples = first_matrix.shape[0]
     batch_arr = _normalize_batch_vector(batch, n_samples).astype(str)
     subject_arr = _normalize_longitudinal_vector(subject_ids, n_samples, "subject_ids").astype(str)
-    timepoint_arr = _normalize_longitudinal_vector(timepoints, n_samples, "timepoints").astype(str)
+    timepoint_arr = (
+        _normalize_longitudinal_vector(timepoints, n_samples, "timepoints").astype(str)
+        if timepoints is not None
+        else None
+    )
     covariates_dict, covariate_names_norm = _normalize_longitudinal_covariates(
         covariates,
         n_samples,
@@ -5517,7 +5690,7 @@ def LongitudinalComparisonReport(
             f"Total samples: {n_samples}",
             f"Features: {len(features)}",
             f"Unique subjects: {len(np.unique(subject_arr))}",
-            f"Unique timepoints: {len(np.unique(timepoint_arr))}",
+            f"Unique timepoints: {len(np.unique(timepoint_arr)) if timepoint_arr is not None else 0}",
             f"Samples in each batch: {batch_counts}",
             f"Covariates: {', '.join(covariate_names_norm) if covariate_names_norm else 'None'}",
             f"Missing data per method: {', '.join(f'{name}={int(np.isnan(data).sum())}' for name, data in normalized_datasets.items())}",
@@ -5559,6 +5732,14 @@ def LongitudinalComparisonReport(
                 report.text_simple(f"Warnings for {method_name}:")
                 for err in method_result.errors:
                     report.text_simple(f"- {err}")
+            unavailable_statuses = [
+                f"{name}: {status.get('status')} ({status.get('reason')})"
+                for name, status in (method_result.diagnostic_status or {}).items()
+                if not status.get("available", False)
+            ]
+            if unavailable_statuses:
+                report.text_simple(f"Unavailable diagnostics for {method_name}:")
+                report.text_simple("\n".join(f"- {status}" for status in unavailable_statuses))
 
             metrics = method_result.summary_metrics or {}
             report.text_simple(f"Summary metrics for {method_name}:")
@@ -5576,6 +5757,15 @@ def LongitudinalComparisonReport(
             report.text_simple(line_break_in_text)
 
         summary_df = summarise_longitudinal_method_performance(method_results, scoring_config=scoring_config)
+        if not summary_df.empty:
+            summary_df["diagnostics_available"] = summary_df["method"].map(
+                lambda method: sum(
+                    status.get("available", False)
+                    for status in (method_results[method].diagnostic_status or {}).values()
+                )
+            ).astype(str) + "/" + summary_df["method"].map(
+                lambda method: len(method_results[method].diagnostic_status or {})
+            ).astype(str)
         advice = generate_longitudinal_comparison_advice(summary_df)
 
         report.log_section("scorecard", "Longitudinal method scorecard")
@@ -5589,6 +5779,7 @@ def LongitudinalComparisonReport(
                 "biological_preservation_score",
                 "overall_score",
                 "overall_rank",
+                "diagnostics_available",
             ]
             report.text_simple("Longitudinal scorecard summary:")
             report.text_simple(summary_df[show_cols].to_string(index=False))
