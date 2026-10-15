@@ -259,8 +259,9 @@ def plot_compare_zscore_distributions(
             except Exception:
                 # KDE can fail for near-constant vectors; keep the histogram only.
                 pass
-            
-        ax.set_xlim([-6, 6])
+        max_abs = max(np.percentile(np.abs(vals), 95), 1.0)
+        max_abs = max(max_abs, 1.0)
+        ax.set_xlim([-max_abs, max_abs])
         ax.invert_xaxis()
         panel_suffix = "Cov_adjusted" if use_residual else "Cov_unadjusted"
         ax.set_title(_title(f"{method} ({panel_suffix})"), fontsize=fontsize)
@@ -1206,11 +1207,12 @@ def plot_compare_long_zscore_distributions(
             if np.isfinite(values).any()
         ]
         if finite_values:
-            max_abs = max(float(np.max(np.abs(values))) for values in finite_values)
-            max_abs = max(max_abs, 1.0)
+            # max_abs = max(float(np.max(np.abs(values))) for values in finite_values)
+            # Limit values to the 95th percentile?
+            max_abs = max(np.percentile(np.abs(np.concatenate(finite_values)), 99), 1.0)
         else:
             max_abs = 1.0
-        bins = np.linspace(-max_abs * 1.1, max_abs * 1.1, 81)
+        bins = np.linspace(-max_abs * 1.2, max_abs * 1.2, 81)
 
         for ax, (method, values) in zip(axes, values_by_method.items()):
             if adjusted and not covariates:
@@ -1467,14 +1469,21 @@ def plot_compare_long_biological_effects(results, p_thr: float = 0.05, max_cols_
             ax.set_title(_title(f"{method} (biological effects unavailable)"))
             ax.axis("off")
             continue
-
+        # choose the current colour for plotting using number of unique covariates
+        Colour_options = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
         idps = df[idp_col].astype(str).tolist()
         n_idps = len(idps)
         x = np.arange(n_idps, dtype=float)
         offsets = (np.arange(len(effects)) - (len(effects) - 1) / 2) * 0.08
         for effect_index, effect in enumerate(effects):
+            # Change the colour and plot type (i.e x, dot etc depending on what covariate is being plotted)
+            # if index is not longer than colour options, it will cycle through the colours
+            if effect_index >= len(Colour_options):
+                Current_colour = Colour_options[effect_index % len(Colour_options)]
+            else:
+                Current_colour = Colour_options[effect_index]
             estimates = pd.to_numeric(df[f"{effect}_est"], errors="coerce").to_numpy(dtype=float)
-            ax.scatter(x + offsets[effect_index], estimates, color=LONGITUDINAL_DOT_COLOR, s=18, zorder=3,
+            ax.scatter(x + offsets[effect_index], estimates, color=Current_colour, s=18, zorder=3,
                        label=effect.replace("_", " "))
             if n_idps <= 10 and f"{effect}_ciL" in df.columns and f"{effect}_ciU" in df.columns:
                 lower = pd.to_numeric(df[f"{effect}_ciL"], errors="coerce").to_numpy(dtype=float)

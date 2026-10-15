@@ -530,8 +530,11 @@ def Z_Score_Raw_Residual_Plot(raw_data, residual_data, batch, probablity_distrib
     ax_raw.set_xlabel("Robust z-score")
     ax_raw.set_ylabel("Frequency" if not probablity_distribution else "Density")
     # Get maximum absolute value for setting x-axis limits consistently
-    max_abs_val = np.max(np.abs(raw_data))
-    ax_raw.set_xlim([-max_abs_val*1.1, max_abs_val*1.1])
+    # max_abs_val = np.max(np.abs(raw_data))
+    # Set max to 95th percentile of absolute values
+    max_abs_val = np.percentile(np.abs(raw_data), 99)
+    max_abs_val = max(max_abs_val, 1.0)
+    ax_raw.set_xlim([-max_abs_val*1.2, max_abs_val*1.2])
     ax_raw.invert_xaxis()
     ax_raw.legend(title="Batch")
 
@@ -554,13 +557,9 @@ def Z_Score_Raw_Residual_Plot(raw_data, residual_data, batch, probablity_distrib
         ax_resid.set_ylabel("Frequency" if not probablity_distribution else "Density")
         # Set x-axis limits similar to raw data for consistency
         # Check if residual data has larger absolute values than raw data
-        if max_abs_val > np.max(np.abs(residual_data)):
-            max_abs_val = np.max(np.abs(residual_data))
-            ax_raw.set_xlim([-max_abs_val*1.1, max_abs_val*1.1])
-        else:
-            max_abs_val = max_abs_val
-        ax_resid.set_xlim([-max_abs_val*1.1, max_abs_val*1.1])
-
+        max_abs_val_resid = np.percentile(np.abs(residual_data), 99)
+        max_abs_val_resid = max(max_abs_val_resid, 1.0)
+        ax_resid.set_xlim([-max_abs_val_resid*1.2, max_abs_val_resid*1.2])
         ax_resid.invert_xaxis()
         ax_resid.legend(title="Batch")
 
@@ -2712,24 +2711,38 @@ def _set_feature_ticks(ax, labels, axis: str = "x", rotation: int | None = None,
 
 
 def _draw_batch_effect_significance(
-    ax, features, pvals, p_thr: float = 0.05, p_value_label: str = "p-value"
+    ax, features, pvals, p_thr: float = 0.05, p_value_label: str = "p-value", max_log_p: float = 0.0000001
 ) -> None:
     """Per-feature -log10(p) scatter shared by the single and comparison longitudinal reports."""
     logp = -np.log10(np.maximum(np.asarray(pvals, dtype=float), 1e-300))
     x = np.arange(len(logp))
+    # If any logp values exceed max_log_p, cap them
+    logp = np.minimum(logp, -np.log10(max_log_p))
     ax.scatter(x, logp, color=LONGITUDINAL_DOT_COLOR, zorder=3)
     threshold_y = -np.log10(p_thr)
     ax.axhline(threshold_y, color="black", linestyle="--", linewidth=1.2)
-    ax.text(
-        0.99,
-        threshold_y,
-        f"{p_value_label} = {p_thr:g}",
-        transform=ax.get_yaxis_transform(),
-        ha="right",
-        va="bottom",
-        fontsize=8,
-        backgroundcolor="white",
-    )
+
+    # IDPs ordered by P-value, if over 75% are significant, don't add the text label as it blocks the points
+    if np.mean(np.asarray(pvals, dtype=float) < p_thr) >= 0.75:
+       ax.text(
+            0.99,
+            threshold_y,
+            f"{p_thr:g}",
+            transform=ax.get_yaxis_transform(),
+            ha="right",
+            va="bottom",
+            fontsize=6,
+        )
+    else:
+        ax.text(
+            0.99,
+            threshold_y,
+            f"{p_value_label} = {p_thr:g}",
+            transform=ax.get_yaxis_transform(),
+            ha="right",
+            va="bottom",
+            fontsize=6,
+        )
     _set_feature_ticks(ax, features, rotation=45)
     ax.set_ylabel(f"-log10({p_value_label})")
     ax.set_xlabel("Feature / IDP")
@@ -3390,8 +3403,11 @@ def Long_Robust_Zscores(
     ax1.set_xlabel("Z-scores of all unique measures")
     # Set axis limits to -8 to 8 for better visualisation:
     # get max z-score for setting axis limits
-    max_z = np.max(np.abs(idp_array))
-    ax1.set_xlim([-max_z*1.1, max_z*1.1])
+    # max_z = np.max(np.abs(idp_array))
+    # set to 90th pecentile 
+    max_z = np.percentile(np.abs(idp_array), 99)
+    max_z = max(max_z, 1.0)
+    ax1.set_xlim([-max_z*1.2, max_z*1.2])
     ax1.invert_xaxis()
     ax1.yaxis.tick_right()
     ax1.yaxis.set_label_position("right")
@@ -6263,3 +6279,5 @@ def plot_age_percentile_chart(
 
     fig.tight_layout()
     return fig, ax
+
+# %%

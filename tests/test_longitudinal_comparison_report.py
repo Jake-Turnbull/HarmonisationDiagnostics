@@ -11,7 +11,7 @@ from DiagnoseHarmonisation import DiagnosticReport
 
 def _build_longitudinal_demo_data(seed: int = 42):
     rng = np.random.default_rng(seed)
-    n_subjects = 8
+    n_subjects = 800
     n_timepoints = 3
     n_features = 4
 
@@ -21,7 +21,7 @@ def _build_longitudinal_demo_data(seed: int = 42):
     # Keep batches balanced across rows while preserving repeated measures layout.
     batch = np.array(["A"] * (len(subject_ids) // 2) + ["B"] * (len(subject_ids) - len(subject_ids) // 2))
 
-    raw = rng.normal(loc=0.0, scale=1.0, size=(len(subject_ids), n_features))
+    raw = rng.normal(loc=0.0, scale=6.0, size=(len(subject_ids), n_features))
     raw[batch == "A", :] += 0.75
 
     harmonised = raw.copy()
