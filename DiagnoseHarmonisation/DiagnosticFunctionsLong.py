@@ -630,11 +630,10 @@ def _pairwise_rpd(arr: np.ndarray) -> float:
 def WithinSubjVar_long(
     idp_matrix: np.ndarray,
     subjects: Sequence,
-    timepoints: Sequence,
     idp_names: Optional[Sequence[str]] = None,
 ) -> pd.DataFrame:
     """
-    Compute within-subject variability (percent) for each IDP across timepoints.
+    Compute within-subject variability (percent) for each IDP across repeated measurements.
 
     Returns both the median pairwise RPD and its standard deviation.
 
@@ -645,7 +644,7 @@ def WithinSubjVar_long(
     - subject
     - n_obs
     - metric_type
-    - one column per IDP (each containing a tuple of median RPD and its standard deviation)
+    - one column per IDP (each containing a tuple of median RPD)
 
     Parameters
     ----------
@@ -653,8 +652,6 @@ def WithinSubjVar_long(
         Numeric matrix of shape (n_samples, n_idps).
     subjects : Sequence
         Subject identifiers aligned to rows of idp_matrix.
-    timepoints : Sequence
-        Timepoint labels aligned to rows of idp_matrix. Kept for validation.
     idp_names : Optional[Sequence[str]]
         Optional list of IDP names. Defaults to idp_1, idp_2, ...
 
@@ -673,9 +670,7 @@ def WithinSubjVar_long(
 
     if len(subjects) != n_samples:
         raise ValueError("Length of subjects must match number of rows in idp_matrix.")
-    if len(timepoints) != n_samples:
-        raise ValueError("Length of timepoints must match number of rows in idp_matrix.")
-
+   
     if idp_names is None:
         idp_names = [f"idp_{i+1}" for i in range(n_idps)]
     else:
@@ -685,7 +680,6 @@ def WithinSubjVar_long(
 
     df = pd.DataFrame(idp_matrix, columns=idp_names)
     df["subject"] = list(subjects)
-    # df["timepoint"] = list(timepoints) 
 
     out_rows = []
     for subj, g in df.groupby("subject", sort=False):
