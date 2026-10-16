@@ -3224,19 +3224,23 @@ def _adjust_for_covariates_preserve_batch(
     idp_cols,
     batch_col,
     covariates=None,
+    subject_id: str | None = None,
 ):
     """
-    Remove covariate effects from each feature while preserving batch effects.
+    Remove covariate and optional subject random-intercept effects while preserving batch effects.
 
     Fits:
-        feature ~ covariates + batch
+        feature ~ covariates + batch, with a subject random intercept when supplied
 
     and returns:
-        feature - fitted covariate contribution
+        feature minus fitted covariate and subject contributions
 
-    Batch and intercept effects are retained.
+    Batch and intercept effects are retained. Subject random effects are
+    centered within batch before removal so they cannot shift batch means.
     """
-    if not covariates:
+    if subject_id is not None and subject_id not in df.columns:
+        raise KeyError(f"Subject ID column '{subject_id}' not found in DataFrame.")
+    if not covariates and subject_id is None:
         return df.copy()
 
     adjusted = df.copy()
@@ -3250,11 +3254,14 @@ def _adjust_for_covariates_preserve_batch(
             index=df.index,
         )
 
+        if subject_id is not None:
+            model_df["_subject"] = df[subject_id]
+
         continuous = []
         categorical = []
 
         # Add covariates and retain categorical information where possible
-        for name, values in covariates.items():
+        for name, values in (covariates or {}).items():
             values = pd.Series(values).reset_index(drop=True)
             values.index = df.index
 
@@ -3306,26 +3313,49 @@ def _adjust_for_covariates_preserve_batch(
 
         y = model_df["_y"].to_numpy(dtype=float)
 
-        beta, *_ = np.linalg.lstsq(
-            X.to_numpy(),
-            y,
-            rcond=None,
-        )
+        if subject_id is not None:
+            import statsmodels.api as sm
 
-        beta = pd.Series(beta, index=X.columns)
-
-        # Remove ONLY covariate effects
-        if X_cov.shape[1]:
-            cov_effect = (
-                X_cov.to_numpy()
-                @ beta[X_cov.columns].to_numpy()
+            mixed_model = sm.MixedLM(
+                endog=y,
+                exog=X,
+                groups=model_df["_subject"],
+                exog_re=np.ones((len(model_df), 1), dtype=float),
+            )
+            mixed_result = mixed_model.fit(reml=False, method="lbfgs", disp=False)
+            fixed_effects = np.asarray(mixed_result.fe_params, dtype=float)
+            fixed_fitted = np.asarray(mixed_result.model.exog @ fixed_effects, dtype=float)
+            subject_effect = pd.Series(
+                np.asarray(mixed_result.fittedvalues, dtype=float) - fixed_fitted,
+                index=model_df.index,
+            )
+            subject_effect -= subject_effect.groupby(
+                model_df["_batch"], observed=True
+            ).transform("mean")
+            covariate_effect = (
+                X_cov.to_numpy() @ fixed_effects[1:1 + X_cov.shape[1]]
+                if X_cov.shape[1]
+                else 0.0
             )
         else:
-            cov_effect = 0.0
+            beta, *_ = np.linalg.lstsq(
+                X.to_numpy(),
+                y,
+                rcond=None,
+            )
+            beta = pd.Series(beta, index=X.columns)
+            covariate_effect = (
+                X_cov.to_numpy() @ beta[X_cov.columns].to_numpy()
+                if X_cov.shape[1]
+                else 0.0
+            )
+            subject_effect = 0.0
+
+        removed_effect = covariate_effect + subject_effect
 
         # Missing model rows should remain missing rather than raw
         adjusted[idp] = np.nan
-        adjusted.loc[model_df.index, idp] = y - cov_effect
+        adjusted.loc[model_df.index, idp] = y - removed_effect
 
     return adjusted
   
@@ -3340,6 +3370,7 @@ def Long_Robust_Zscores(
         plot_as_residuals: bool = False,
         rep: object | None = None,
         figsize: tuple = (8.0, 5.5),
+        subject_ids=None,
 ) -> pd.DataFrame:
     apply_plot_theme()
 
@@ -3369,6 +3400,12 @@ def Long_Robust_Zscores(
     # Convert the data and batch into a DataFrame for plotting
     plot_df = pd.DataFrame(data, columns=idp_cols)
     plot_df[batch_col] = batch
+    subject_col = None
+    if subject_ids is not None:
+        if len(subject_ids) != data.shape[0]:
+            raise ValueError("Length of subject_ids must match number of data rows.")
+        subject_col = "subject_id"
+        plot_df[subject_col] = np.asarray(subject_ids)
     print(plot_df.head())
     print(f"Plotting DataFrame shape: {plot_df.shape}")
 
@@ -3381,6 +3418,7 @@ def Long_Robust_Zscores(
             idp_cols=idp_cols,
             batch_col=batch_col,
             covariates=covariates,
+            subject_id=subject_col,
         )
 
     # ------------------------------------------------------------------

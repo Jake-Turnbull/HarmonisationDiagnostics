@@ -1189,6 +1189,7 @@ def plot_compare_long_zscore_distributions(
     batch,
     features,
     covariates=None,
+    subject_ids=None,
     draw_pdf: bool = True,
     max_cols_in_plotting_grid: int = 3,
     height_in_plotting_grid: float = 4.8,
@@ -1201,18 +1202,27 @@ def plot_compare_long_zscore_distributions(
     batch_arr = np.asarray(batch)
     unique_batches = np.unique(batch_arr)
     covariates = covariates or None
+    if subject_ids is not None:
+        subject_ids = np.asarray(subject_ids)
+        if subject_ids.ndim != 1 or subject_ids.shape[0] != batch_arr.shape[0]:
+            raise ValueError("subject_ids must be a 1D vector matching batch length.")
 
     def _zscore_by_method(adjust: bool):
         values_by_method = {}
         for method, data in datasets.items():
             frame = pd.DataFrame(np.asarray(data, dtype=float), columns=features)
             frame["batch"] = batch_arr
-            if adjust and covariates:
+            subject_col = None
+            if subject_ids is not None:
+                subject_col = "subject_id"
+                frame[subject_col] = subject_ids
+            if adjust and (covariates or subject_col is not None):
                 frame = PlotDiagnosticResults._adjust_for_covariates_preserve_batch(
                     df=frame,
                     idp_cols=features,
                     batch_col="batch",
                     covariates=covariates,
+                    subject_id=subject_col,
                 )
             values = PlotDiagnosticResults.z_score(
                 frame[features].to_numpy(dtype=float), MAD=True
@@ -1233,11 +1243,11 @@ def plot_compare_long_zscore_distributions(
             max_abs = max(np.percentile(np.abs(np.concatenate(finite_values)), 99.9999), 1.0)
         else:
             max_abs = 1.0
-        bins = np.linspace(-max_abs * 1.2, max_abs * 1.2, 81)
+        bins = np.linspace(-max_abs, max_abs, 81)
 
         for ax, (method, values) in zip(axes, values_by_method.items()):
-            if adjusted and not covariates:
-                ax.text(0.5, 0.5, "No covariates supplied", ha="center", va="center", transform=ax.transAxes)
+            if adjusted and not covariates and subject_ids is None:
+                ax.text(0.5, 0.5, "No covariates or subject IDs supplied", ha="center", va="center", transform=ax.transAxes)
                 ax.set_title(_title(method))
                 ax.set_axis_off()
                 continue

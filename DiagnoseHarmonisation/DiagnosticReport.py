@@ -4020,6 +4020,7 @@ def LongitudinalReport(data, batch,
             as_pdf=False,
             plot_as_residuals=False,
             rep=report,
+            subject_ids=subject_ids,
         )
 
         # Add plotting sucess to script:    
@@ -4028,8 +4029,8 @@ def LongitudinalReport(data, batch,
         if covariates is None:
             report.log_text("No covariates provided; covariate-adjusted Z-scores will not be available.")
 
-        if covariates is not None:
-            report.log_text("Covariates provided; covariate-adjusted Z-scores will be available.")
+        if covariates is not None or subject_ids is not None:
+            report.log_text("Covariates and/or subject IDs provided; adjusted Z-scores will be available.")
             PlotDiagnosticResults.Long_Robust_Zscores(
                 data=data,
                 batch=batch,
@@ -4039,6 +4040,7 @@ def LongitudinalReport(data, batch,
                 as_pdf=False,
                 plot_as_residuals=True,
                 rep=report,
+                subject_ids=subject_ids,
             )
 
         """ LEGACY CODE: PLOTTING FUNCTIONS
@@ -5820,6 +5822,7 @@ def LongitudinalComparisonReport(
                 batch_arr,
                 features,
                 covariates=covariates_dict,
+                subject_ids=subject_arr,
                 max_cols_in_plotting_grid=max_cols_in_plotting_grid,
                 height_in_plotting_grid=height_in_plotting_grid,
                 width_in_plotting_grid=width_in_plotting_grid,

@@ -66,6 +66,32 @@ def test_comparison_plot_grid_dimensions_are_configurable():
         plt.close(figure)
 
 
+def test_covariate_adjustment_removes_subject_intercepts_and_preserves_batch():
+    subject_effects = np.repeat([-3.0, -1.0, 1.0, 3.0], 2)
+    batch_effects = np.tile([0.0, 5.0], 4)
+    covariates = np.array([-1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0])
+    frame = pd.DataFrame(
+        {
+            "feature": subject_effects + 10.0 + batch_effects + 2.0 * covariates,
+            "batch": ["A", "B"] * 4,
+            "subject": np.repeat(["s1", "s2", "s3", "s4"], 2),
+        }
+    )
+    covariate_map = {"age": covariates}
+
+    adjusted = PlotDiagnosticResults._adjust_for_covariates_preserve_batch(
+        frame,
+        idp_cols=["feature"],
+        batch_col="batch",
+        covariates=covariate_map,
+        subject_id="subject",
+    )
+
+    batch_means = adjusted.groupby("batch")["feature"].mean()
+    assert adjusted.groupby("batch")["feature"].std().max() < frame.groupby("batch")["feature"].std().max()
+    assert batch_means["B"] - batch_means["A"] == pytest.approx(5.0)
+
+
 def test_subject_order_uses_median_rho_heatmap_and_idp_medians():
     subject_order = pd.DataFrame(
         {
