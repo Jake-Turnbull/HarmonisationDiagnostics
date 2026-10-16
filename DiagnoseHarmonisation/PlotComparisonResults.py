@@ -258,7 +258,7 @@ def plot_compare_zscore_distributions(
             except Exception:
                 # KDE can fail for near-constant vectors; keep the histogram only.
                 pass
-        max_abs = max(np.percentile(np.abs(vals), 95), 1.0)
+        max_abs = max(np.percentile(np.abs(vals), 99.9999), 1.0)
         max_abs = max(max_abs, 1.0)
         ax.set_xlim([-max_abs, max_abs])
         ax.invert_xaxis()
@@ -1229,8 +1229,8 @@ def plot_compare_long_zscore_distributions(
         ]
         if finite_values:
             # max_abs = max(float(np.max(np.abs(values))) for values in finite_values)
-            # Limit values to the 95th percentile?
-            max_abs = max(np.percentile(np.abs(np.concatenate(finite_values)), 99), 1.0)
+            # Limit values to the 99th percentile?
+            max_abs = max(np.percentile(np.abs(np.concatenate(finite_values)), 99.9999), 1.0)
         else:
             max_abs = 1.0
         bins = np.linspace(-max_abs * 1.2, max_abs * 1.2, 81)
