@@ -68,6 +68,8 @@ def test_longitudinal_comparison_report_generates_html(test_results_dir):
         show=False,
         timestamped_reports=False,
         max_cols_in_plotting_grid = 4,
+        height_in_plotting_grid=4.8,
+        width_in_plotting_grid=12,
 
     )
 
@@ -157,4 +159,29 @@ def test_max_plots_per_row(test_results_dir):
             max_cols_in_plotting_grid = 4,
             report_name="Max_Plots_Per_Row_Test",
             save_dir=test_results_dir / "max_plots_per_row",
+        )
+
+def test_change_plot_dims(test_results_dir):
+    data = _build_longitudinal_demo_data(seed=99)
+    datasets = dict(data["datasets"])
+    datasets["Broken"] = datasets["Raw"][:-1, :]
+    datasets["broken2"] = datasets["Raw"][:-2, :]
+    datasets["Broken3"] = datasets["Raw"][:-3, :]
+    
+
+    with pytest.raises(ValueError, match="identical shape"):
+        DiagnosticReport.LongitudinalComparisonReport(
+            datasets=datasets,
+            batch=data["batch"],
+            subject_ids=data["subject_ids"],
+            timepoints=data["timepoints"],
+            covariates=data["covariates"],
+            features=data["features"],
+            save_data=False,
+            timestamped_reports=False,
+            max_cols_in_plotting_grid = 4,
+            report_name="Change_Plot_Dims_Test",
+            save_dir=test_results_dir / "change_plot_dims",
+            height_in_plotting_grid=4.8,
+            width_in_plotting_grid=6.0,
         )

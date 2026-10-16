@@ -3005,6 +3005,8 @@ def CrossSectionalComparisonReport(
     shared_y: bool = False,
     fontsize: int | float | None = None,
     max_cols_in_plotting_grid: int = 3,
+    height_in_plotting_grid: float = 4.8,
+    width_in_plotting_grid: float = 4.8,
 ) -> StatsReporter:
     """
     Create a comparative diagnostic report for multiple harmonisation methods.
@@ -3341,6 +3343,8 @@ def CrossSectionalComparisonReport(
                 base_cmap=base_cmap,
                 fontsize=fontsize,
                 max_cols_in_plotting_grid=max_cols_in_plotting_grid,
+                height_in_plotting_grid=height_in_plotting_grid,
+                width_in_plotting_grid=width_in_plotting_grid,
             )
         )
         _log_figures(
@@ -3352,18 +3356,20 @@ def CrossSectionalComparisonReport(
                 base_cmap=base_cmap,
                 max_cols_in_plotting_grid=max_cols_in_plotting_grid,
                 fontsize=fontsize,
+                height_in_plotting_grid=height_in_plotting_grid,
+                width_in_plotting_grid=width_in_plotting_grid,
             )
         )
-        _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results, shared_y=shared_y, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results, shared_y=shared_y, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_cohens_d(method_results, shared_y=shared_y, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_variance_ratios(method_results, shared_y=shared_y, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_lmm_icc(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_lmm_biological_effects(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
         _log_figures(PlotComparisonResults.plot_compare_mahalanobis(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_ks(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_covariance(method_results, batch=batch_arr, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_ks(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_covariance(method_results, batch=batch_arr, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_batch_scree(method_results, batch_arr, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
         _log_figures(confounding_figs)
-        _log_figures(PlotComparisonResults.plot_compare_pca_r2_heatmaps(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_pca_r2_heatmaps(method_results, fontsize=fontsize, max_cols_in_plotting_grid=max_cols_in_plotting_grid, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
         _log_figures(
             PlotComparisonResults.plot_compare_pca_embeddings(
                 method_results,
@@ -3375,6 +3381,8 @@ def CrossSectionalComparisonReport(
                 base_cmap=base_cmap,
                 fontsize=fontsize,
                 max_cols_in_plotting_grid=max_cols_in_plotting_grid,
+                height_in_plotting_grid=height_in_plotting_grid,
+                width_in_plotting_grid=width_in_plotting_grid,
             )
         )
         if UMAP_embedding:
@@ -3389,6 +3397,8 @@ def CrossSectionalComparisonReport(
                     base_cmap=base_cmap,
                     fontsize=fontsize,
                     max_cols_in_plotting_grid=max_cols_in_plotting_grid,
+                    height_in_plotting_grid=height_in_plotting_grid,
+                    width_in_plotting_grid=width_in_plotting_grid,
                 )
             )
         _log_figures(PlotComparisonResults.plot_method_scorecard(summary_df))
@@ -5587,6 +5597,8 @@ def LongitudinalComparisonReport(
     show: bool = False,
     timestamped_reports: bool = True,
     max_cols_in_plotting_grid: int = 2,
+    height_in_plotting_grid: float = 4.8,
+    width_in_plotting_grid: float = 4.8,
 ) -> StatsReporter:
     """Run and compare longitudinal diagnostics across multiple methods."""
     if not isinstance(datasets, dict) or len(datasets) == 0:
@@ -5809,14 +5821,16 @@ def LongitudinalComparisonReport(
                 features,
                 covariates=covariates_dict,
                 max_cols_in_plotting_grid=max_cols_in_plotting_grid,
+                height_in_plotting_grid=height_in_plotting_grid,
+                width_in_plotting_grid=width_in_plotting_grid,
             )
         )
-        _log_figures(PlotComparisonResults.plot_compare_long_subject_order(method_results))
-        _log_figures(PlotComparisonResults.plot_compare_long_within_subject_variability(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_long_additive_multiplicative(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_long_mixed_effects(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_long_biological_effects(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
-        _log_figures(PlotComparisonResults.plot_compare_long_multivariate_batch_difference(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_subject_order(method_results, height_in_plotting_grid=height_in_plotting_grid, width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_within_subject_variability(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid,height_in_plotting_grid=height_in_plotting_grid,width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_additive_multiplicative(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid,height_in_plotting_grid=height_in_plotting_grid,width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_mixed_effects(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid,height_in_plotting_grid=height_in_plotting_grid,width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_biological_effects(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid,height_in_plotting_grid=height_in_plotting_grid,width_in_plotting_grid=width_in_plotting_grid))
+        _log_figures(PlotComparisonResults.plot_compare_long_multivariate_batch_difference(method_results,max_cols_in_plotting_grid=max_cols_in_plotting_grid,height_in_plotting_grid=height_in_plotting_grid,width_in_plotting_grid=width_in_plotting_grid))
         _log_figures(PlotComparisonResults.plot_compare_longitudinal_scorecard(summary_df))
 
         if save_data and summary_df is not None and not summary_df.empty:

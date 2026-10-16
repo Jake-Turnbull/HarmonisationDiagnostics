@@ -36,6 +36,36 @@ def test_longitudinal_summary_uses_fdr_pvalues_when_available():
     assert metrics["prop_multiplicative_significant"] == 0.0
 
 
+def test_comparison_plot_grid_dimensions_are_configurable():
+    method_result = SimpleNamespace(
+        zscore_raw=np.arange(4, dtype=float).reshape(4, 1),
+        within_subject_variability=pd.DataFrame({"x": [1.0, 2.0]}),
+    )
+
+    cross_sectional_figures = PlotComparisonResults.plot_compare_zscore_distributions(
+        {"method": method_result},
+        batch=["A", "A", "B", "B"],
+        height_in_plotting_grid=3.0,
+        width_in_plotting_grid=5.0,
+    )
+    longitudinal_figures = PlotComparisonResults.plot_compare_long_within_subject_variability(
+        {"method": method_result},
+        height_in_plotting_grid=3.0,
+        width_in_plotting_grid=5.0,
+    )
+
+    assert cross_sectional_figures[0][1].get_size_inches() == pytest.approx([5.0, 3.0])
+    assert longitudinal_figures[0][1].get_size_inches() == pytest.approx([5.0, 3.0])
+    for _, figure in cross_sectional_figures + longitudinal_figures:
+        figure.canvas.draw()
+        axes = figure.axes[0]
+        panel_aspect = axes.get_window_extent().width / axes.get_window_extent().height
+        assert panel_aspect > 1.2
+
+    for _, figure in cross_sectional_figures + longitudinal_figures:
+        plt.close(figure)
+
+
 def test_subject_order_uses_median_rho_heatmap_and_idp_medians():
     subject_order = pd.DataFrame(
         {
