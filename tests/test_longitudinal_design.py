@@ -7,6 +7,7 @@ from DiagnoseHarmonisation.DiagnosticFunctionsLong import (
     MixedEffects_long,
     MultiVariateBatchDifference_long,
     MultiplicativeEffect_long,
+    SubjectOrder_long,
     WithinSubjVar_long,
     _classify_longitudinal_design,
     _resolve_time_adjustment,
@@ -93,6 +94,83 @@ def test_within_subject_variability_does_not_require_timepoint_labels():
     pd.testing.assert_frame_equal(without_time, with_time)
     with pytest.raises(ValueError, match="Length of timepoints"):
         WithinSubjVar_long(matrix, subjects, ["t1"], idp_names=["x"])
+
+
+def test_within_subject_variability_returns_median_absolute_rpd_only():
+    matrix = np.array([[-1.0], [-2.0], [-10.0], [np.inf]])
+
+    result = WithinSubjVar_long(matrix, ["s1"] * 4, idp_names=["x"])
+
+    assert result.loc[0, "x"] == pytest.approx(400.0 / 3.0)
+    assert np.isscalar(result.loc[0, "x"])
+    assert "std" not in result.columns
+
+
+def test_subject_order_aggregates_duplicate_keys_and_skips_non_finite_pairs():
+    matrix = np.array(
+        [
+            [1.0, 10.0],
+            [3.0, 12.0],
+            [4.0, np.inf],
+            [6.0, 30.0],
+            [10.0, 100.0],
+            [20.0, 200.0],
+            [30.0, 300.0],
+        ]
+    )
+    subjects = ["s1", "s1", "s2", "s3", "s1", "s2", "s3"]
+    timepoints = ["t1", "t1", "t1", "t1", "t2", "t2", "t2"]
+
+    result = SubjectOrder_long(
+        matrix,
+        subjects,
+        timepoints,
+        idp_names=["finite", "has_inf"],
+        nPerm=10,
+        seed=1,
+    ).set_index("IDP")
+
+    assert result.loc["finite", "nPairs"] == 3
+    assert result.loc["finite", "SpearmanRho"] == pytest.approx(1.0)
+    assert result.loc["has_inf", "nPairs"] == 2
+    assert np.isnan(result.loc["has_inf", "SpearmanRho"])
+
+
+def test_additive_effect_uses_stable_chi2_tail_and_applies_bh_fdr(monkeypatch):
+    from types import SimpleNamespace
+
+    from DiagnoseHarmonisation import DiagnosticFunctionsLong
+
+    log_likelihoods = iter([50.0, 0.0, 10.0, 0.0])
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "_safe_fit_mixedlm",
+        lambda *args, **kwargs: SimpleNamespace(llf=next(log_likelihoods)),
+    )
+    data = np.arange(16, dtype=float).reshape(8, 2)
+    subjects = [f"s{i}" for i in range(8)]
+    batches = ["A", "A", "B", "B"] * 2
+    timepoints = ["t1", "t2"] * 4
+
+    effects, *_ = AdditiveEffect_long(
+        idp_matrix=data,
+        subjects=subjects,
+        timepoints=timepoints,
+        batch_name=batches,
+        idp_names=["large_lr", "smaller_lr"],
+        verbose=False,
+    )
+
+    effects = effects.set_index("Feature")
+    assert effects.loc["large_lr", "p-value"] > 0.0
+    assert effects.loc["large_lr", "p-value"] < effects.loc["smaller_lr", "p-value"]
+    assert effects["p-value_fdr"].notna().all()
+    assert effects.loc["large_lr", "p-value_fdr"] == pytest.approx(
+        effects.loc["large_lr", "p-value"] * 2
+    )
+    assert effects.loc["smaller_lr", "p-value_fdr"] == pytest.approx(
+        effects.loc["smaller_lr", "p-value"]
+    )
 
 
 def test_confounded_batch_models_do_not_report_pure_batch_effects():

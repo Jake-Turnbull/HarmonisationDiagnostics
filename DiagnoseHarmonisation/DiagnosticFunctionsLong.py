@@ -191,11 +191,13 @@ def SubjectOrder_long(
     Compute pairwise Spearman correlations between matched subjects across all
     ordered timepoint pairs, with permutation-based significance testing.
 
-    For each pair of timepoints (order preserved from first appearance), subjects
-    present at both timepoints are matched and Spearman’s rho is computed for each
-    IDP (column). Significance is assessed via permutation testing by shuffling
-    the second-timepoint values within matched pairs (nPerm iterations). P-values
-    use the +1 correction: p = (1 + count_ge) / (1 + valid_null_count).
+    For each pair of timepoints (order preserved from first appearance), values
+    are averaged within each subject-timepoint when duplicate observations exist.
+    Subjects present at both timepoints are then matched and Spearman's rho is
+    computed for each IDP (column), using only finite paired values. Significance
+    is assessed via permutation testing by shuffling the second-timepoint values
+    within matched pairs (nPerm iterations). P-values use the +1 correction:
+    p = (1 + count_ge) / (1 + valid_null_count).
 
     Args:
     
@@ -216,7 +218,7 @@ def SubjectOrder_long(
         pd.DataFrame
             Columns: ["TimeA","TimeB","IDP","nPairs",
                     "SpearmanRho","NullMeanRho","pValue"].
-            Rows with fewer than 3 matched pairs return NaNs for statistics.
+            Rows with fewer than 3 finite matched pairs return NaNs for statistics.
     """
 
     # Validate and normalize inputs
@@ -265,37 +267,38 @@ def SubjectOrder_long(
                                  "NullMeanRho": np.nan, "pValue": np.nan})
                 continue
 
-            Ta_subj = subjects_arr[idxA_all]
-            Tb_subj = subjects_arr[idxB_all]
+            def aggregate_subject_values(indices):
+                aggregated = {}
+                for subject_id in pd.unique(subjects_arr[indices]):
+                    subject_indices = indices[subjects_arr[indices] == subject_id]
+                    subject_values = idp_matrix[subject_indices, :]
+                    aggregated[subject_id] = np.array(
+                        [
+                            np.mean(feature_values[np.isfinite(feature_values)])
+                            if np.isfinite(feature_values).any()
+                            else np.nan
+                            for feature_values in subject_values.T
+                        ],
+                        dtype=float,
+                    )
+                return aggregated
 
-            # subjects in A that also appear in B
-            maskA = np.isin(Ta_subj, Tb_subj)
-            if not np.any(maskA):
+            values_a = aggregate_subject_values(idxA_all)
+            values_b = aggregate_subject_values(idxB_all)
+            common_subj = [subject_id for subject_id in values_a if subject_id in values_b]
+            if not common_subj:
                 for idp in idp_names:
                     rows.append({"TimeA": tpA, "TimeB": tpB, "IDP": idp,
                                  "nPairs": 0, "SpearmanRho": np.nan,
                                  "NullMeanRho": np.nan, "pValue": np.nan})
                 continue
 
-            common_subj = Ta_subj[maskA]
-            idxA = idxA_all[np.nonzero(maskA)[0]]
-
-            # map first occurrence in Tb to global row indices
-            tb_index_map = {}
-            for i, val in enumerate(Tb_subj):
-                if val not in tb_index_map:
-                    tb_index_map[val] = idxB_all[i]
-            idxB = np.array([tb_index_map[s] for s in common_subj], dtype=int)
-
             # iterate idps (columns)
             for j, idp_name in enumerate(idp_names):
-                xa_raw = idp_matrix[idxA, j] if j < n_idps else np.array([], dtype=float)
-                yb_raw = idp_matrix[idxB, j] if j < n_idps else np.array([], dtype=float)
+                xa = np.array([values_a[subject_id][j] for subject_id in common_subj])
+                yb = np.array([values_b[subject_id][j] for subject_id in common_subj])
 
-                xa = _force_numeric_vector(xa_raw)
-                yb = _force_numeric_vector(yb_raw)
-
-                valid_mask = ~(np.isnan(xa) | np.isnan(yb))
+                valid_mask = np.isfinite(xa) & np.isfinite(yb)
                 xa = xa[valid_mask]; yb = yb[valid_mask]
                 nPairs = xa.size
 
@@ -354,7 +357,7 @@ def _pairwise_rpd(arr: np.ndarray) -> float:
     """
     Median pairwise relative percent difference (RPD) across all pairs.
 
-    RPD(i, j) = abs(xi - xj) / ((xi + xj) / 2) * 100
+    RPD(i, j) = abs((xi - xj) / ((xi + xj) / 2)) * 100
 
     Parameters
     ----------
@@ -368,7 +371,7 @@ def _pairwise_rpd(arr: np.ndarray) -> float:
         or if no valid denominator is available.
     """
     arr = np.asarray(arr, dtype=float)
-    arr = arr[~np.isnan(arr)]
+    arr = arr[np.isfinite(arr)]
     n = arr.size
 
     if n < 2:
@@ -377,12 +380,11 @@ def _pairwise_rpd(arr: np.ndarray) -> float:
     rpds = []
     for i, j in combinations(range(n), 2):
         denom = (arr[i] + arr[j]) / 2.0
-        if denom == 0 or np.isnan(denom):
+        if denom == 0 or not np.isfinite(denom):
             continue
-        rpds.append(abs(arr[i] - arr[j]) / denom * 100.0)
-
-    # Calculate the std of RPD as well
-    rpds_std = float(np.std(rpds)) if rpds else np.nan
+        rpd = abs((arr[i] - arr[j]) / denom) * 100.0
+        if np.isfinite(rpd):
+            rpds.append(rpd)
 
     if len(rpds) == 0:
         return np.nan
@@ -399,7 +401,8 @@ def WithinSubjVar_long(
     """
     Compute within-subject variability (percent) for each IDP across timepoints.
 
-    Returns both the median pairwise RPD and its standard deviation.
+    Returns the median pairwise RPD only. No standard deviation is calculated
+    or returned.
 
     This version uses one consistent metric for all subjects:
     median pairwise RPD across all available non-missing measurements.
@@ -408,7 +411,7 @@ def WithinSubjVar_long(
     - subject
     - n_obs
     - metric_type
-    - one column per IDP (each containing a tuple of median RPD and its standard deviation)
+    - one column per IDP containing the scalar median pairwise RPD
 
     Parameters
     ----------
@@ -3200,12 +3203,12 @@ def AdditiveEffect_long(
                 if np.isfinite(llf_full) and np.isfinite(llf_red):
                     LR = 2.0 * (llf_full - llf_red)
                     try:
-                        n_levels = int(pd.Categorical(local_df[batchcol]).nunique())
+                        n_levels = int(pd.Series(local_df[batchcol]).nunique())
                         df_stat = max(n_levels - 1, 1)
                     except Exception:
                         df_stat = np.nan
                     if not np.isnan(df_stat):
-                        pval = float(1.0 - chi2.cdf(LR, df_stat))
+                        pval = float(chi2.sf(LR, df_stat))
                     used = "LRT"
             except Exception as e:
                 if verbose:
