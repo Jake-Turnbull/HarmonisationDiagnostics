@@ -3256,7 +3256,6 @@ def AdditiveEffect_long(
         rows.append({"Feature": feat, "TestStat": LR, "df": df_stat, "p-value": pval, "method": used})
 
     out = pd.DataFrame(rows)
-    out = out.sort_values(by="TestStat", ascending=False).reset_index(drop=True)
     return _add_fdr_pvalues(out), model_defs_add, full_fixed, reduced_fixed
 
 model_defs_mul = []
@@ -3569,5 +3568,4 @@ def MultiplicativeEffect_long(
         })
 
     out = pd.DataFrame(rows)
-    out = out.sort_values(by="ChiSq", ascending=False).reset_index(drop=True)
     return _add_fdr_pvalues(out), model_defs_mul

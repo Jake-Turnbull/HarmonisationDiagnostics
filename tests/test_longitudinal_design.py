@@ -141,7 +141,7 @@ def test_additive_effect_uses_stable_chi2_tail_and_applies_bh_fdr(monkeypatch):
 
     from DiagnoseHarmonisation import DiagnosticFunctionsLong
 
-    log_likelihoods = iter([50.0, 0.0, 10.0, 0.0])
+    log_likelihoods = iter([10.0, 0.0, 50.0, 0.0])
     monkeypatch.setattr(
         DiagnosticFunctionsLong,
         "_safe_fit_mixedlm",
@@ -157,20 +157,49 @@ def test_additive_effect_uses_stable_chi2_tail_and_applies_bh_fdr(monkeypatch):
         subjects=subjects,
         timepoints=timepoints,
         batch_name=batches,
-        idp_names=["large_lr", "smaller_lr"],
+        idp_names=["lower_lr", "higher_lr"],
         verbose=False,
     )
 
+    assert effects["Feature"].tolist() == ["lower_lr", "higher_lr"]
     effects = effects.set_index("Feature")
-    assert effects.loc["large_lr", "p-value"] > 0.0
-    assert effects.loc["large_lr", "p-value"] < effects.loc["smaller_lr", "p-value"]
+    assert effects.loc["lower_lr", "p-value"] > effects.loc["higher_lr", "p-value"]
     assert effects["p-value_fdr"].notna().all()
-    assert effects.loc["large_lr", "p-value_fdr"] == pytest.approx(
-        effects.loc["large_lr", "p-value"] * 2
+    assert effects.loc["lower_lr", "p-value_fdr"] == pytest.approx(
+        effects.loc["lower_lr", "p-value"]
     )
-    assert effects.loc["smaller_lr", "p-value_fdr"] == pytest.approx(
-        effects.loc["smaller_lr", "p-value"]
+    assert effects.loc["higher_lr", "p-value_fdr"] == pytest.approx(
+        effects.loc["higher_lr", "p-value"] * 2
     )
+
+
+def test_multiplicative_effect_preserves_feature_order(monkeypatch):
+    from types import SimpleNamespace
+
+    from DiagnoseHarmonisation import DiagnosticFunctionsLong
+
+    fligner_results = iter([(1.0, 0.3), (9.0, 0.01)])
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "_safe_fit_mixedlm",
+        lambda *args, **kwargs: SimpleNamespace(resid=np.arange(8, dtype=float)),
+    )
+    monkeypatch.setattr(
+        DiagnosticFunctionsLong,
+        "fligner",
+        lambda *args, **kwargs: next(fligner_results),
+    )
+
+    effects, _ = MultiplicativeEffect_long(
+        idp_matrix=np.arange(16, dtype=float).reshape(8, 2),
+        subjects=[f"s{i}" for i in range(8)],
+        batch_name=["A", "A", "B", "B"] * 2,
+        idp_names=["lower_chi2", "higher_chi2"],
+        verbose=False,
+    )
+
+    assert effects["Feature"].tolist() == ["lower_chi2", "higher_chi2"]
+    assert effects["ChiSq"].tolist() == [1.0, 9.0]
 
 
 def test_confounded_batch_models_do_not_report_pure_batch_effects():

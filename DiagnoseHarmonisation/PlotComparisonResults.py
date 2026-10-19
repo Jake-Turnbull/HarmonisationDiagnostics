@@ -259,6 +259,8 @@ def plot_compare_zscore_distributions(
                 # KDE can fail for near-constant vectors; keep the histogram only.
                 pass
         max_abs = max(np.percentile(np.abs(vals), 99.9999), 1.0)
+        if max_abs > 8:
+            max_abs = 8
         max_abs = max(max_abs, 1.0)
         ax.set_xlim([-max_abs, max_abs])
         ax.invert_xaxis()
@@ -965,8 +967,8 @@ def plot_compare_pca_embeddings(
                 is_categorical=is_categorical,
                 color_label=cov_name,
                 base_cmap=base_cmap,
-                height=height_in_plotting_grid,
-                width=width_in_plotting_grid,
+                height_in_plotting_grid=height_in_plotting_grid,
+                width_in_plotting_grid=width_in_plotting_grid,
             )
         )
     return figs
@@ -1055,8 +1057,8 @@ def Plot_compare_UMAP_embeddings(
                 is_categorical=is_categorical,
                 color_label=cov_name,
                 base_cmap=base_cmap,
-                height=height_in_plotting_grid,
-                width=width_in_plotting_grid,
+                height_in_plotting_grid=height_in_plotting_grid,
+                width_in_plotting_grid=width_in_plotting_grid,
             )
         )
 
@@ -1241,6 +1243,8 @@ def plot_compare_long_zscore_distributions(
             # max_abs = max(float(np.max(np.abs(values))) for values in finite_values)
             # Limit values to the 99th percentile?
             max_abs = max(np.percentile(np.abs(np.concatenate(finite_values)), 99.9999), 1.0)
+            if max_abs < 8:
+                max_abs = 8
         else:
             max_abs = 1.0
         bins = np.linspace(-max_abs, max_abs, 81)

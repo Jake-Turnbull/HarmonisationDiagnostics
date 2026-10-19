@@ -3329,9 +3329,12 @@ def _adjust_for_covariates_preserve_batch(
                 np.asarray(mixed_result.fittedvalues, dtype=float) - fixed_fitted,
                 index=model_df.index,
             )
-            subject_effect -= subject_effect.groupby(
-                model_df["_batch"], observed=True
-            ).transform("mean")
+            # If ID's are nested within batches, we need to remove the batch-specific mean from the subject effect
+            if subject_effect.groupby(model_df["_batch"], observed=True).nunique().max() == 1:
+                subject_effect -= subject_effect.groupby(
+                    model_df["_batch"], observed=True
+                ).transform("mean")
+            
             covariate_effect = (
                 X_cov.to_numpy() @ fixed_effects[1:1 + X_cov.shape[1]]
                 if X_cov.shape[1]
