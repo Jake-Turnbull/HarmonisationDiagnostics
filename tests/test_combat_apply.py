@@ -37,6 +37,30 @@ def test_combat_apply_round_trip_modular_fast_path():
     )
 
 
+def test_combat_apply_round_trip_with_covariate_removal_matrix():
+    data, batch, mod = _make_data(seed=9)
+    removal_matrix = np.ones((1, mod.shape[1]))
+    trained = hf.combat_modular(
+        data=data,
+        batch=batch,
+        mod=mod,
+        mean_model="ols",
+        prior_mode="global",
+        RegressCovariates=True,
+        CovariateRemovalMatrix=removal_matrix,
+    )
+
+    result = hf.combat_apply(
+        new_data=data,
+        new_batch=batch,
+        new_mod=mod,
+        trained_output=trained,
+    )
+    np.testing.assert_allclose(
+        np.asarray(result["bayesdata"]), np.asarray(trained["bayesdata"]), atol=1e-6
+    )
+
+
 def test_combat_apply_round_trip_modular_local_priors_categorical_covariate():
     n_samples = 60
     n_features = 8

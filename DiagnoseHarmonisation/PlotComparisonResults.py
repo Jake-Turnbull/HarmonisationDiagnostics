@@ -263,7 +263,6 @@ def plot_compare_zscore_distributions(
             max_abs = 8
         max_abs = max(max_abs, 1.0)
         ax.set_xlim([-max_abs, max_abs])
-        ax.invert_xaxis()
         panel_suffix = "Cov_adjusted" if use_residual else "Cov_unadjusted"
         ax.set_title(_title(f"{method} ({panel_suffix})"), fontsize=fontsize)
         ax.set_xlabel("Robust z-score", fontsize=fontsize)
@@ -1273,7 +1272,6 @@ def plot_compare_long_zscore_distributions(
                     ax.plot(grid, stats.norm.pdf(grid, mu, sd), color=patches[0].get_facecolor()[:3], linewidth=2)
 
             ax.set_xlim(bins[0], bins[-1])
-            ax.invert_xaxis()
             ax.set_title(_title(method))
             ax.set_xlabel("Robust z-score")
             ax.set_ylabel("Density")

@@ -113,3 +113,9 @@ TestResults/
 *.json
 *.xlsx
 *.h5
+*.png
+*.svg
+*.pdf
+*.npz
+*.DS_Store
+*__init__.*

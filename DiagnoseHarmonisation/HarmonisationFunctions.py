@@ -16,7 +16,7 @@ import numpy.linalg as la
 import pandas as pd
 import patsy
 import statsmodels.formula.api as smf
-from scipy.stats import chi2, zscore
+from scipy.stats import chi2, rankdata, zscore
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
@@ -973,11 +973,8 @@ def combat_modular(
     """
     Modular ComBat entrypoint.
 
-    This function is a modular wrapper around the existing `combat` implementation.
-    By default (`mean_model='ols'` and `prior_mode='global'`) it calls the
-    original `combat` function to preserve exact baseline behaviour. Experimental
-    modular paths (GAM mean models, local priors) will be implemented here
-    incrementally.
+    The default OLS/global configuration runs through the modular pipeline and
+    exposes its design diagnostics. CovBat remains on the legacy implementation.
 
     Args: 
         data (np.array or pd.DataFrame): The data matrix to be harmonized, with shape (n_features, n_samples).
@@ -1004,14 +1001,17 @@ def combat_modular(
             RuntimeWarning,
         )
     
+    if isinstance(mean_model, str):
+        mean_model = mean_model.lower()
+
     if mean_model not in {"ols", "gam"}:
         raise ValueError("mean_model must be 'ols' or 'gam'.")
 
     if prior_mode not in {"global", "local"}:
         raise ValueError("prior_mode must be 'global' or 'local'.")
 
-    # Fast-path: delegate estimation to legacy combat, but still return rich output.
-    if (mean_model == "ols") and (prior_mode == "global"):
+    # CovBat's modular reconstruction is incomplete, so retain its legacy path.
+    if covbat_mode and (mean_model == "ols") and (prior_mode == "global"):
         output = combat(
             data=data,
             batch=batch,
@@ -1047,8 +1047,7 @@ def combat_modular(
             }
         return output
 
-    # For non-default configurations (GAM mean model or local priors) we perform
-    # the modular pipeline here so we can construct and apply feature-wise priors.
+    # Fit the requested mean model and priors through the modular pipeline.
     import pandas as pd
 
     if mean_model == "gam":
@@ -1180,6 +1179,7 @@ def combat_modular(
         )
 
     design_diagnostics = {
+        "mode": "modular",
         "mean_model": mean_model,
         "prior_mode": prior_mode,
         "n_samples": int(dat_np.shape[1]),
@@ -1289,7 +1289,12 @@ def combat_modular(
 
     # Reconstruct final harmonized data (add covariate effects back if required)
     stand_mean_with_cov = stand_mean
-    bayesdata = _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, stand_mean_with_cov, Cov_effects, DeltaCorrection=DeltaCorrection, GammaCorrection=GammaCorrection, RegressCovariates=RegressCovariates,covariate_removal_matrix=CovariateRemovalMatrix,mean_model=mean_model)
+    if CovariateRemovalMatrix is not None and RegressCovariates and mean_model == "ols" and X_cov_mean is not None:
+        X_cov_centered = design[:, n_batch:] - X_cov_mean
+        Cov_effects = _selected_covariate_effects(
+            X_cov_centered, B_hat[n_batch:, :], CovariateRemovalMatrix
+        )
+    bayesdata = _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, stand_mean_with_cov, Cov_effects, DeltaCorrection=DeltaCorrection, GammaCorrection=GammaCorrection, RegressCovariates=RegressCovariates,mean_model=mean_model)
 
     if dat_transposed:
         bayesdata = bayesdata.T
@@ -1606,13 +1611,14 @@ def combat_apply(
     if encoded.shape[1] > 0 and X_cov_mean is not None:
         X_cov_new = encoded - np.asarray(X_cov_mean, dtype=float)
         cov_rows = B_hat[n_batch:, :]
-        Cov_effects_new = (X_cov_new @ cov_rows).T
+        if use_regress_cov and use_removal_matrix is not None and mean_model == "ols":
+            Cov_effects_new = _selected_covariate_effects(
+                X_cov_new, cov_rows, use_removal_matrix
+            )
+        else:
+            Cov_effects_new = (X_cov_new @ cov_rows).T
     else:
         Cov_effects_new = np.zeros((n_features_trained, n_new_samples))
-
-    if use_removal_matrix is not None and use_regress_cov and mean_model == "ols":
-        Cov_effects_new = np.asarray(use_removal_matrix) @ Cov_effects_new
-
     stand_mean_new = np.tile(offset_vec[:, None], (1, n_new_samples)) + Cov_effects_new
     s_new = (dat_np - stand_mean_new) / (np.sqrt(var_pooled)[:, None] + 1e-8)
 
@@ -1883,6 +1889,20 @@ def _standardize(data, stand_mean, var_pooled):
     s_data = (data - stand_mean) / (np.sqrt(var_pooled)[:, None] + 1e-8)
     return s_data
 #--------------------------------------------------------------------------------------
+def _selected_covariate_effects(X_cov, B_cov, removal_matrix):
+    """Return the summed effects of covariates selected for removal."""
+    X_cov = np.asarray(X_cov, dtype=float)
+    B_cov = np.asarray(B_cov, dtype=float)
+    mask = np.asarray(removal_matrix, dtype=float)
+    if mask.ndim == 1:
+        mask = mask.reshape(1, -1)
+    if mask.ndim != 2 or mask.shape[1] != B_cov.shape[0]:
+        raise ValueError("CovariateRemovalMatrix columns must match encoded covariates.")
+    if mask.shape[0] not in (1, B_cov.shape[1]):
+        raise ValueError("CovariateRemovalMatrix rows must be 1 or match the feature count.")
+    selected_coefficients = mask * B_cov.T
+    return (X_cov @ selected_coefficients.T).T
+#--------------------------------------------------------------------------------------
 def _estimate_raw_batch(s_data, design, n_batch, batches):
     """Estimate raw batch-wise means and variances from standardized data."""
     batch_design = design[:, :n_batch]
@@ -1982,10 +2002,6 @@ def _reconstruct(s_data, gamma_star, delta_star, batches, batch, var_pooled, sta
         )
         bayesdata = _run_covbat_for_combat_modular(bayesdata, batch)
 
-    if covariate_removal_matrix is not None and RegressCovariates and mean_model == "ols":
-        # Multiply the Cov_effects by the covariate removal matrix to remove specified covariate effects
-        Cov_effects = covariate_removal_matrix @ Cov_effects
-    
     if RegressCovariates:
         bayesdata = (bayesdata * (np.sqrt(var_pooled)[:, None])) + (stand_mean - Cov_effects)
     else:
@@ -2134,30 +2150,31 @@ def _fit_gam_covariates(data, mod_df, gam_opts=None):
     cov_effects = (X_design @ W).T
     return cov_effects
 #--------------------------------------------------------------------------------------
-def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, weight_methods=None, weight_opts=None, global_priors=None):
+def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, weight_methods=None, weight_opts=None, global_priors=None,abs_correlations=False):
     """Construct feature-wise, batch-wise local priors using weighted pooling.
 
     Supports multiple weight methods and parameter controls via ``weight_methods``
     and ``weight_opts``. Allowed methods include:
-    - 'correlation_similarity' : |corr(feature_i, feature_j)| computed within batch
+    - 'correlation_similarity' : signed correlation mapped to a non-negative similarity
     - 'variance_similarity'    : similarity of within-batch feature variances
-      - 'magnitude_similarity'   : similarity of mean absolute gamma across features
-      - 'spatial_proximity'      : Gaussian kernel on provided feature coordinates
-      - 'directional_bias'       : per-batch sign/magnitude agreement of raw gamma
-      - 'custom' or 'similarity_matrix': use precomputed matrix from ``weight_opts``
+                - 'magnitude_similarity' and 'directional_bias' : ranked similarity of standardized feature means
+                - 'spatial_proximity'      : Gaussian kernel on provided feature coordinates
+                - 'custom' or 'similarity_matrix': use precomputed matrix from ``weight_opts``
 
     ``weight_opts`` supports:
       - 'method_weights': dict mapping method -> weight (floats). Defaults to equal weights.
       - 'min_effective': int minimum effective sample size before falling back to global priors (default 5).
       - 'feature_coords': ndarray (n_features, d) for spatial kernel.
       - 'sigma': float bandwidth for spatial kernel (optional).
-      - 'similarity_matrix': ndarray (n_features, n_features) custom similarity.
+            - 'similarity_matrix': ndarray (n_features, n_features) custom similarity.
+            - 'similarity_floor': minimum contribution from every feature (default 0.01).
       - 'normalize': bool row-normalize weight matrices (default True).
 
-    Returns dict with arrays 'gamma_bar_local', 't2_local', 'a_prior_local', 'b_prior_local'
-    (shape (n_batch, n_features)) and 'weights' (shape (n_batch, n_features, n_features)).
+    Returns separate mean-effect weights (``weights``) for gamma/t2 and scale
+    weights (``scale_weights``) for a/b priors. Variance similarity is used only
+    for scale weights; all other requested methods contribute only to mean weights.
     """
-    eps = 1e-12
+    eps = 1e-10
     if weight_methods is None:
         weight_methods = ["correlation_similarity"]
     if weight_opts is None:
@@ -2169,24 +2186,23 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
     method_weights = weight_opts.get("method_weights")
     if method_weights is None:
         method_weights = {m: 1.0 / len(weight_methods) for m in weight_methods}
+    else:
+        total_method_weight = sum(method_weights.values())
+        if total_method_weight > eps:
+            method_weights = {m: w / total_method_weight for m, w in method_weights.items()}
 
     min_effective = int(weight_opts.get("min_effective", 5))
     normalize = bool(weight_opts.get("normalize", True))
+
+    # get number of features, similarity floor is 1/n_features if not specified
+    n_features = gamma_hat.shape[1]
+    # similarity_floor = max(float(weight_opts.get("similarity_floor", 1.0 / n_features)), eps)
+    similarity_floor = max(float(weight_opts.get("similarity_floor", 0.01)), eps)
 
     # Global pooled variance similarity fallback.
     v_global = np.asarray(var_pooled).ravel()
     if v_global.size != n_features:
         v_global = np.ones(n_features)
-
-    # Magnitude similarity based on mean absolute gamma across batches (global).
-    mag = np.mean(np.abs(gamma_hat), axis=0)
-    mdiff = np.abs(mag[:, None] - mag[None, :])
-    maxmdiff = np.max(mdiff)
-    if maxmdiff <= 0:
-        mag_sim = np.ones_like(mdiff)
-    else:
-        mag_sim = 1.0 - (mdiff / (maxmdiff + eps))
-    mag_sim = np.clip(mag_sim, 0.0, 1.0)
 
     # Spatial proximity (optional)
     coords = weight_opts.get("feature_coords", None)
@@ -2208,8 +2224,9 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
         if sim_matrix.shape != (n_features, n_features):
             sim_matrix = None
 
-    # Storage for per-batch weight matrices
+    # Keep mean-effect and scale-effect pooling independent.
     weights_all = np.zeros((n_batch, n_features, n_features), dtype=float)
+    scale_weights_all = np.zeros_like(weights_all)
     low_sample_warnings = []
 
     # Runtime warning thresholds by method family.
@@ -2223,16 +2240,19 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
         n_b = batch_idx.size
 
         # Per-batch correlation similarity.
-        if n_b >= 2:
+        if n_b >= 2 and n_features > 1:
             try:
                 corr_b = np.corrcoef(s_data[:, batch_idx])
                 corr_b = np.nan_to_num(corr_b)
-                corr_abs_b = np.abs(corr_b)
+                if abs_correlations:
+                    corr_b = np.abs(corr_b)
+                corr_similarity_b = (1.0 + corr_b) / 2.0 + eps
+                np.fill_diagonal(corr_similarity_b, 1.0)
             except Exception:
-                corr_abs_b = np.eye(n_features)
+                corr_similarity_b = np.eye(n_features)
         else:
-            corr_abs_b = np.eye(n_features)
-
+            corr_similarity_b = np.eye(n_features)
+        
         # Per-batch variance similarity.
         if n_b >= 2:
             v_b = np.var(s_data[:, batch_idx], axis=1, ddof=1)
@@ -2241,30 +2261,56 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
         else:
             v_b = v_global
 
-        vdiff_b = np.abs(v_b[:, None] - v_b[None, :])
+        
+        log_variance_b = np.log(np.maximum(v_b, eps))
+        log_variance_distance = np.abs(
+            log_variance_b[:, None] - log_variance_b[None, :]
+        )
+        var_sim_b = np.exp(-log_variance_distance)
+    
+        
+        # Per-batch variance similarity.
+        if n_b >= 2:
+            v_b = np.var(s_data[:, batch_idx], axis=1, ddof=1)
+        elif n_b == 1:
+            v_b = np.var(s_data[:, batch_idx], axis=1, ddof=0)
+        else:
+            v_b = v_global
+
+        vdiff_b = np.abs(v_b[:, None] / v_b[None, :])
         maxdiff_b = np.max(vdiff_b)
+        # Use log of variance ratios to determine similarity, = 0 when ratios are equal
+        vdiff_b = np.log(vdiff_b + eps)
         if maxdiff_b <= 0:
             var_sim_b = np.ones_like(vdiff_b)
-        else:
-            var_sim_b = 1.0 - (vdiff_b / (maxdiff_b + eps))
-        var_sim_b = np.clip(var_sim_b, 0.0, 1.0)
 
-        W = np.zeros((n_features, n_features), dtype=float)
+        # For each vdiff_b element, determine similarity based on log ratio compared to 1
+        for i in range(n_features):
+            for j in range(n_features):
+                if vdiff_b[i, j] > 1 and vdiff_b[i, j] <10:
+                    var_sim_b[i, j] = abs(1.0 - vdiff_b[i, j])
+                elif vdiff_b[i, j] <1:
+                    var_sim_b[i, j] = abs(1.0 + vdiff_b[i, j])
+                else:
+                    var_sim_b[i, j] = 0.0 + eps
+       
+        W_mean = np.zeros((n_features, n_features), dtype=float)
         for method in weight_methods:
             wgt = float(method_weights.get(method, 0.0))
             if wgt == 0.0:
+                continue
+            if method == "variance_similarity":
+                if n_b < var_like_min_n:
+                    msg = (
+                        f"Batch {b} has n={n_b}; variance_similarity can be unstable below n={var_like_min_n}."
+                    )
+                    warnings.warn(msg, RuntimeWarning)
+                    low_sample_warnings.append(msg)
                 continue
 
             if method in ("correlation_similarity", "covariance_similarity") and n_b < corr_like_min_n:
                 msg = (
                     f"Batch {b} has n={n_b}; {method} can be unstable below n={corr_like_min_n}."
-                )
-                warnings.warn(msg, RuntimeWarning)
-                low_sample_warnings.append(msg)
-
-            if method == "variance_similarity" and n_b < var_like_min_n:
-                msg = (
-                    f"Batch {b} has n={n_b}; variance_similarity can be unstable below n={var_like_min_n}."
                 )
                 warnings.warn(msg, RuntimeWarning)
                 low_sample_warnings.append(msg)
@@ -2277,7 +2323,7 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
                 low_sample_warnings.append(msg)
 
             if method == "correlation_similarity":
-                M = corr_abs_b
+                M = corr_similarity_b
             elif method == "covariance_similarity":
                 # Convert within-batch covariance magnitude to [0, 1] similarity.
                 if n_b >= 2:
@@ -2286,82 +2332,47 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
                     M = abs_cov / (np.max(abs_cov) + eps)
                 else:
                     M = np.eye(n_features)
-            elif method == "variance_similarity":
-                M = var_sim_b
-            elif method == "magnitude_similarity":
-                M = mag_sim
+            elif method in ("magnitude_similarity", "directional_bias"):
+                batch_means = np.mean(s_data[:, batch_idx], axis=1) if n_b else np.zeros(n_features)
+                mean_ranks = rankdata(batch_means, method="average")
+                rank_distance = np.abs(mean_ranks[:, None] - mean_ranks[None, :])
+                M = 1.0 - rank_distance / max(n_features - 1, 1)
             elif method == "spatial_proximity":
                 M = spatial_sim
             elif method in ("custom", "similarity_matrix"):
                 M = sim_matrix if sim_matrix is not None else np.zeros((n_features, n_features))
-            elif method == "directional_bias":
-                # Directional bias with configurable parameters. We compute sign
-                # agreement and a magnitude-kernel, optionally downweighting
-                # features whose sign disagrees with a global sign.
-                dir_opts = weight_opts.get("directional", {}) if isinstance(weight_opts, dict) else {}
-                dir_min_abs = float(dir_opts.get("dir_min_abs", weight_opts.get("dir_min_abs", 1e-8)))
-                dir_sigma = dir_opts.get("dir_sigma", weight_opts.get("dir_sigma", None))
-                dir_power = float(dir_opts.get("dir_power", weight_opts.get("dir_power", 1.0)))
-                use_global_sign = bool(dir_opts.get("use_global_sign", weight_opts.get("use_global_sign", False)))
-                global_sign_strength = float(dir_opts.get("global_sign_strength", weight_opts.get("global_sign_strength", 0.5)))
-
-                mag_b = np.abs(gamma_hat[b, :])
-                signs = np.sign(gamma_hat[b, :])
-                # Mask small magnitudes as noise
-                mask = mag_b >= dir_min_abs
-
-                # sign agreement matrix (1 if same sign and not noisy)
-                sign_agree = (signs[:, None] * signs[None, :] > 0).astype(float)
-                sign_agree = sign_agree * (mask[:, None] * mask[None, :])
-
-                # magnitude similarity kernel (Gaussian on abs gamma differences)
-                if dir_sigma is None:
-                    # robust default: std of non-negligible magnitudes, fallback to 1.0
-                    nonzero_mag = mag_b[mask]
-                    if nonzero_mag.size > 1:
-                        dir_sigma_val = float(np.std(nonzero_mag))
-                    else:
-                        dir_sigma_val = float(np.std(mag_b))
-                    if dir_sigma_val <= 0:
-                        dir_sigma_val = 1.0
-                else:
-                    dir_sigma_val = float(dir_sigma)
-
-                mdiff_b = np.abs(mag_b[:, None] - mag_b[None, :])
-                Mmag = np.exp(- (mdiff_b ** 2) / (2.0 * (dir_sigma_val ** 2) + eps))
-
-                M = sign_agree * (Mmag ** dir_power)
-
-                if use_global_sign:
-                    global_signs = np.sign(np.mean(gamma_hat, axis=0))
-                    align = (signs == global_signs).astype(float)
-                    # features misaligned with global sign are downweighted by global_sign_strength
-                    factor = np.where(align == 1.0, 1.0, global_sign_strength)
-                    M = M * (factor[:, None] * factor[None, :])
             else:
                 M = np.zeros((n_features, n_features), dtype=float)
             M = np.nan_to_num(M)
             M[M < 0] = 0
-            np.fill_diagonal(M, 0)
+            M = np.maximum(M, similarity_floor)
 
             if normalize:
                 row_sums = M.sum(axis=1, keepdims=True)
                 row_sums[row_sums == 0] = 1
                 M = M / row_sums
 
-            W += wgt * M
+            W_mean += wgt * M
 
-        # Force non-negative and zero diagonal
-        W[W < 0] = 0.0
-        np.fill_diagonal(W, 0.0)
+        # With no mean-effect method requested, use uniform pooling.
+        if not np.any(W_mean):
+            W_mean.fill(1.0)
 
-        # Row-normalize to make weights sum to 1 per target feature
+        # Force non-negative weights and row-normalize each effect matrix.
+        W_mean[W_mean < 0] = 0.0
         if normalize:
-            row_sums = W.sum(axis=1, keepdims=True)
+            row_sums = W_mean.sum(axis=1, keepdims=True)
             row_sums[row_sums == 0] = 1.0
-            W = W / row_sums
+            W_mean = W_mean / row_sums
 
-        weights_all[b, :, :] = W
+        W_scale = np.maximum(np.nan_to_num(var_sim_b), similarity_floor)
+        if normalize:
+            row_sums = W_scale.sum(axis=1, keepdims=True)
+            row_sums[row_sums == 0] = 1.0
+            W_scale = W_scale / row_sums
+
+        weights_all[b, :, :] = W_mean
+        scale_weights_all[b, :, :] = W_scale
 
     # --- Compute weighted priors per batch and per feature ---
     gamma_bar_local = np.zeros((n_batch, n_features), dtype=float)
@@ -2369,51 +2380,61 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
     a_prior_local = np.zeros((n_batch, n_features), dtype=float)
     b_prior_local = np.zeros((n_batch, n_features), dtype=float)
 
+    effective_sample_size = np.zeros((n_batch, n_features))
+    scale_effective_sample_size = np.zeros((n_batch, n_features))
+    used_global_fallback = np.zeros((n_batch, n_features), dtype=bool)
+    used_global_fallback_mean = np.zeros((n_batch, n_features), dtype=bool)
+    used_global_fallback_scale = np.zeros((n_batch, n_features), dtype=bool)
     for b in range(n_batch):
         gh = gamma_hat[b, :]
         dh = delta_hat[b, :]
-        Wb = weights_all[b, :, :]
+        Wb_mean = weights_all[b, :, :]
+        Wb_scale = scale_weights_all[b, :, :]
         for f in range(n_features):
-            w = Wb[f, :].copy()
-            w[f] = 0.0
-            if np.allclose(w.sum(), 0.0):
-                w = np.ones(n_features, dtype=float)
-                w[f] = 0.0
-            s = w.sum()
-            if s <= eps:
-                w = np.zeros_like(w)
-            else:
-                w = w / s
-            
-            effective_sample_size = np.zeros((n_batch, n_features))
-            used_global_fallback = np.zeros((n_batch, n_features), dtype=bool)
+            w_mean = Wb_mean[f, :].copy()
+            if np.allclose(w_mean.sum(), 0.0):
+                w_mean = np.ones(n_features, dtype=float)
+            w_mean = w_mean / w_mean.sum()
+            ess_mean = 1.0 / (np.sum(w_mean ** 2) + eps)
+            effective_sample_size[b, f] = ess_mean
 
-            ess = 1.0 / (np.sum(w ** 2) + eps)
-            if ess < min_effective and global_priors is not None:
+            w_scale = Wb_scale[f, :].copy()
+            if np.allclose(w_scale.sum(), 0.0):
+                w_scale = np.ones(n_features, dtype=float)
+            w_scale = w_scale / w_scale.sum()
+            ess_scale = 1.0 / (np.sum(w_scale ** 2) + eps)
+            scale_effective_sample_size[b, f] = ess_scale
+
+            mean_fallback = ess_mean < min_effective and global_priors is not None
+            scale_fallback = ess_scale < min_effective and global_priors is not None
+            if mean_fallback:
                 gamma_bar_local[b, f] = global_priors[0][b]
                 t2_local[b, f] = global_priors[1][b]
-                a_prior_local[b, f] = global_priors[2][b]
-                b_prior_local[b, f] = global_priors[3][b]
-                effective_sample_size[b, f] = ess
+                used_global_fallback_mean[b, f] = True
+            else:
+                gamma_bar_local[b, f] = float(np.sum(w_mean * gh))
+                mu = gamma_bar_local[b, f]
+                correction = max(1.0 - np.sum(w_mean ** 2), eps)
+                t2_local[b, f] = float(np.sum(w_mean * (gh - mu) ** 2) / correction)
+                if t2_local[b, f] <= eps:
+                    t2_local[b, f] = 1e-6
 
-                if ess < min_effective and global_priors is not None:
-                    used_global_fallback[b, f] = True                
-                continue
-
-            gamma_bar_local[b, f] = float(np.sum(w * gh))
-            mu = gamma_bar_local[b, f]
-            t2_local[b, f] = float(np.sum(w * (gh - mu) ** 2))
-            if t2_local[b, f] <= eps:
-                t2_local[b, f] = 1e-6
-
-            m = float(np.sum(w * dh))
-            s2 = float(np.sum(w * (dh - m) ** 2))
-            if s2 <= eps and global_priors is not None:
+            if scale_fallback:
                 a_prior_local[b, f] = global_priors[2][b]
                 b_prior_local[b, f] = global_priors[3][b]
             else:
-                a_prior_local[b, f] = (2.0 * s2 + m ** 2) / (s2 + eps)
-                b_prior_local[b, f] = (m * s2 + m ** 3) / (s2 + eps)
+                m = float(np.sum(w_scale * dh))
+                correction = max(1.0 - np.sum(w_scale ** 2), eps)
+                s2 = float(np.sum(w_scale * (dh - m) ** 2) / correction)
+                if s2 <= eps and global_priors is not None:
+                    a_prior_local[b, f] = global_priors[2][b]
+                    b_prior_local[b, f] = global_priors[3][b]
+                else:
+                    a_prior_local[b, f] = (2.0 * s2 + m ** 2) / (s2 + eps)
+                    b_prior_local[b, f] = (m * s2 + m ** 3) / (s2 + eps)
+
+            used_global_fallback_scale[b, f] = scale_fallback
+            used_global_fallback[b, f] = mean_fallback or scale_fallback
 
     return {
         "gamma_bar_local": gamma_bar_local,
@@ -2421,13 +2442,19 @@ def _construct_local_priors(s_data, gamma_hat, delta_hat, var_pooled, batches, w
         "a_prior_local": a_prior_local,
         "b_prior_local": b_prior_local,
         "weights": weights_all,
+        "scale_weights": scale_weights_all,
         "warnings": low_sample_warnings,
         "weight_methods": list(weight_methods),
         "effective_sample_size": effective_sample_size,
+        "scale_effective_sample_size": scale_effective_sample_size,
         "used_global_fallback": used_global_fallback,
+        "used_global_fallback_mean": used_global_fallback_mean,
+        "used_global_fallback_scale": used_global_fallback_scale,
         "min_effective": min_effective,
         "method_weights": method_weights,
     }
+#--------------------------------------------------------------------------------------
+
 #--------------------------------------------------------------------------------------
 def it_sol(sdat, g_hat, d_hat, g_bar, t2, a, b, conv=0.0001):
     """Iteratively solve for the posterior mean and variance of the batch effect parameters.
