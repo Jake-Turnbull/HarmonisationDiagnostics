@@ -1,7 +1,11 @@
-# DiagnoseHarmonisation (DHARM)
+# Diagnose Harmonisation (DHARM): An open-source tool for the harmonisation and analysis of batch effects in MRI-derived measures.
+
+Jacob Turnbull, Gaurav Bhalerao, Thomas E. Nichols, Paul McCarthy, Grace Gillis, Jasmine Blane, Brian Zhaoyi Mo, Shaun Warrington, Stamatios N. Sotiropoulos, Renato Besenczi, Fidel Alfaro-Almagro, Stephen M. Smith, Ludovica Griffanti
+
+
+[![bioRxiv](https://img.shields.io/badge/bioRxiv-Preprint-B31B1B.svg)](https://doi.org/10.64898/2026.10.30.763051)
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.19595960-blue)](https://doi.org/10.5281/zenodo.19595960)
-
 [![PyPI version](https://img.shields.io/pypi/v/DiagnoseHarmonisation.svg)](https://pypi.org/project/DiagnoseHarmonisation/)
 [![Python versions](https://img.shields.io/pypi/pyversions/DiagnoseHarmonisation.svg)](https://pypi.org/project/DiagnoseHarmonisation/)
 [![License](https://img.shields.io/pypi/l/DiagnoseHarmonisation.svg)](https://pypi.org/project/DiagnoseHarmonisation/)
@@ -172,3 +176,14 @@ To run the simulator, run **streamlit run simulator.py** in the terminal.
 # Acknowledgement
 
 This work was supported by the Rosetrees Trust and the NIHR Oxford Health Biomedical Research Centre (NIHR203316). The views expressed are those of the author(s) and not necessarily those of the NIHR or the Department of Health and Social Care. The Centre for Integrative Neuroimaging was supported by core funding from the Wellcome Trust (203139/Z/16/Z and 203139/A/16/Z). We are grateful to the members of the OxCIN’s (Oxford University Centre for Integrative Neuroimaging) Harmonisation Working Group for the helpful discussions and feedback on the tool.
+
+
+---
+## Citation
+
+If you use DiagnoseHarmonisation (DHARM) in your research, please cite our preprint:
+
+**Jacob Turnbull, Gaurav Bhalerao, Thomas E. Nichols, Paul McCarthy, Grace Gillis, Jasmine Blane, Brian Zhaoyi Mo, Shaun Warrington, Stamatios N. Sotiropoulos, Renato Besenczi, Fidel Alfaro-Almagro, Stephen M. Smith, Ludovica Griffanti (2026).**
+*[Diagnose Harmonisation (DHARM): An open-source tool for the harmonisation and analysis of batch effects in MRI-derived measures.].*
+bioRxiv.
+https://doi.org/10.64898/2026.10.30.763051
